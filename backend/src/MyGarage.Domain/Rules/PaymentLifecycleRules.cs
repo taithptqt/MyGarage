@@ -52,6 +52,19 @@ public static class PaymentLifecycleRules
         return TerminalStatuses.Contains(norm);
     }
 
+    public static bool IsImmutableStatus(string? status)
+    {
+        return !string.IsNullOrWhiteSpace(status) && TerminalStatuses.Contains(status.Trim());
+    }
+
+    public static bool TryNormalizeTransitionTarget(string? status, out string normalizedTarget)
+    {
+        normalizedTarget = string.IsNullOrWhiteSpace(status)
+            ? string.Empty
+            : status.Trim().ToUpperInvariant();
+        return normalizedTarget is StatusCompleted or StatusFailed or StatusCanceled;
+    }
+
     public static bool CanTransition(string? currentStatus, string? targetStatus)
     {
         if (string.IsNullOrWhiteSpace(currentStatus) || string.IsNullOrWhiteSpace(targetStatus))

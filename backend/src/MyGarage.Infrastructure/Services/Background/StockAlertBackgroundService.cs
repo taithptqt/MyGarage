@@ -28,7 +28,7 @@ public sealed class StockAlertBackgroundService : BackgroundService
             try
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
-                var service = scope.ServiceProvider.GetRequiredService<IInventoryAdminService>();
+                var service = scope.ServiceProvider.GetRequiredService<IStockAlertSyncService>();
                 var alerts = await service.RebuildStockAlertsAsync(null);
                 _logger.LogInformation("Stock alert background run completed. Active alerts: {Count}", alerts.Count);
             }

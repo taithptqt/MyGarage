@@ -11,7 +11,6 @@ using MyGarage.Exceptions;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Route("api/bay-management")]
     [Route("api/v1/bay-management")]
     [Authorize]
     public class BayManagementController : ControllerBase
@@ -30,14 +29,13 @@ namespace MyGarage.Controllers
         /// <summary>
         /// Allocates a bay to a service order and vehicle.
         /// </summary>
-        [HttpPost("{id:long}/allocate")]
-        [HttpPost("/api/bays/{id:long}/allocate")]
-        [HttpPost("/api/v1/bays/{id:long}/allocate")]
+        [HttpPost("{id:long}/allocations")]
+        [HttpPost("/api/v1/bays/{id:long}/allocations")]
         public async Task<IActionResult> AllocateBay(long id, [FromBody] BayAllocationCreateDto dto)
         {
             if (dto == null)
             {
-                return BadRequest(new { message = "Dữ liệu phân bổ khoang không hợp lệ." });
+                return this.BadRequestProblem("Dữ liệu phân bổ khoang không hợp lệ.");
             }
 
             if (dto.BayId <= 0)
@@ -46,13 +44,13 @@ namespace MyGarage.Controllers
             }
             else if (id != dto.BayId)
             {
-                return BadRequest(new { Message = "Bay ID in URL does not match DTO" });
+                return this.BadRequestProblem("Bay ID in URL does not match DTO");
             }
 
             var actor = this.ToUserActorContext();
             if (!actor.UserId.HasValue || actor.UserId.Value <= 0)
             {
-                return Unauthorized(new { message = "Không xác định được nhân sự thao tác." });
+                return this.UnauthorizedProblem("Không xác định được nhân sự thao tác.");
             }
 
             if (!await _authService.CanAllocateBayAsync(id, dto.ServiceOrderId, actor))
@@ -74,26 +72,25 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { Message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { Message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
         /// <summary>
         /// Releases a bay from its current allocation.
         /// </summary>
-        [HttpDelete("{id:long}/release")]
-        [HttpDelete("/api/bays/{id:long}/release")]
-        [HttpDelete("/api/v1/bays/{id:long}/release")]
+        [HttpDelete("{id:long}/allocations")]
+        [HttpDelete("/api/v1/bays/{id:long}/allocations")]
         public async Task<IActionResult> ReleaseBay(long id, [FromQuery] string? notes)
         {
             var actor = this.ToUserActorContext();
             if (!actor.UserId.HasValue || actor.UserId.Value <= 0)
             {
-                return Unauthorized(new { message = "Không xác định được nhân sự thao tác." });
+                return this.UnauthorizedProblem("Không xác định được nhân sự thao tác.");
             }
 
             if (!await _authService.CanReleaseBayAsync(id, actor))
@@ -108,11 +105,11 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -120,7 +117,6 @@ namespace MyGarage.Controllers
         /// Gets the timeline of bay allocations for a specific date.
         /// </summary>
         [HttpGet("timeline")]
-        [HttpGet("/api/bays/timeline")]
         [HttpGet("/api/v1/bays/timeline")]
         public async Task<IActionResult> GetTimeline([FromQuery] DateTime? date, [FromQuery] long? branchId)
         {

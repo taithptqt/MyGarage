@@ -9,7 +9,6 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers;
 
 [Authorize(Roles = "Staff")]
-[Route("api/maintenance-reminders")]
 [Route("api/v1/maintenance-reminders")]
 [ApiController]
 public sealed class MaintenanceRemindersController : ControllerBase
@@ -21,14 +20,14 @@ public sealed class MaintenanceRemindersController : ControllerBase
         _maintenanceReminderService = maintenanceReminderService;
     }
 
-    [HttpPost("schedule")]
+    [HttpPost("schedules")]
     public async Task<IActionResult> Schedule(
         [FromBody] MaintenanceReminderScheduleRequestDto? request,
         CancellationToken cancellationToken)
     {
         if (request == null)
         {
-            return BadRequest(new { message = "Payload is required." });
+            return this.BadRequestProblem("Payload is required.");
         }
 
         try
@@ -41,15 +40,15 @@ public sealed class MaintenanceRemindersController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
     }
 
-    [HttpPost("schedule-by-service-order/{serviceOrderId:long}")]
+    [HttpPost("service-orders/{serviceOrderId:long}/schedules")]
     public async Task<IActionResult> ScheduleByServiceOrder(
         long serviceOrderId,
         [FromQuery] int? remindAfterDays = null,
@@ -68,11 +67,11 @@ public sealed class MaintenanceRemindersController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(new { message = ex.Message });
+            return this.NotFoundProblem(ex.Message);
         }
     }
 
@@ -92,7 +91,7 @@ public sealed class MaintenanceRemindersController : ControllerBase
         });
     }
 
-    [HttpPost("process-due")]
+    [HttpPost("due-dispatches")]
     public async Task<IActionResult> ProcessDue(
         [FromQuery] int batchSize = 200,
         CancellationToken cancellationToken = default)
@@ -109,7 +108,7 @@ public sealed class MaintenanceRemindersController : ControllerBase
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Status))
         {
-            return BadRequest(new { message = "Status is required." });
+            return this.BadRequestProblem("Status is required.");
         }
 
         try
@@ -122,14 +121,14 @@ public sealed class MaintenanceRemindersController : ControllerBase
                 cancellationToken);
             if (updated == null)
             {
-                return NotFound(new { message = "Reminder not found." });
+                return this.NotFoundProblem("Reminder not found.");
             }
 
             return Ok(updated);
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
     }
 }

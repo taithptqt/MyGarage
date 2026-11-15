@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace MyGarage.Models;
 
 public class OrderInvoice

@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using AutoMapper;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -12,10 +16,44 @@ namespace MyGarage.Services
         };
 
         private readonly ISalaryCoefficientRepository _salaryCoefficientRepository;
+        private readonly IMapper _mapper;
 
-        public SalaryCoefficientService(ISalaryCoefficientRepository repository) : base(repository)
+        public SalaryCoefficientService(ISalaryCoefficientRepository repository, IMapper mapper) : base(repository)
         {
             _salaryCoefficientRepository = repository;
+            _mapper = mapper;
+        }
+
+        public async Task<IEnumerable<SalaryCoefficientResponseDto>> GetAllDtosAsync()
+        {
+            var items = await GetAllAsync();
+            return _mapper.Map<IEnumerable<SalaryCoefficientResponseDto>>(items);
+        }
+
+        public async Task<SalaryCoefficientResponseDto?> GetDtoByIdAsync(long id)
+        {
+            var item = await GetByIdAsync(id);
+            return item == null ? null : _mapper.Map<SalaryCoefficientResponseDto>(item);
+        }
+
+        public async Task<SalaryCoefficientResponseDto> CreateDtoAsync(SalaryCoefficientCreateDto itemDto)
+        {
+            var entity = _mapper.Map<SalaryCoefficient>(itemDto);
+            var createdItem = await AddAsync(entity);
+            return _mapper.Map<SalaryCoefficientResponseDto>(createdItem);
+        }
+
+        public async Task<SalaryCoefficientResponseDto?> UpdateDtoAsync(long id, SalaryCoefficientUpdateDto itemDto)
+        {
+            var existingItem = await GetByIdAsync(id);
+            if (existingItem == null)
+            {
+                return null;
+            }
+
+            _mapper.Map(itemDto, existingItem);
+            var updatedItem = await UpdateAsync(id, existingItem);
+            return updatedItem == null ? null : _mapper.Map<SalaryCoefficientResponseDto>(updatedItem);
         }
 
         public override async Task<IEnumerable<SalaryCoefficient>> GetAllAsync()

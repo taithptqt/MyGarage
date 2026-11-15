@@ -1,21 +1,16 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/vehicles")]
     [Route("api/v1/vehicles")]
     [ApiController]
     [Authorize]
@@ -23,19 +18,16 @@ namespace MyGarage.Controllers
     {
         private readonly IVehicleService _vehicleService;
         private readonly IVehicleHistoryService _vehicleHistoryService;
-        private readonly IGarageContext _context;
-        private readonly IMapper _mapper;
+        private readonly IVehicleQueryService _vehicleQueryService;
 
         public VehiclesController(
             IVehicleService vehicleService,
             IVehicleHistoryService vehicleHistoryService,
-            IGarageContext context,
-            IMapper mapper)
+            IVehicleQueryService vehicleQueryService)
         {
             _vehicleService = vehicleService;
             _vehicleHistoryService = vehicleHistoryService;
-            _context = context;
-            _mapper = mapper;
+            _vehicleQueryService = vehicleQueryService;
         }
 
         [Authorize(Roles = "Staff")]
@@ -45,23 +37,16 @@ namespace MyGarage.Controllers
             [FromQuery] int? pageSize = null)
         {
             var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
-            var query = _context.Vehicles.AsNoTracking()
-                .Include(v => v.Model).ThenInclude(m => m.Brand)
-                .Where(v => v.IsDeleted != true).OrderBy(v => v.Id);
-            var total = await query.CountAsync();
-            var offset = ((long)normalizedPage - 1) * normalizedSize;
-            var paged = offset >= total
-                ? new List<Vehicle>()
-                : await query.Skip((int)offset).Take(normalizedSize).ToListAsync();
-            var dtos = _mapper.Map<List<VehicleResponseDto>>(paged);
+            var (paged, total) = await _vehicleQueryService.GetPagedAsync(normalizedPage, normalizedSize);
+            var dtos = _vehicleService.MapToDtos(paged);
             return Ok(PagedEnvelope<VehicleResponseDto>.Create(dtos, total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<VehicleResponseDto>> GetById(long id)
         {
-            var vehicle = await _vehicleService.GetByIdAsync(id);
-            if (vehicle == null)
+            var dto = await _vehicleService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
@@ -71,7 +56,6 @@ namespace MyGarage.Controllers
                 return Forbid();
             }
 
-            var dto = _mapper.Map<VehicleResponseDto>(vehicle);
             return Ok(dto);
         }
 
@@ -99,25 +83,20 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<VehicleResponseDto>> Create([FromBody] VehicleCreateDto vehicleDto)
         {
-            var entity = _mapper.Map<Vehicle>(vehicleDto);
-            var createdVehicle = await _vehicleService.AddAsync(entity);
-            var responseDto = _mapper.Map<VehicleResponseDto>(createdVehicle);
-            return CreatedAtAction(nameof(GetById), new { id = createdVehicle.Id }, responseDto);
+            var responseDto = await _vehicleService.CreateDtoAsync(vehicleDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [Authorize(Roles = "Staff")]
         [HttpPut("{id:long}")]
         public async Task<ActionResult<VehicleResponseDto>> Update(long id, [FromBody] VehicleUpdateDto vehicleDto)
         {
-            var existingVehicle = await _vehicleService.GetByIdAsync(id);
-            if (existingVehicle == null)
+            var responseDto = await _vehicleService.UpdateDtoAsync(id, vehicleDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
 
-            _mapper.Map(vehicleDto, existingVehicle);
-            var updatedVehicle = await _vehicleService.UpdateAsync(id, existingVehicle);
-            var responseDto = _mapper.Map<VehicleResponseDto>(updatedVehicle);
             return Ok(responseDto);
         }
 
@@ -147,9 +126,7 @@ namespace MyGarage.Controllers
                 return false;
             }
 
-            return await _context.CustomerVehicles
-                .AsNoTracking()
-                .AnyAsync(cv => cv.VehicleId == vehicleId && cv.CustomerId == currentCustomerId.Value && cv.IsDeleted != true);
+            return await _vehicleQueryService.CustomerOwnsVehicleAsync(vehicleId, currentCustomerId.Value);
         }
     }
 }

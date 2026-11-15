@@ -3,27 +3,22 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/ai-model-configs")]
     [Route("api/v1/ai-model-configs")]
     [ApiController]
     [Authorize(Policy = "AdminStaffOnly")]
     public class AiModelConfigController : ControllerBase
     {
         private readonly IAiModelConfigService _aiModelConfigService;
-        private readonly IMapper _mapper;
 
-        public AiModelConfigController(IAiModelConfigService aiModelConfigService, IMapper mapper)
+        public AiModelConfigController(IAiModelConfigService aiModelConfigService)
         {
             _aiModelConfigService = aiModelConfigService;
-            _mapper = mapper;
         }
 
         /// <summary>
@@ -35,8 +30,7 @@ namespace MyGarage.Controllers
         [ProducesResponseType(typeof(IEnumerable<AiModelConfigResponseDto>), StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<AiModelConfigResponseDto>>> GetAll()
         {
-            var items = await _aiModelConfigService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<AiModelConfigResponseDto>>(items);
+            var dtos = await _aiModelConfigService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
@@ -52,12 +46,11 @@ namespace MyGarage.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<AiModelConfigResponseDto>> GetById(long id)
         {
-            var item = await _aiModelConfigService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _aiModelConfigService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<AiModelConfigResponseDto>(item);
             return Ok(dto);
         }
 
@@ -71,10 +64,8 @@ namespace MyGarage.Controllers
         [ProducesResponseType(typeof(AiModelConfigResponseDto), StatusCodes.Status201Created)]
         public async Task<ActionResult<AiModelConfigResponseDto>> Create([FromBody] AiModelConfigCreateDto itemDto)
         {
-            var entity = _mapper.Map<AiModelConfig>(itemDto);
-            var createdItem = await _aiModelConfigService.AddAsync(entity);
-            var responseDto = _mapper.Map<AiModelConfigResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _aiModelConfigService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         /// <summary>
@@ -90,20 +81,11 @@ namespace MyGarage.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<AiModelConfigResponseDto>> Update(long id, [FromBody] AiModelConfigUpdateDto itemDto)
         {
-            var existingItem = await _aiModelConfigService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _aiModelConfigService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _aiModelConfigService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<AiModelConfigResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

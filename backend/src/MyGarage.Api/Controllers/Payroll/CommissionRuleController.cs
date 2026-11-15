@@ -1,18 +1,14 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Interfaces.Queries;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/commission-rules")]
     [Route("api/v1/commission-rules")]
     [ApiController]
     [Authorize(Policy = "AdminStaffOnly")]
@@ -34,33 +30,29 @@ namespace MyGarage.Controllers
         };
 
         private readonly ICommissionRuleService _commissionRuleService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _db;
+        private readonly ICommissionRuleDataService _dataService;
 
-        public CommissionRuleController(ICommissionRuleService commissionRuleService, IMapper mapper, IGarageContext db)
+        public CommissionRuleController(ICommissionRuleService commissionRuleService, ICommissionRuleDataService dataService)
         {
             _commissionRuleService = commissionRuleService;
-            _mapper = mapper;
-            _db = db;
+            _dataService = dataService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CommissionRuleResponseDto>>> GetAll()
         {
-            var items = await _commissionRuleService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<CommissionRuleResponseDto>>(items);
+            var dtos = await _commissionRuleService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<CommissionRuleResponseDto>> GetById(long id)
         {
-            var item = await _commissionRuleService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _commissionRuleService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<CommissionRuleResponseDto>(item);
             return Ok(dto);
         }
 
@@ -75,15 +67,15 @@ namespace MyGarage.Controllers
                 itemDto.CommissionValue);
             if (!string.IsNullOrWhiteSpace(validationError))
             {
-                return BadRequest(new { message = validationError });
+                return this.BadRequestProblem(validationError);
             }
 
-            var entity = _mapper.Map<CommissionRule>(itemDto);
+            var entity = _commissionRuleService.MapToEntity(itemDto);
             entity.TargetType = NormalizeTargetType(itemDto.TargetType);
             entity.CommissionType = NormalizeCommissionType(itemDto.CommissionType);
             entity.IsActive ??= true;
             var createdItem = await _commissionRuleService.AddAsync(entity);
-            var responseDto = _mapper.Map<CommissionRuleResponseDto>(createdItem);
+            var responseDto = _commissionRuleService.MapToDto(createdItem);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
@@ -104,10 +96,10 @@ namespace MyGarage.Controllers
                 itemDto.CommissionValue);
             if (!string.IsNullOrWhiteSpace(validationError))
             {
-                return BadRequest(new { message = validationError });
+                return this.BadRequestProblem(validationError);
             }
 
-            _mapper.Map(itemDto, existingItem);
+            _commissionRuleService.MapUpdate(itemDto, existingItem);
             existingItem.TargetType = NormalizeTargetType(itemDto.TargetType);
             existingItem.CommissionType = NormalizeCommissionType(itemDto.CommissionType);
             var updatedItem = await _commissionRuleService.UpdateAsync(id, existingItem);
@@ -116,7 +108,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-            var responseDto = _mapper.Map<CommissionRuleResponseDto>(updatedItem);
+            var responseDto = _commissionRuleService.MapToDto(updatedItem);
             return Ok(responseDto);
         }
 
@@ -137,44 +129,7 @@ namespace MyGarage.Controllers
             [FromQuery] long? staffTierId = null,
             [FromQuery] bool? isActive = true)
         {
-            var query = _db.CommissionRules
-                .AsNoTracking()
-                .Where(x => x.IsDeleted != true && x.TargetType == TargetTypeServiceAdvisor);
-
-            if (branchId.HasValue)
-            {
-                query = query.Where(x => x.BranchId == branchId.Value);
-            }
-
-            if (staffTierId.HasValue)
-            {
-                query = query.Where(x => x.StaffTierId == staffTierId.Value);
-            }
-
-            if (isActive.HasValue)
-            {
-                query = query.Where(x => (x.IsActive ?? true) == isActive.Value);
-            }
-
-            var rows = await query
-                .OrderBy(x => x.BranchId)
-                .ThenBy(x => x.StaffTierId)
-                .ThenByDescending(x => x.IsActive)
-                .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.BranchId,
-                    x.StaffTierId,
-                    x.TargetId,
-                    x.CommissionType,
-                    x.CommissionValue,
-                    isActive = x.IsActive ?? true,
-                    x.CreatedAt,
-                    x.UpdatedAt
-                })
-                .ToListAsync();
-
+            var rows = await _dataService.GetServiceAdvisorRulesAsync(branchId, staffTierId, isActive, HttpContext.RequestAborted);
             return Ok(new
             {
                 total = rows.Count,
@@ -182,12 +137,12 @@ namespace MyGarage.Controllers
             });
         }
 
-        [HttpPost("service-advisor/upsert")]
+        [HttpPut("service-advisor")]
         public async Task<IActionResult> UpsertServiceAdvisorRule([FromBody] ServiceAdvisorCommissionRuleUpsertRequestDto? request)
         {
             if (request == null)
             {
-                return BadRequest(new { message = "Payload is required." });
+                return this.BadRequestProblem("Payload is required.");
             }
 
             var validationError = await ValidateCommissionRuleInputAsync(
@@ -198,51 +153,22 @@ namespace MyGarage.Controllers
                 request.CommissionValue);
             if (!string.IsNullOrWhiteSpace(validationError))
             {
-                return BadRequest(new { message = validationError });
+                return this.BadRequestProblem(validationError);
             }
 
-            var existing = await _db.CommissionRules
-                .FirstOrDefaultAsync(x =>
-                    x.IsDeleted != true &&
-                    x.BranchId == request.BranchId &&
-                    x.StaffTierId == request.StaffTierId &&
-                    x.TargetType == TargetTypeServiceAdvisor &&
-                    x.TargetId == request.TargetId);
-
-            var now = VietnamTime.Now;
-            if (existing == null)
-            {
-                var entity = new CommissionRule
-                {
-                    BranchId = request.BranchId,
-                    StaffTierId = request.StaffTierId,
-                    TargetType = TargetTypeServiceAdvisor,
-                    TargetId = request.TargetId,
-                    CommissionType = NormalizeCommissionType(request.CommissionType),
-                    CommissionValue = request.CommissionValue!.Value,
-                    IsActive = request.IsActive,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-                _db.CommissionRules.Add(entity);
-                await _db.SaveChangesAsync();
-                return Ok(new
-                {
-                    message = "Service advisor commission rule created.",
-                    rule = _mapper.Map<CommissionRuleResponseDto>(entity)
-                });
-            }
-
-            existing.CommissionType = NormalizeCommissionType(request.CommissionType);
-            existing.CommissionValue = request.CommissionValue!.Value;
-            existing.IsActive = request.IsActive;
-            existing.UpdatedAt = now;
-            await _db.SaveChangesAsync();
+            var (rule, created) = await _dataService.UpsertServiceAdvisorRuleAsync(
+                request.BranchId,
+                request.StaffTierId,
+                request.TargetId,
+                NormalizeCommissionType(request.CommissionType),
+                request.CommissionValue!.Value,
+                request.IsActive,
+                HttpContext.RequestAborted);
 
             return Ok(new
             {
-                message = "Service advisor commission rule updated.",
-                rule = _mapper.Map<CommissionRuleResponseDto>(existing)
+                message = created ? "Service advisor commission rule created." : "Service advisor commission rule updated.",
+                rule = _commissionRuleService.MapToDto(rule)
             });
         }
 
@@ -274,18 +200,12 @@ namespace MyGarage.Controllers
                 return "commissionValue cannot exceed 100 for PERCENT type.";
             }
 
-            var branchExists = await _db.Branches
-                .AsNoTracking()
-                .AnyAsync(x => x.Id == branchId && x.IsDeleted != true);
-            if (!branchExists)
+            if (!await _dataService.BranchExistsAsync(branchId, HttpContext.RequestAborted))
             {
                 return $"Branch #{branchId} not found.";
             }
 
-            var tierExists = await _db.StaffTiers
-                .AsNoTracking()
-                .AnyAsync(x => x.Id == staffTierId && x.IsDeleted != true);
-            if (!tierExists)
+            if (!await _dataService.StaffTierExistsAsync(staffTierId, HttpContext.RequestAborted))
             {
                 return $"Staff tier #{staffTierId} not found.";
             }

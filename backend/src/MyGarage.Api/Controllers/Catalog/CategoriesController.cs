@@ -1,33 +1,27 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/categories")]
     [Route("api/v1/categories")]
     [ApiController]
     [Authorize(Policy = "AdminStaffOnly")]
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _db;
+        private readonly ICategoryQueryService _categoryQueryService;
 
-        public CategoriesController(ICategoryService categoryService, IMapper mapper, IGarageContext db)
+        public CategoriesController(ICategoryService categoryService, ICategoryQueryService categoryQueryService)
         {
             _categoryService = categoryService;
-            _mapper = mapper;
-            _db = db;
+            _categoryQueryService = categoryQueryService;
         }
 
         [AllowAnonymous]
@@ -46,18 +40,9 @@ namespace MyGarage.Controllers
                 if (normalizedPageSize < 1) normalizedPageSize = 1;
                 if (normalizedPageSize > 200) normalizedPageSize = 200;
 
-                var query = _db.Categories
-                    .AsNoTracking()
-                    .Where(x => x.IsDeleted != true)
-                    .OrderByDescending(x => x.Id);
+                var (items, total) = await _categoryQueryService.GetPagedAsync(normalizedPage, normalizedPageSize);
 
-                var total = await query.CountAsync();
-                var items = await query
-                    .Skip((normalizedPage - 1) * normalizedPageSize)
-                    .Take(normalizedPageSize)
-                    .ToListAsync();
-
-                var pagedDtos = _mapper.Map<List<CategoryResponseDto>>(items);
+                var pagedDtos = _categoryService.MapToDtos(items);
                 return Ok(new
                 {
                     items = pagedDtos,
@@ -68,8 +53,7 @@ namespace MyGarage.Controllers
                 });
             }
 
-            var allItems = await _categoryService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<CategoryResponseDto>>(allItems);
+            var dtos = await _categoryService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
@@ -77,42 +61,31 @@ namespace MyGarage.Controllers
         [HttpGet("{id:long}")]
         public async Task<ActionResult<CategoryResponseDto>> GetById(long id)
         {
-            var item = await _categoryService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _categoryService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            var dto = _mapper.Map<CategoryResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<CategoryResponseDto>> Create([FromBody] CategoryCreateDto itemDto)
         {
-            var entity = _mapper.Map<Category>(itemDto);
-            var createdItem = await _categoryService.AddAsync(entity);
-            var responseDto = _mapper.Map<CategoryResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _categoryService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id:long}")]
         public async Task<ActionResult<CategoryResponseDto>> Update(long id, [FromBody] CategoryUpdateDto itemDto)
         {
-            var existingItem = await _categoryService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _categoryService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _categoryService.UpdateAsync(id, existingItem);
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-
-            var responseDto = _mapper.Map<CategoryResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

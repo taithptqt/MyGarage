@@ -13,9 +13,10 @@ public sealed class ChatbotLlmPromptBuilder : IChatbotLlmPromptBuilder
     private const int MaxHistoryMessages = 24;
     private readonly IPiiAnonymizerService _piiAnonymizer;
 
-    public ChatbotLlmPromptBuilder(IPiiAnonymizerService? piiAnonymizer = null)
+    public ChatbotLlmPromptBuilder(IPiiAnonymizerService piiAnonymizer)
     {
-        _piiAnonymizer = piiAnonymizer ?? new PiiAnonymizerService();
+        ArgumentNullException.ThrowIfNull(piiAnonymizer);
+        _piiAnonymizer = piiAnonymizer;
     }
 
     public IReadOnlyList<ChatbotLlmMessage> BuildMessages(

@@ -3,15 +3,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/service-order-discounts")]
     [Route("api/v1/service-order-discounts")]
     [ApiController]
     [Authorize(Roles = "Staff")]
@@ -19,35 +16,30 @@ namespace MyGarage.Controllers
     {
         private readonly IServiceOrderDiscountService _serviceOrderDiscountService;
         private readonly IServiceOrderService _serviceOrderService;
-        private readonly IMapper _mapper;
 
         public ServiceOrderDiscountController(
             IServiceOrderDiscountService serviceOrderDiscountService,
-            IServiceOrderService serviceOrderService,
-            IMapper mapper)
+            IServiceOrderService serviceOrderService)
         {
             _serviceOrderDiscountService = serviceOrderDiscountService;
             _serviceOrderService = serviceOrderService;
-            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ServiceOrderDiscountResponseDto>>> GetAll()
         {
-            var items = await _serviceOrderDiscountService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<ServiceOrderDiscountResponseDto>>(items);
+            var dtos = await _serviceOrderDiscountService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<ServiceOrderDiscountResponseDto>> GetById(long id)
         {
-            var item = await _serviceOrderDiscountService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _serviceOrderDiscountService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<ServiceOrderDiscountResponseDto>(item);
             return Ok(dto);
         }
 
@@ -58,19 +50,17 @@ namespace MyGarage.Controllers
             {
                 if (itemDto == null || itemDto.ServiceOrderId <= 0)
                 {
-                    return BadRequest(new { message = "Thiếu ServiceOrderId hợp lệ để tạo chiết khấu lệnh sửa chữa." });
+                    return this.BadRequestProblem("Thiếu ServiceOrderId hợp lệ để tạo chiết khấu lệnh sửa chữa.");
                 }
 
                 await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(itemDto.ServiceOrderId);
 
-                var entity = _mapper.Map<ServiceOrderDiscount>(itemDto);
-                var createdItem = await _serviceOrderDiscountService.AddAsync(entity);
-                var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(createdItem);
-                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+                var responseDto = await _serviceOrderDiscountService.CreateDtoAsync(itemDto);
+                return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -90,19 +80,17 @@ namespace MyGarage.Controllers
                     : existingItem.ServiceOrderId;
                 await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(targetServiceOrderId);
 
-                _mapper.Map(itemDto, existingItem);
-                var updatedItem = await _serviceOrderDiscountService.UpdateAsync(id, existingItem);
-                if (updatedItem == null)
+                var responseDto = await _serviceOrderDiscountService.UpdateDtoAsync(id, existingItem, itemDto!);
+                if (responseDto == null)
                 {
                     return NotFound();
                 }
 
-                var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(updatedItem);
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -128,7 +116,7 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
     }

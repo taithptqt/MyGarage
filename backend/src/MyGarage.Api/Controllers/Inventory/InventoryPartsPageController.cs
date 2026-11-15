@@ -9,7 +9,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize(Roles = "Staff")]
-[Route("api/inventory/parts-page")]
 [Route("api/v1/inventory/parts-page")]
 public sealed class InventoryPartsPageController : ControllerBase
 {

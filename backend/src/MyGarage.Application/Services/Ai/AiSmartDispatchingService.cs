@@ -1,7 +1,9 @@
-using MyGarage.Models;
-using MyGarage.Interfaces;
-using MyGarage.DTOs.Responses;
+using AutoMapper;
 using MyGarage.Application.Ai;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
+using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Services
 {
@@ -9,14 +11,43 @@ namespace MyGarage.Services
     {
         private readonly IDispatchBayCandidates _bayCandidates;
         private readonly IServiceOrderRepository _serviceOrderRepository;
+        private readonly IMapper _mapper;
 
         public AiSmartDispatchingService(
             IAiSmartDispatchingRepository repository,
             IDispatchBayCandidates bayCandidates,
-            IServiceOrderRepository serviceOrderRepository) : base(repository)
+            IServiceOrderRepository serviceOrderRepository,
+            IMapper mapper) : base(repository)
         {
             _bayCandidates = bayCandidates;
             _serviceOrderRepository = serviceOrderRepository;
+            _mapper = mapper;
+        }
+
+        public async Task<AiSmartDispatchingResponseDto?> GetDtoByIdAsync(long id)
+        {
+            var item = await GetByIdAsync(id);
+            return item == null ? null : _mapper.Map<AiSmartDispatchingResponseDto>(item);
+        }
+
+        public async Task<AiSmartDispatchingResponseDto> CreateDtoAsync(AiSmartDispatchingCreateDto itemDto)
+        {
+            var entity = _mapper.Map<AiSmartDispatching>(itemDto);
+            var createdItem = await AddAsync(entity);
+            return _mapper.Map<AiSmartDispatchingResponseDto>(createdItem);
+        }
+
+        public async Task<AiSmartDispatchingResponseDto?> UpdateDtoAsync(long id, AiSmartDispatchingUpdateDto itemDto)
+        {
+            var existingItem = await GetByIdAsync(id);
+            if (existingItem == null)
+            {
+                return null;
+            }
+
+            _mapper.Map(itemDto, existingItem);
+            var updatedItem = await UpdateAsync(id, existingItem);
+            return updatedItem == null ? null : _mapper.Map<AiSmartDispatchingResponseDto>(updatedItem);
         }
 
         public async Task<AiDispatchRecommendationResponseDto?> RecommendBayAsync(long serviceOrderId)

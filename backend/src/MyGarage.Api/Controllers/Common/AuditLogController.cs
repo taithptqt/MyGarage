@@ -1,21 +1,16 @@
-using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Common;
 using MyGarage.Extensions;
 using MyGarage.Application.Audit;
 using MyGarage.Application.Common.Pagination;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/audit-logs")]
     [Route("api/v1/audit-logs")]
     [ApiController]
     [Authorize(Policy = "AdminStaffOnly")]
@@ -23,13 +18,11 @@ namespace MyGarage.Controllers
     {
         private readonly IAuditLogService _auditLogService;
         private readonly AdminAuditQuery _adminAuditQuery;
-        private readonly IMapper _mapper;
 
-        public AuditLogController(IAuditLogService auditLogService, AdminAuditQuery adminAuditQuery, IMapper mapper)
+        public AuditLogController(IAuditLogService auditLogService, AdminAuditQuery adminAuditQuery)
         {
             _auditLogService = auditLogService;
             _adminAuditQuery = adminAuditQuery;
-            _mapper = mapper;
         }
 
         [HttpGet("admin-changes")]
@@ -55,60 +48,40 @@ namespace MyGarage.Controllers
             var envelope = await _auditLogService.ToPagedEnvelopeAsync(
                 page,
                 pageSize,
-                paged => _mapper.Map<IEnumerable<AuditLogResponseDto>>(paged));
+                paged => _auditLogService.MapToDtos(paged));
             return Ok(envelope);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<AuditLogResponseDto>> GetById(long id)
         {
-            var item = await _auditLogService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _auditLogService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<AuditLogResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
-        public async Task<ActionResult<AuditLogResponseDto>> Create([FromBody] AuditLogCreateDto itemDto)
+        public IActionResult Create()
         {
-            var entity = _mapper.Map<AuditLog>(itemDto);
-            var createdItem = await _auditLogService.AddAsync(entity);
-            var responseDto = _mapper.Map<AuditLogResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            Response.Headers.Allow = "GET";
+            return this.ProblemMessage(405, "Nhật ký kiểm toán chỉ được hệ thống ghi.");
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<AuditLogResponseDto>> Update(long id, [FromBody] AuditLogUpdateDto itemDto)
+        public IActionResult Update(long id)
         {
-            var existingItem = await _auditLogService.GetByIdAsync(id);
-            if (existingItem == null)
-            {
-                return NotFound();
-            }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _auditLogService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<AuditLogResponseDto>(updatedItem);
-            return Ok(responseDto);
+            Response.Headers.Allow = "GET";
+            return this.ProblemMessage(405, "Nhật ký kiểm toán không được sửa trực tiếp.");
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public IActionResult Delete(long id)
         {
-            var result = await _auditLogService.DeleteAsync(id);
-            if (!result)
-            {
-                return NotFound();
-            }
-            return NoContent();
+            Response.Headers.Allow = "GET";
+            return this.ProblemMessage(405, "Nhật ký kiểm toán không được xóa trực tiếp.");
         }
     }
 }

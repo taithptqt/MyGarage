@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
+using MyGarage.Application.Interfaces.Stores.Purchasing;
 using MyGarage.DTOs.Requests;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -13,16 +12,16 @@ namespace MyGarage.Services
 {
     public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrderService
     {
-        private readonly IGarageContext _context;
-        private readonly IInventoryAdminService _inventoryAdminService;
+        private readonly IPurchaseOrderReceiveStore _store;
+        private readonly IStockAlertSyncService _stockAlertSyncService;
 
         public PurchaseOrderService(
             IPurchaseOrderRepository repository,
-            IGarageContext context,
-            IInventoryAdminService inventoryAdminService) : base(repository)
+            IPurchaseOrderReceiveStore store,
+            IStockAlertSyncService stockAlertSyncService) : base(repository)
         {
-            _context = context;
-            _inventoryAdminService = inventoryAdminService;
+            _store = store;
+            _stockAlertSyncService = stockAlertSyncService;
         }
 
         public async Task<PurchaseOrderReceiveResult> ReceivePurchaseOrderAsync(
@@ -40,9 +39,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Thiếu danh sách sản phẩm nhận kho.");
             }
 
-            var purchaseOrder = await _context.PurchaseOrders
-                .Include(x => x.PurchaseOrderItems)
-                .FirstOrDefaultAsync(x => x.Id == purchaseOrderId);
+            var purchaseOrder = await _store.GetPurchaseOrderWithItemsAsync(purchaseOrderId);
             if (purchaseOrder == null)
             {
                 throw new KeyNotFoundException("Không tìm thấy purchase order.");
@@ -53,9 +50,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Purchase order đã hủy, không thể nhận hàng.");
             }
 
-            var warehouseExists = await _context.Warehouses
-                .AsNoTracking()
-                .AnyAsync(x => x.Id == purchaseOrder.DestinationWarehouseId);
+            var warehouseExists = await _store.WarehouseExistsAsync(purchaseOrder.DestinationWarehouseId);
             if (!warehouseExists)
             {
                 throw new InvalidOperationException("Kho đích không tồn tại.");
@@ -70,209 +65,162 @@ namespace MyGarage.Services
                 .GroupBy(x => x.ProductId)
                 .ToDictionary(x => x.Key, x => x.First());
 
-            var strategy = _context.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
+            return await _store.ExecuteInTransactionAsync(async () =>
             {
                 var affectedProductIds = new HashSet<long>();
                 var lineResults = new List<PurchaseOrderReceiveLineResult>();
                 var grnItems = new List<GoodsReceiptNoteItem>();
                 decimal totalReceivedAmount = 0m;
 
-                await using var transaction = await TryBeginTransactionAsync();
-                try
+                var grn = new GoodsReceiptNote
                 {
-                    var grn = new GoodsReceiptNote
+                    GrnCode = $"GRN-{now:yyyyMMddHHmmss}-{purchaseOrder.Id}",
+                    PurchaseOrderId = purchaseOrder.Id,
+                    WarehouseId = purchaseOrder.DestinationWarehouseId,
+                    ReceivedAt = now,
+                    ReceivedBy = effectiveActorId,
+                    Status = "POSTED",
+                    Note = note,
+                    CreatedAt = now
+                };
+                await _store.AddGoodsReceiptNoteAndSaveAsync(grn);
+
+                foreach (var incoming in request.Items.Where(x => x != null))
+                {
+                    if (incoming.ReceivedQuantity <= 0m)
                     {
-                        GrnCode = $"GRN-{now:yyyyMMddHHmmss}-{purchaseOrder.Id}",
-                        PurchaseOrderId = purchaseOrder.Id,
-                        WarehouseId = purchaseOrder.DestinationWarehouseId,
-                        ReceivedAt = now,
-                        ReceivedBy = effectiveActorId,
-                        Status = "POSTED",
-                        Note = note,
-                        CreatedAt = now
-                    };
-                    _context.GoodsReceiptNotes.Add(grn);
-                    await SaveChangesInTransactionAsync();
+                        continue;
+                    }
 
-                    foreach (var incoming in request.Items.Where(x => x != null))
+                    PurchaseOrderItem? targetItem = null;
+                    if (incoming.PurchaseOrderItemId.HasValue && incoming.PurchaseOrderItemId.Value > 0)
                     {
-                        if (incoming.ReceivedQuantity <= 0m)
-                        {
-                            continue;
-                        }
+                        itemById.TryGetValue(incoming.PurchaseOrderItemId.Value, out targetItem);
+                    }
+                    else if (incoming.ProductId.HasValue && incoming.ProductId.Value > 0)
+                    {
+                        itemByProductId.TryGetValue(incoming.ProductId.Value, out targetItem);
+                    }
 
-                        PurchaseOrderItem? targetItem = null;
-                        if (incoming.PurchaseOrderItemId.HasValue && incoming.PurchaseOrderItemId.Value > 0)
-                        {
-                            itemById.TryGetValue(incoming.PurchaseOrderItemId.Value, out targetItem);
-                        }
-                        else if (incoming.ProductId.HasValue && incoming.ProductId.Value > 0)
-                        {
-                            itemByProductId.TryGetValue(incoming.ProductId.Value, out targetItem);
-                        }
+                    if (targetItem == null)
+                    {
+                        throw new InvalidOperationException("Có dòng nhận hàng không khớp với item trong purchase order.");
+                    }
 
-                        if (targetItem == null)
-                        {
-                            if (transaction != null) await transaction.RollbackAsync();
-                            throw new InvalidOperationException("Có dòng nhận hàng không khớp với item trong purchase order.");
-                        }
+                    var currentReceived = targetItem.ReceivedQuantity ?? 0m;
+                    var remaining = Math.Max(0m, targetItem.OrderedQuantity - currentReceived);
+                    if (remaining <= 0m)
+                    {
+                        continue;
+                    }
 
-                        var currentReceived = targetItem.ReceivedQuantity ?? 0m;
-                        var remaining = Math.Max(0m, targetItem.OrderedQuantity - currentReceived);
-                        if (remaining <= 0m)
-                        {
-                            continue;
-                        }
+                    var acceptedQty = Math.Min(remaining, incoming.ReceivedQuantity);
+                    if (acceptedQty <= 0m)
+                    {
+                        continue;
+                    }
 
-                        var acceptedQty = Math.Min(remaining, incoming.ReceivedQuantity);
-                        if (acceptedQty <= 0m)
-                        {
-                            continue;
-                        }
+                    targetItem.ReceivedQuantity = currentReceived + acceptedQty;
+                    var unitPrice = incoming.CostPrice ?? targetItem.CostPrice;
+                    totalReceivedAmount += acceptedQty * unitPrice;
+                    affectedProductIds.Add(targetItem.ProductId);
 
-                        targetItem.ReceivedQuantity = currentReceived + acceptedQty;
-                        var unitPrice = incoming.CostPrice ?? targetItem.CostPrice;
-                        totalReceivedAmount += acceptedQty * unitPrice;
-                        affectedProductIds.Add(targetItem.ProductId);
-
-                        var inventory = await _context.Inventories
-                            .FirstOrDefaultAsync(x =>
-                                x.WarehouseId == purchaseOrder.DestinationWarehouseId &&
-                                x.ProductId == targetItem.ProductId);
-
-                        if (inventory == null)
+                    var inventory = await _store.GetInventoryAsync(purchaseOrder.DestinationWarehouseId, targetItem.ProductId);
+                    if (inventory == null)
+                    {
+                        var minStockLevel = await _store.GetProductMinStockLevelAsync(targetItem.ProductId);
+                        inventory = new Inventory
                         {
-                            var product = await _context.Products.AsNoTracking()
-                                .FirstOrDefaultAsync(x => x.Id == targetItem.ProductId);
-                            inventory = new Inventory
-                            {
-                                WarehouseId = purchaseOrder.DestinationWarehouseId,
-                                ProductId = targetItem.ProductId,
-                                Quantity = acceptedQty,
-                                MinStockLevel = product?.MinStockLevel ?? 0m,
-                                ReservedQuantity = 0m,
-                                CurrentMacPrice = unitPrice,
-                                TotalInventoryValue = acceptedQty * unitPrice
-                            };
-                            _context.Inventories.Add(inventory);
-                        }
-                        else
-                        {
-                            inventory.Quantity += acceptedQty;
-                            inventory.CurrentMacPrice = unitPrice;
-                            inventory.TotalInventoryValue = (inventory.TotalInventoryValue ?? 0m) + (acceptedQty * unitPrice);
-                        }
-
-                        _context.StockTransactions.Add(new StockTransaction
-                        {
-                            ProductId = targetItem.ProductId,
                             WarehouseId = purchaseOrder.DestinationWarehouseId,
-                            Type = "Purchase",
-                            Quantity = acceptedQty,
-                            Price = unitPrice,
-                            PurchaseOrderId = purchaseOrder.Id,
-                            Note = note ?? $"Receive from PO #{purchaseOrder.Id}",
-                            CreatedAt = now,
-                            CreatedBy = effectiveActorId
-                        });
-
-                        grnItems.Add(new GoodsReceiptNoteItem
-                        {
-                            GoodsReceiptNoteId = grn.Id,
-                            PurchaseOrderItemId = targetItem.Id,
                             ProductId = targetItem.ProductId,
-                            OrderedQuantity = targetItem.OrderedQuantity,
-                            ReceivedQuantity = acceptedQty,
-                            UnitCost = unitPrice,
-                            LineAmount = acceptedQty * unitPrice,
-                            CreatedAt = now
-                        });
-
-                        lineResults.Add(new PurchaseOrderReceiveLineResult(
-                            targetItem.Id,
-                            targetItem.ProductId,
-                            acceptedQty,
-                            targetItem.OrderedQuantity,
-                            targetItem.ReceivedQuantity));
+                            Quantity = acceptedQty,
+                            MinStockLevel = minStockLevel,
+                            ReservedQuantity = 0m,
+                            CurrentMacPrice = unitPrice,
+                            TotalInventoryValue = acceptedQty * unitPrice
+                        };
+                        _store.AddInventory(inventory);
                     }
-
-                    if (lineResults.Count == 0)
+                    else
                     {
-                        if (transaction != null) await transaction.RollbackAsync();
-                        throw new InvalidOperationException("Không có số lượng hợp lệ để nhận kho.");
+                        inventory.Quantity += acceptedQty;
+                        inventory.CurrentMacPrice = unitPrice;
+                        inventory.TotalInventoryValue = (inventory.TotalInventoryValue ?? 0m) + (acceptedQty * unitPrice);
                     }
 
-                    if (grnItems.Count > 0)
+                    _store.AddStockTransaction(new StockTransaction
                     {
-                        _context.GoodsReceiptNoteItems.AddRange(grnItems);
-                    }
+                        ProductId = targetItem.ProductId,
+                        WarehouseId = purchaseOrder.DestinationWarehouseId,
+                        Type = "Purchase",
+                        Quantity = acceptedQty,
+                        Price = unitPrice,
+                        PurchaseOrderId = purchaseOrder.Id,
+                        Note = note ?? $"Receive from PO #{purchaseOrder.Id}",
+                        CreatedAt = now,
+                        CreatedBy = effectiveActorId
+                    });
 
-                    var allCompleted = purchaseOrder.PurchaseOrderItems.All(x => (x.ReceivedQuantity ?? 0m) >= x.OrderedQuantity);
-                    purchaseOrder.Status = allCompleted
-                        ? nameof(PurchaseOrderStatusCode.COMPLETED)
-                        : nameof(PurchaseOrderStatusCode.PARTIAL_RECEIVED);
-
-                    await SaveChangesInTransactionAsync();
-
-                    if (affectedProductIds.Count > 0)
+                    grnItems.Add(new GoodsReceiptNoteItem
                     {
-                        var relatedAlerts = await _context.StockAlerts
-                            .Where(x =>
-                                x.IsResolved == false &&
-                                x.WarehouseId == purchaseOrder.DestinationWarehouseId &&
-                                affectedProductIds.Contains(x.ProductId))
-                            .Select(x => x.Id)
-                            .ToListAsync();
+                        GoodsReceiptNoteId = grn.Id,
+                        PurchaseOrderItemId = targetItem.Id,
+                        ProductId = targetItem.ProductId,
+                        OrderedQuantity = targetItem.OrderedQuantity,
+                        ReceivedQuantity = acceptedQty,
+                        UnitCost = unitPrice,
+                        LineAmount = acceptedQty * unitPrice,
+                        CreatedAt = now
+                    });
 
-                        foreach (var alertId in relatedAlerts)
-                        {
-                            await _inventoryAdminService.ResolveStockAlertAsync(alertId, purchaseOrder.Id, effectiveActorId);
-                        }
-                    }
+                    lineResults.Add(new PurchaseOrderReceiveLineResult(
+                        targetItem.Id,
+                        targetItem.ProductId,
+                        acceptedQty,
+                        targetItem.OrderedQuantity,
+                        targetItem.ReceivedQuantity));
+                }
 
-                    await _inventoryAdminService.RebuildStockAlertsAsync(effectiveActorId);
-                    if (transaction != null) await transaction.CommitAsync();
+                if (lineResults.Count == 0)
+                {
+                    throw new InvalidOperationException("Không có số lượng hợp lệ để nhận kho.");
+                }
 
-                    return new PurchaseOrderReceiveResult(
-                        grn.GrnCode,
-                        grn.Id,
-                        purchaseOrder.Id,
-                        purchaseOrder.Status,
-                        now,
+                if (grnItems.Count > 0)
+                {
+                    _store.AddGoodsReceiptNoteItems(grnItems);
+                }
+
+                var allCompleted = purchaseOrder.PurchaseOrderItems.All(x => (x.ReceivedQuantity ?? 0m) >= x.OrderedQuantity);
+                purchaseOrder.Status = allCompleted
+                    ? nameof(PurchaseOrderStatusCode.COMPLETED)
+                    : nameof(PurchaseOrderStatusCode.PARTIAL_RECEIVED);
+
+                await _store.SaveChangesAsync();
+
+                if (affectedProductIds.Count > 0)
+                {
+                    var relatedAlerts = await _store.GetUnresolvedStockAlertIdsAsync(
                         purchaseOrder.DestinationWarehouseId,
-                        totalReceivedAmount,
-                        lineResults);
-                }
-                catch
-                {
-                    if (transaction != null) await transaction.RollbackAsync();
-                    throw;
-                }
-            });
-        }
+                        affectedProductIds);
 
-        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
-        {
-            if (_context.Database.CurrentTransaction != null)
-            {
-                return null;
-            }
-
-            return await _context.Database.BeginTransactionAsync();
-        }
-
-        private async Task SaveChangesInTransactionAsync()
-        {
-            var strategy = _context.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await TryBeginTransactionAsync();
-                await _context.SaveChangesAsync();
-                if (transaction != null)
-                {
-                    await transaction.CommitAsync();
+                    foreach (var alertId in relatedAlerts)
+                    {
+                        await _stockAlertSyncService.ResolveStockAlertAsync(alertId, purchaseOrder.Id, effectiveActorId);
+                    }
                 }
+
+                await _stockAlertSyncService.RebuildStockAlertsAsync(effectiveActorId);
+
+                return new PurchaseOrderReceiveResult(
+                    grn.GrnCode,
+                    grn.Id,
+                    purchaseOrder.Id,
+                    purchaseOrder.Status,
+                    now,
+                    purchaseOrder.DestinationWarehouseId,
+                    totalReceivedAmount,
+                    lineResults);
             });
         }
     }

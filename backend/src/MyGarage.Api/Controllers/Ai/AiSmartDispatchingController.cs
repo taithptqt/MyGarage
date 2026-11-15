@@ -1,9 +1,5 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -13,20 +9,17 @@ using MyGarage.Extensions;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/ai-smart-dispatchings")]
     [Route("api/v1/ai-smart-dispatchings")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class AiSmartDispatchingController : ControllerBase
     {
         private readonly IAiSmartDispatchingService _aiSmartDispatchingService;
-        private readonly IMapper _mapper;
         private readonly DispatchListQuery _list;
 
-        public AiSmartDispatchingController(IAiSmartDispatchingService aiSmartDispatchingService, IMapper mapper, DispatchListQuery list)
+        public AiSmartDispatchingController(IAiSmartDispatchingService aiSmartDispatchingService, DispatchListQuery list)
         {
             _aiSmartDispatchingService = aiSmartDispatchingService;
-            _mapper = mapper;
             _list = list;
         }
 
@@ -41,41 +34,29 @@ namespace MyGarage.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<AiSmartDispatchingResponseDto>> GetById(long id)
         {
-            var item = await _aiSmartDispatchingService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _aiSmartDispatchingService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<AiSmartDispatchingResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<AiSmartDispatchingResponseDto>> Create([FromBody] AiSmartDispatchingCreateDto itemDto)
         {
-            var entity = _mapper.Map<AiSmartDispatching>(itemDto);
-            var createdItem = await _aiSmartDispatchingService.AddAsync(entity);
-            var responseDto = _mapper.Map<AiSmartDispatchingResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _aiSmartDispatchingService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<AiSmartDispatchingResponseDto>> Update(long id, [FromBody] AiSmartDispatchingUpdateDto itemDto)
         {
-            var existingItem = await _aiSmartDispatchingService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _aiSmartDispatchingService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _aiSmartDispatchingService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<AiSmartDispatchingResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

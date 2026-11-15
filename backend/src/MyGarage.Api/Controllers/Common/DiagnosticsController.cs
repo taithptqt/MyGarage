@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers;
@@ -10,17 +9,16 @@ namespace MyGarage.Controllers;
 /// </summary>
 [ApiController]
 [Authorize(Policy = "AdminStaffOnly")]
-[Route("api/diagnostics")]
 [Route("api/v1/diagnostics")]
 public class DiagnosticsController(
     IEmailService emailService,
     IPaymentConfirmationService paymentConfirmationService,
-    IGarageContext db,
+    IPaymentService paymentService,
     IHostEnvironment environment) : ControllerBase
 {
     private readonly IEmailService _emailService = emailService;
     private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
-    private readonly IGarageContext _db = db;
+    private readonly IPaymentService _paymentService = paymentService;
     private readonly IHostEnvironment _environment = environment;
 
     /// <summary>
@@ -56,33 +54,35 @@ public class DiagnosticsController(
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Gửi email thất bại.",
-                error = ex.Message,
-                innerError = ex.InnerException?.Message
-            });
+            return this.ProblemMessage(
+                StatusCodes.Status500InternalServerError,
+                "Gửi email thất bại.",
+                extensions: new Dictionary<string, object?>
+                {
+                    ["success"] = false,
+                    ["error"] = ex.Message,
+                    ["innerError"] = ex.InnerException?.Message
+                });
         }
     }
 
     /// <summary>
     /// Trigger thủ công email cho một payment đã COMPLETED.
-    /// POST /api/diagnostics/retry-payment-email/{paymentId}
+    /// POST /api/v1/diagnostics/payment-emails/{paymentId}/retries
     /// </summary>
-    [HttpPost("retry-payment-email/{paymentId:long}")]
+    [HttpPost("payment-emails/{paymentId:long}/retries")]
     public async Task<IActionResult> RetryPaymentEmail(long paymentId)
     {
         if (!_environment.IsDevelopment())
         {
             return NotFound();
         }
-        var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Id == paymentId);
+        var payment = await _paymentService.GetByIdAsync(paymentId);
         if (payment is null)
-            return NotFound(new { message = $"Không tìm thấy Payment #{paymentId}" });
+            return this.NotFoundProblem($"Không tìm thấy Payment #{paymentId}");
 
         if (payment.Status != "COMPLETED")
-            return BadRequest(new { message = $"Payment #{paymentId} chưa COMPLETED (status hiện tại: {payment.Status})" });
+            return this.BadRequestProblem($"Payment #{paymentId} chưa COMPLETED (status hiện tại: {payment.Status})");
 
         try
         {
@@ -90,7 +90,7 @@ public class DiagnosticsController(
             // bằng cách reset status về PENDING rồi gọi ApplyOutcomeAsync
             var previousStatus = payment.Status;
             payment.Status = "PENDING"; // Tạm đặt về PENDING để trigger email
-            await _db.SaveChangesAsync();
+            await _paymentService.UpdateAsync(paymentId, payment);
 
             await _paymentConfirmationService.ApplyOutcomeAsync(payment, payment.Amount, "COMPLETED");
 
@@ -104,12 +104,14 @@ public class DiagnosticsController(
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Retry thất bại.",
-                error = ex.Message
-            });
+            return this.ProblemMessage(
+                StatusCodes.Status500InternalServerError,
+                "Retry thất bại.",
+                extensions: new Dictionary<string, object?>
+                {
+                    ["success"] = false,
+                    ["error"] = ex.Message
+                });
         }
     }
 

@@ -33,6 +33,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
         else
         {
+            if (!string.Equals(user.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+                return Enumerable.Empty<ServiceOrderODataDto>().AsQueryable();
             var customerId = user.GetCurrentUserId();
             if (!customerId.HasValue)
             {
@@ -83,6 +85,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
         else
         {
+            if (!string.Equals(user.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+                return Enumerable.Empty<QuotationODataDto>().AsQueryable();
             var customerId = user.GetCurrentUserId();
             if (!customerId.HasValue)
             {
@@ -145,15 +149,19 @@ public sealed class ODataQueryService : IODataQueryService
             Action = x.Action,
             TableName = x.TableName,
             RecordId = x.RecordId,
-            OldValue = x.OldValue,
-            NewValue = x.NewValue,
+            // Historical audit values may contain secrets. Do not expose them through
+            // OData until existing records can be reliably sanitized.
+            OldValue = null,
+            NewValue = null,
             Timestamp = x.Timestamp
         });
     }
 
-    public IQueryable<VehicleODataDto> Vehicles(ClaimsPrincipal user)
+    public IQueryable<VehicleODataDto> Vehicles(ClaimsPrincipal user, bool includeDeleted = false)
     {
         var query = _context.Vehicles.AsNoTracking();
+        if (!includeDeleted || !user.IsAdminStaff())
+            query = query.Where(v => v.IsDeleted != true);
         if (user.IsStaffUser())
         {
             if (!user.IsAdminStaff())
@@ -171,6 +179,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
         else
         {
+            if (!string.Equals(user.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+                return Enumerable.Empty<VehicleODataDto>().AsQueryable();
             var customerId = user.GetCurrentUserId();
             if (!customerId.HasValue)
             {
@@ -214,6 +224,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
         else
         {
+            if (!string.Equals(user.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+                return Enumerable.Empty<AppointmentODataDto>().AsQueryable();
             var customerId = user.GetCurrentUserId();
             if (!customerId.HasValue)
             {
@@ -278,7 +290,7 @@ public sealed class ODataQueryService : IODataQueryService
         });
     }
 
-    public IQueryable<StaffODataDto> Staffs(ClaimsPrincipal user)
+    public IQueryable<StaffODataDto> Staffs(ClaimsPrincipal user, bool includeDeleted = false)
     {
         if (!user.IsStaffUser())
         {
@@ -286,6 +298,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
 
         var query = _context.Staffs.AsNoTracking();
+        if (!includeDeleted || !user.IsAdminStaff())
+            query = query.Where(x => x.IsDeleted != true);
         if (!user.IsAdminStaff())
         {
             var branchId = user.GetCurrentBranchId();
@@ -314,7 +328,7 @@ public sealed class ODataQueryService : IODataQueryService
         });
     }
 
-    public IQueryable<CustomerODataDto> Customers(ClaimsPrincipal user)
+    public IQueryable<CustomerODataDto> Customers(ClaimsPrincipal user, bool includeDeleted = false)
     {
         if (!user.IsStaffUser())
         {
@@ -322,6 +336,8 @@ public sealed class ODataQueryService : IODataQueryService
         }
 
         var query = _context.Customers.AsNoTracking();
+        if (!includeDeleted || !user.IsAdminStaff())
+            query = query.Where(c => c.IsDeleted != true);
         if (!user.IsAdminStaff())
         {
             var branchId = user.GetCurrentBranchId();

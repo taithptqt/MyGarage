@@ -113,7 +113,7 @@ if ($QuotationId -gt 0 -and $ActorStaffId -gt 0) {
 }
 
 if ($ShiftClosingId -gt 0) {
-  $r = Invoke-Api -Method "POST" -Path "/api/shift-closings/$ShiftClosingId/reconcile" -Body @{
+  $r = Invoke-Api -Method "POST" -Path "/api/shift-closings/$ShiftClosingId/reconciliations" -Body @{
     actualBalance = 0
     totalCashOut = 0
     note = "Smoke reconcile"
@@ -122,7 +122,7 @@ if ($ShiftClosingId -gt 0) {
 }
 
 if ($RetailReturnId -gt 0) {
-  $r = Invoke-Api -Method "POST" -Path "/api/retail-returns/$RetailReturnId/finalize"
+  $r = Invoke-Api -Method "POST" -Path "/api/retail-returns/$RetailReturnId/finalizations"
   Add-Result "Retail Return Finalize" $r
 }
 

@@ -4,7 +4,17 @@ using System.Linq;
 
 namespace MyGarage.Application.Common.Pagination;
 
-public sealed record PagedEnvelope<T>
+public interface IPagedEnvelopeMetadata
+{
+    int TotalCount { get; }
+    int Page { get; }
+    int PageSize { get; }
+    int TotalPages { get; }
+    bool HasPreviousPage { get; }
+    bool HasNextPage { get; }
+}
+
+public sealed record PagedEnvelope<T> : IPagedEnvelopeMetadata
 {
     public IReadOnlyList<T> Items { get; init; } = Array.Empty<T>();
     public int TotalCount { get; init; }

@@ -8,7 +8,6 @@ using MyGarage.Common;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Route("api/workshop")]
     [Route("api/v1/workshop")]
     [Authorize]
     public sealed class WorkshopDispatchController : ControllerBase
@@ -26,7 +25,7 @@ namespace MyGarage.Controllers
             var targetBranchId = branchId ?? this.GetCurrentBranchId();
             if (targetBranchId <= 0)
             {
-                return BadRequest(new { message = "Thiếu branchId hợp lệ." });
+                return this.BadRequestProblem("Thiếu branchId hợp lệ.");
             }
 
             var targetDate = date ?? VietnamTime.Now;

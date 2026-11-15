@@ -1,22 +1,17 @@
 // Mục đích: Cung cấp API quản lý luồng phê duyệt ngoại lệ khi áp dụng voucher.
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/voucher-approval-requests")]
     [Route("api/v1/voucher-approval-requests")]
     [ApiController]
     [Authorize(Policy = "AdminStaffOnly")]
@@ -31,14 +26,14 @@ namespace MyGarage.Controllers
         }
 
         private readonly IVoucherApprovalRequestService _service;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _context;
+        private readonly IVoucherApprovalRequestQueryService _queryService;
 
-        public VoucherApprovalRequestController(IVoucherApprovalRequestService service, IMapper mapper, IGarageContext context)
+        public VoucherApprovalRequestController(
+            IVoucherApprovalRequestService service,
+            IVoucherApprovalRequestQueryService queryService)
         {
             _service = service;
-            _mapper = mapper;
-            _context = context;
+            _queryService = queryService;
         }
 
         [HttpGet]
@@ -47,20 +42,9 @@ namespace MyGarage.Controllers
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
         {
-            var query = _context.VoucherApprovalRequests.AsNoTracking().Include(x => x.Voucher).Include(x => x.Redemption).AsQueryable();
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                var normalized = status.Trim().ToUpperInvariant();
-                query = query.Where(x => x.Status != null && x.Status.ToUpper() == normalized);
-            }
             var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
-            var total = await query.CountAsync();
-            var offset = ((long)normalizedPage - 1) * normalizedSize;
-            var paged = offset >= total
-                ? new List<VoucherApprovalRequest>()
-                : await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
-                    .Skip((int)offset).Take(normalizedSize).ToListAsync();
-            var dtos = _mapper.Map<List<VoucherApprovalRequestResponseDto>>(paged);
+            var (paged, total) = await _queryService.GetPagedAsync(status, normalizedPage, normalizedSize);
+            var dtos = _service.MapToDtos(paged);
             return Ok(PagedEnvelope<VoucherApprovalRequestResponseDto>.Create(dtos, total, normalizedPage, normalizedSize));
         }
 
@@ -68,32 +52,21 @@ namespace MyGarage.Controllers
         public async Task<IActionResult> GetAdminPage([FromQuery] string? search, [FromQuery] int? page,
             [FromQuery] int? pageSize, System.Threading.CancellationToken cancellationToken)
         {
-            var query = _context.VoucherApprovalRequests.AsNoTracking().AsQueryable();
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var term = search.Trim().ToUpperInvariant();
-                query = query.Where(x => ((x.RequestType ?? "null") + " " + (x.Reason ?? "null") + " " + x.Id.ToString() + " " +
-                    (x.VoucherId.HasValue ? x.VoucherId.Value.ToString() : "null")).ToUpper().Contains(term));
-            }
-            var total = await query.CountAsync(cancellationToken);
             var (current, size) = PaginationExtensions.NormalizePagination(page, pageSize, 10, 100);
-            var offset = ((long)current - 1) * size;
-            var rows = offset >= total ? new List<VoucherApprovalRequest>() :
-                await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
-                    .Skip((int)offset).Take(size).ToListAsync(cancellationToken);
-            return Ok(new { items = _mapper.Map<List<VoucherApprovalRequestResponseDto>>(rows), total });
+            var (rows, total) = await _queryService.GetAdminPageAsync(search, current, size, cancellationToken);
+            return Ok(new { items = _service.MapToDtos(rows), total });
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<VoucherApprovalRequestResponseDto>> GetById(long id)
         {
-            var item = await _service.GetDetailedByIdAsync(id);
-            if (item == null)
+            var dto = await _service.GetDetailedDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            return Ok(_mapper.Map<VoucherApprovalRequestResponseDto>(item));
+            return Ok(dto);
         }
 
         [HttpPost]
@@ -101,13 +74,11 @@ namespace MyGarage.Controllers
         {
             if (dto.RequestedBy <= 0 || string.IsNullOrWhiteSpace(dto.RequestType) || string.IsNullOrWhiteSpace(dto.Reason))
             {
-                return BadRequest(new { message = "RequestedBy, RequestType, and Reason are required." });
+                return this.BadRequestProblem("RequestedBy, RequestType, and Reason are required.");
             }
 
-            var entity = _mapper.Map<VoucherApprovalRequest>(dto);
-            var created = await _service.AddAsync(entity);
-            var response = _mapper.Map<VoucherApprovalRequestResponseDto>(created);
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
+            var response = await _service.CreateDtoAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id = response.Id }, response);
         }
 
         [HttpPatch("{id:long}")]
@@ -115,13 +86,13 @@ namespace MyGarage.Controllers
         {
             if (decision.ApproverId <= 0)
             {
-                return BadRequest(new { message = "ApproverId is required." });
+                return this.BadRequestProblem("ApproverId is required.");
             }
 
             var normalizedDecision = (decision.Decision ?? string.Empty).Trim().ToUpperInvariant();
             if (normalizedDecision is not ("APPROVE" or "REJECT"))
             {
-                return BadRequest(new { message = "Decision must be APPROVE or REJECT." });
+                return this.BadRequestProblem("Decision must be APPROVE or REJECT.");
             }
 
             var mapped = new VoucherApprovalDecisionDto
@@ -134,19 +105,19 @@ namespace MyGarage.Controllers
             try
             {
                 var updated = normalizedDecision == "APPROVE"
-                    ? await _service.ApproveAsync(id, mapped)
-                    : await _service.RejectAsync(id, mapped);
+                    ? await _service.ApproveDtoAsync(id, mapped)
+                    : await _service.RejectDtoAsync(id, mapped);
 
                 if (updated == null)
                 {
                     return NotFound();
                 }
 
-                return Ok(_mapper.Map<VoucherApprovalRequestResponseDto>(updated));
+                return Ok(updated);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 

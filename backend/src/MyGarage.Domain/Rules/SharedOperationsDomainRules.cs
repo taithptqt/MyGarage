@@ -179,7 +179,11 @@ public static class SharedOperationsDomainRules
         "securitystamp",
         "token",
         "secret",
-        "otp"
+        "otp",
+        "credential",
+        "authorization",
+        "privatekey",
+        "cookie"
     };
 
     public static (int Page, int PageSize) NormalizeAuditPageSize(

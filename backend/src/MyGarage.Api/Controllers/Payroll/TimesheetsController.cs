@@ -4,27 +4,26 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests.Execution;
 using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Exceptions;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Route("api/timesheets")]
     [Route("api/v1/timesheets")]
     [Authorize]
     public sealed class TimesheetsController : ControllerBase
     {
         private readonly ITimesheetService _timesheetService;
-        private readonly IGarageContext _context;
+        private readonly ITimesheetQueryService _timesheetQueryService;
 
-        public TimesheetsController(ITimesheetService timesheetService, IGarageContext context)
+        public TimesheetsController(ITimesheetService timesheetService, ITimesheetQueryService timesheetQueryService)
         {
             _timesheetService = timesheetService;
-            _context = context;
+            _timesheetQueryService = timesheetQueryService;
         }
 
         [HttpGet("today")]
@@ -43,11 +42,11 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -67,15 +66,15 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
-        [HttpPost("check-in")]
+        [HttpPost("check-ins")]
         public async Task<ActionResult<TimesheetEntryDto>> CheckIn([FromBody] TimesheetCheckInRequestDto request)
         {
             var currentUserId = this.GetCurrentUserId();
@@ -101,15 +100,15 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
-        [HttpPut("{id:long}/check-out")]
+        [HttpPost("{id:long}/check-outs")]
         public async Task<ActionResult<TimesheetEntryDto>> CheckOut(long id, [FromBody] TimesheetCheckOutRequestDto request)
         {
             if (!this.TryResolveBranchScope(null, out var scopedBranchId, out var denied))
@@ -117,11 +116,7 @@ namespace MyGarage.Controllers
                 return (ActionResult)denied!;
             }
 
-            var entryOwner = await _context.TimesheetEntries
-                .AsNoTracking()
-                .Where(t => t.Id == id)
-                .Select(t => new { t.StaffId, t.BranchId })
-                .FirstOrDefaultAsync();
+            var entryOwner = await _timesheetQueryService.GetEntryOwnerAsync(id);
             if (entryOwner != null)
             {
                 if (scopedBranchId.HasValue && entryOwner.BranchId != scopedBranchId.Value)
@@ -144,11 +139,11 @@ namespace MyGarage.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -181,11 +176,7 @@ namespace MyGarage.Controllers
 
             if (scopedBranchId.HasValue)
             {
-                var targetBranchId = await _context.Staffs
-                    .AsNoTracking()
-                    .Where(s => s.Id == targetStaffId && s.IsDeleted != true)
-                    .Select(s => (long?)s.BranchId)
-                    .FirstOrDefaultAsync();
+                var targetBranchId = await _timesheetQueryService.GetStaffBranchIdAsync(targetStaffId);
                 if (!targetBranchId.HasValue || targetBranchId.Value != scopedBranchId.Value)
                 {
                     return null;

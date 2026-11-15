@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Interfaces;
 
@@ -10,11 +9,11 @@ namespace MyGarage.Services
 {
     public sealed class VehicleHistoryService : IVehicleHistoryService
     {
-        private readonly IGarageContext _context;
+        private readonly IVehicleHistoryStore _store;
 
-        public VehicleHistoryService(IGarageContext context)
+        public VehicleHistoryService(IVehicleHistoryStore store)
         {
-            _context = context;
+            _store = store;
         }
 
         public async Task<VehicleServiceHistoryResponseDto?> GetServiceHistoryAsync(long vehicleId, int page = 1, int pageSize = 20)
@@ -27,75 +26,18 @@ namespace MyGarage.Services
             var normalizedPage = Math.Max(1, page);
             var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
 
-            var vehicle = await _context.Vehicles
-                .AsNoTracking()
-                .Where(x => x.Id == vehicleId && x.IsDeleted != true)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.LicensePlate,
-                    x.Vin
-                })
-                .FirstOrDefaultAsync();
+            var vehicle = await _store.GetVehicleAsync(vehicleId);
             if (vehicle == null)
             {
                 return null;
             }
 
-            var baseQuery = _context.ServiceOrders
-                .AsNoTracking()
-                .Where(x => x.VehicleId == vehicleId);
-
-            var total = await baseQuery.CountAsync();
-            var orders = await baseQuery
-                .OrderByDescending(x => x.CheckInTime ?? x.CreatedAt ?? DateTime.MinValue)
-                .ThenByDescending(x => x.Id)
-                .Skip((normalizedPage - 1) * normalizedPageSize)
-                .Take(normalizedPageSize)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.Code,
-                    x.Status,
-                    x.CheckInTime,
-                    x.ActualHandover,
-                    x.FinalAmount,
-                    x.PaymentStatus,
-                    x.Qcstatus
-                })
-                .ToListAsync();
+            var (total, orders) = await _store.GetPagedServiceOrdersAsync(vehicleId, normalizedPage, normalizedPageSize);
 
             var orderIds = orders.Select(x => x.Id).ToList();
-            var detailRows = await _context.ServiceOrderDetails
-                .AsNoTracking()
-                .Where(x => orderIds.Contains(x.ServiceOrderId))
-                .Select(x => new DetailRow
-                {
-                    ServiceOrderId = x.ServiceOrderId,
-                    ItemType = x.ItemType,
-                    ItemName = x.ItemName
-                })
-                .ToListAsync();
-            var diagnosisCounts = await _context.Diagnoses
-                .AsNoTracking()
-                .Where(x => orderIds.Contains(x.ServiceOrderId))
-                .GroupBy(x => x.ServiceOrderId)
-                .Select(x => new
-                {
-                    ServiceOrderId = x.Key,
-                    Count = x.Count()
-                })
-                .ToDictionaryAsync(x => x.ServiceOrderId, x => x.Count);
-            var paymentSums = await _context.Payments
-                .AsNoTracking()
-                .Where(x => x.ServiceOrderId.HasValue && orderIds.Contains(x.ServiceOrderId.Value))
-                .GroupBy(x => x.ServiceOrderId!.Value)
-                .Select(x => new
-                {
-                    ServiceOrderId = x.Key,
-                    PaidAmount = x.Sum(p => p.Amount)
-                })
-                .ToDictionaryAsync(x => x.ServiceOrderId, x => x.PaidAmount);
+            var detailRows = await _store.GetOrderDetailsAsync(orderIds);
+            var diagnosisCounts = await _store.GetDiagnosisCountsAsync(orderIds);
+            var paymentSums = await _store.GetPaymentSumsAsync(orderIds);
 
             var detailsByOrder = detailRows
                 .GroupBy(x => x.ServiceOrderId)
@@ -104,7 +46,7 @@ namespace MyGarage.Services
             var items = orders.Select(order =>
             {
                 detailsByOrder.TryGetValue(order.Id, out var orderDetails);
-                orderDetails ??= new List<DetailRow>();
+                orderDetails ??= new List<VehicleHistoryDetailRecord>();
 
                 var serviceLineCount = orderDetails.Count(x => NormalizeType(x.ItemType) == "LABOR");
                 var partLineCount = orderDetails.Count(x => NormalizeType(x.ItemType) == "PART");
@@ -125,7 +67,7 @@ namespace MyGarage.Services
                     TotalAmount = order.FinalAmount ?? 0m,
                     PaidAmount = paymentSums.TryGetValue(order.Id, out var paid) ? paid : 0m,
                     PaymentStatus = order.PaymentStatus,
-                    QcStatus = order.Qcstatus,
+                    QcStatus = order.QcStatus,
                     DiagnosisCount = diagnosisCounts.TryGetValue(order.Id, out var diagnosisCount) ? diagnosisCount : 0,
                     ServiceLineCount = serviceLineCount,
                     PartLineCount = partLineCount,
@@ -154,15 +96,6 @@ namespace MyGarage.Services
                 "PART" or "PARTS" or "PRODUCT" or "MATERIAL" or "INVENTORY" => "PART",
                 _ => "LABOR"
             };
-        }
-
-        private sealed class DetailRow
-        {
-            public long ServiceOrderId { get; set; }
-
-            public string ItemType { get; set; } = string.Empty;
-
-            public string ItemName { get; set; } = string.Empty;
         }
     }
 }

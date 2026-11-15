@@ -1,49 +1,42 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
     [Authorize(Roles = "Staff")]
-    [Route("api/salary-coefficients")]
     [Route("api/v1/salary-coefficients")]
     [ApiController]
     public class SalaryCoefficientController : ControllerBase
     {
         private readonly ISalaryCoefficientService _salaryCoefficientService;
-        private readonly IMapper _mapper;
 
-        public SalaryCoefficientController(ISalaryCoefficientService salaryCoefficientService, IMapper mapper)
+        public SalaryCoefficientController(ISalaryCoefficientService salaryCoefficientService)
         {
             _salaryCoefficientService = salaryCoefficientService;
-            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<SalaryCoefficientResponseDto>>> GetAll()
         {
-            var items = await _salaryCoefficientService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<SalaryCoefficientResponseDto>>(items);
+            var dtos = await _salaryCoefficientService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<SalaryCoefficientResponseDto>> GetById(long id)
         {
-            var item = await _salaryCoefficientService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _salaryCoefficientService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            var dto = _mapper.Map<SalaryCoefficientResponseDto>(item);
             return Ok(dto);
         }
 
@@ -57,14 +50,12 @@ namespace MyGarage.Controllers
 
             try
             {
-                var entity = _mapper.Map<SalaryCoefficient>(itemDto);
-                var createdItem = await _salaryCoefficientService.AddAsync(entity);
-                var responseDto = _mapper.Map<SalaryCoefficientResponseDto>(createdItem);
-                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+                var responseDto = await _salaryCoefficientService.CreateDtoAsync(itemDto);
+                return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -76,27 +67,19 @@ namespace MyGarage.Controllers
                 return Forbid();
             }
 
-            var existingItem = await _salaryCoefficientService.GetByIdAsync(id);
-            if (existingItem == null)
-            {
-                return NotFound();
-            }
-
             try
             {
-                _mapper.Map(itemDto, existingItem);
-                var updatedItem = await _salaryCoefficientService.UpdateAsync(id, existingItem);
-                if (updatedItem == null)
+                var responseDto = await _salaryCoefficientService.UpdateDtoAsync(id, itemDto);
+                if (responseDto == null)
                 {
                     return NotFound();
                 }
 
-                var responseDto = _mapper.Map<SalaryCoefficientResponseDto>(updatedItem);
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 

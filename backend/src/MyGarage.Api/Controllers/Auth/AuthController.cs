@@ -9,10 +9,10 @@ using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests.Auth;
 using MyGarage.DTOs.Responses.Auth;
 using MyGarage.Security;
+using MyGarage.Services;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/auth")]
     [Route("api/v1/auth")]
     [ApiController]
     public class AuthController : ControllerBase
@@ -21,17 +21,20 @@ namespace MyGarage.Controllers
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
         private readonly ITokenBlacklistService _tokenBlacklistService;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             IAuthService authService,
             IConfiguration configuration,
             IWebHostEnvironment environment,
-            ITokenBlacklistService tokenBlacklistService)
+            ITokenBlacklistService tokenBlacklistService,
+            ILogger<AuthController> logger)
         {
             _authService = authService;
             _configuration = configuration;
             _environment = environment;
             _tokenBlacklistService = tokenBlacklistService;
+            _logger = logger;
         }
 
         [AllowAnonymous]
@@ -47,11 +50,15 @@ namespace MyGarage.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return this.UnauthorizedProblem(ex.Message);
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return HandleUnexpectedAuthFailure(ex);
             }
         }
 
@@ -66,13 +73,17 @@ namespace MyGarage.Controllers
                 AuthCookie.Append(Response, response.Token, _configuration, _environment);
                 return Ok(response);
             }
-            catch (InvalidOperationException ex)
+            catch (AuthRequestException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
+                return HandleUnexpectedAuthFailure(ex);
             }
         }
 
@@ -89,12 +100,26 @@ namespace MyGarage.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return this.UnauthorizedProblem(ex.Message);
+            }
+            catch (AuthRequestException ex)
+            {
+                return this.BadRequestProblem(ex.Message);
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
+                return HandleUnexpectedAuthFailure(ex);
             }
+        }
+
+        private ObjectResult HandleUnexpectedAuthFailure(Exception exception)
+        {
+            _logger.LogError("Authentication request failed ({ExceptionType}); trace {TraceId}", exception.GetType().Name, HttpContext.TraceIdentifier);
+            return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.", "INTERNAL_SERVER_ERROR");
         }
 
         [AllowAnonymous]
@@ -126,7 +151,7 @@ namespace MyGarage.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("logout")]
+        [HttpPost("session-revocations")]
         public async Task<IActionResult> Logout()
         {
             var authHeader = Request.Headers.Authorization.ToString();
@@ -146,7 +171,6 @@ namespace MyGarage.Controllers
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [HttpPost("credential-recovery-requests")]
-        [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
         {
             try
@@ -154,16 +178,17 @@ namespace MyGarage.Controllers
                 await _authService.ForgotPasswordAsync(request);
                 return Ok(new { Message = "Đã gửi liên kết thành công" });
             }
-            catch (ValidationException ex)
+            catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // Do not disclose whether an account exists when delivery or storage fails.
+                _logger.LogError("Credential recovery request failed ({ExceptionType}); trace {TraceId}", ex.GetType().Name, HttpContext.TraceIdentifier);
+                return Ok(new { Message = "Đã gửi liên kết thành công" });
             }
         }
 
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [HttpPost("credential-recovery-finalizations")]
-        [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
         {
             try
@@ -173,11 +198,11 @@ namespace MyGarage.Controllers
             }
             catch (ValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return this.UnauthorizedProblem(ex.Message);
             }
         }
 
@@ -190,7 +215,7 @@ namespace MyGarage.Controllers
 
             if (string.IsNullOrEmpty(userIdStr) || !long.TryParse(userIdStr, out long userId) || string.IsNullOrEmpty(role))
             {
-                return Unauthorized(new { Message = "Invalid user claims." });
+                return this.UnauthorizedProblem("Invalid user claims.");
             }
 
             try
@@ -201,7 +226,7 @@ namespace MyGarage.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return this.UnauthorizedProblem(ex.Message);
             }
         }
 
@@ -214,7 +239,7 @@ namespace MyGarage.Controllers
 
             if (string.IsNullOrEmpty(userIdStr) || !long.TryParse(userIdStr, out long userId) || string.IsNullOrEmpty(role))
             {
-                return Unauthorized(new { Message = "Invalid user claims." });
+                return this.UnauthorizedProblem("Invalid user claims.");
             }
 
             try
@@ -224,7 +249,7 @@ namespace MyGarage.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return this.UnauthorizedProblem(ex.Message);
             }
         }
     }

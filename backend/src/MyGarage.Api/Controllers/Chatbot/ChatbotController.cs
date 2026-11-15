@@ -14,7 +14,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/chatbot")]
 [Route("api/v1/chatbot")]
 public class ChatbotController : ControllerBase
 {
@@ -79,7 +78,7 @@ public class ChatbotController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (KeyNotFoundException)
         {
@@ -103,7 +102,7 @@ public class ChatbotController : ControllerBase
     /// <response code="404">Session/customer not found.</response>
     /// <response code="409">Session conflict (for example handed off/locked).</response>
     /// <response code="429">Rate limit reached.</response>
-    [HttpPost("orchestrate")]
+    [HttpPost("orchestrations")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(OrchestratedChatbotReplyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -129,7 +128,7 @@ public class ChatbotController : ControllerBase
 
         if (request is null)
         {
-            return BadRequest(new { message = "Request body is required." });
+            return this.BadRequestProblem("Request body is required.");
         }
 
         try
@@ -150,16 +149,16 @@ public class ChatbotController : ControllerBase
         {
             if (ex.Message.Contains("RATE_LIMIT", StringComparison.OrdinalIgnoreCase))
             {
-                return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Too many chatbot requests." });
+                return this.ProblemMessage(StatusCodes.Status429TooManyRequests, "Too many chatbot requests.");
             }
 
             if (ex.Message.Contains("locked", StringComparison.OrdinalIgnoreCase) ||
                 ex.Message.Contains("handed off", StringComparison.OrdinalIgnoreCase))
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
             }
 
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (KeyNotFoundException)
         {
@@ -220,15 +219,15 @@ public class ChatbotController : ControllerBase
         {
             if (ex.Message.Contains("RATE_LIMIT", StringComparison.OrdinalIgnoreCase))
             {
-                return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Too many chatbot requests." });
+                return this.ProblemMessage(StatusCodes.Status429TooManyRequests, "Too many chatbot requests.");
             }
 
             if (ex.Message.Contains("locked", StringComparison.OrdinalIgnoreCase))
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
             }
 
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (KeyNotFoundException)
         {
@@ -287,7 +286,7 @@ public class ChatbotController : ControllerBase
     /// <response code="401">Authentication required.</response>
     /// <response code="403">Caller role is not Customer.</response>
     /// <response code="404">Session or customer not found.</response>
-    [HttpPost("upload-image")]
+    [HttpPost("images")]
     [Consumes("multipart/form-data")]
     [Produces("application/json")]
     [RequestFormLimits(MultipartBodyLengthLimit = 8 * 1024 * 1024 + 1024)]
@@ -312,17 +311,31 @@ public class ChatbotController : ControllerBase
             return Unauthorized();
         }
 
+        if (request?.File is null)
+        {
+            return this.BadRequestProblem("File is required.");
+        }
+
         try
         {
+            await using var stream = request.File.OpenReadStream();
+            var input = new UploadChatbotImageInput(
+                request.SessionId,
+                request.SessionToken,
+                request.Note,
+                stream,
+                request.File.FileName ?? string.Empty,
+                request.File.ContentType ?? string.Empty,
+                request.File.Length);
             var result = await _chatbotImageUploadService.UploadAndAnalyzeAsync(
                 customerId.Value,
-                request ?? new UploadChatbotImageRequestDto(),
+                input,
                 cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
         catch (KeyNotFoundException)
         {

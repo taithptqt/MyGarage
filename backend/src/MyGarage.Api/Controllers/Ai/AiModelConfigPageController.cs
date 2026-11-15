@@ -6,7 +6,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize(Policy = "AdminStaffOnly")]
-[Route("api/ai-model-configs/page")]
 [Route("api/v1/ai-model-configs/page")]
 public sealed class AiModelConfigPageController(AiModelConfigPageQuery query) : ControllerBase
 {

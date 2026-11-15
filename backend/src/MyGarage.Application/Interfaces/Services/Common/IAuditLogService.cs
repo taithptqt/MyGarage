@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
 using MyGarage.Models;
 
 namespace MyGarage.Interfaces
@@ -15,5 +17,10 @@ namespace MyGarage.Interfaces
             string? query = null,
             DateTime? from = null,
             DateTime? to = null);
+
+        List<AuditLogResponseDto> MapToDtos(IEnumerable<AuditLog> items);
+        Task<AuditLogResponseDto?> GetDtoByIdAsync(long id);
+        Task<AuditLogResponseDto> CreateDtoAsync(AuditLogCreateDto itemDto);
+        Task<AuditLogResponseDto?> UpdateDtoAsync(long id, AuditLogUpdateDto itemDto);
     }
 }

@@ -1,19 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using Microsoft.EntityFrameworkCore;
+using MyGarage.Application.Interfaces.Queries;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/material-request-details")]
     [Route("api/v1/material-request-details")]
     [ApiController]
     [Authorize(Roles = "Staff")]
@@ -21,49 +17,38 @@ namespace MyGarage.Controllers
     {
         private readonly IMaterialRequestDetailService _materialRequestDetailService;
         private readonly IServiceOrderService _serviceOrderService;
-        private readonly IGarageContext _context;
-        private readonly IMapper _mapper;
+        private readonly IMaterialRequestDetailQueryService _queryService;
 
         public MaterialRequestDetailController(
             IMaterialRequestDetailService materialRequestDetailService,
             IServiceOrderService serviceOrderService,
-            IGarageContext context,
-            IMapper mapper)
+            IMaterialRequestDetailQueryService queryService)
         {
             _materialRequestDetailService = materialRequestDetailService;
             _serviceOrderService = serviceOrderService;
-            _context = context;
-            _mapper = mapper;
+            _queryService = queryService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<MaterialRequestDetailResponseDto>>> GetAll([FromQuery] long? serviceOrderId = null)
         {
-            IEnumerable<MaterialRequestDetail> items;
             if (serviceOrderId.HasValue)
             {
-                items = await _context.MaterialRequestDetails
-                    .Include(d => d.Product)
-                    .Where(d => d.Request.ServiceOrderId == serviceOrderId.Value && (d.IssuedQuantity ?? 0) > 0)
-                    .ToListAsync();
+                var items = await _queryService.GetIssuedByServiceOrderAsync(serviceOrderId.Value, HttpContext.RequestAborted);
+                return Ok(_materialRequestDetailService.MapToDtos(items));
             }
-            else
-            {
-                items = await _materialRequestDetailService.GetAllAsync();
-            }
-            var dtos = _mapper.Map<IEnumerable<MaterialRequestDetailResponseDto>>(items);
-            return Ok(dtos);
+
+            return Ok(await _materialRequestDetailService.GetAllDtosAsync());
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<MaterialRequestDetailResponseDto>> GetById(long id)
         {
-            var item = await _materialRequestDetailService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _materialRequestDetailService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<MaterialRequestDetailResponseDto>(item);
             return Ok(dto);
         }
 
@@ -74,7 +59,7 @@ namespace MyGarage.Controllers
             {
                 if (itemDto == null || itemDto.RequestId <= 0)
                 {
-                    return BadRequest(new { message = "Thiếu RequestId hợp lệ để tạo chi tiết yêu cầu vật tư." });
+                    return this.BadRequestProblem("Thiếu RequestId hợp lệ để tạo chi tiết yêu cầu vật tư.");
                 }
 
                 var serviceOrderId = await ResolveServiceOrderIdFromRequestIdAsync(itemDto.RequestId);
@@ -83,14 +68,12 @@ namespace MyGarage.Controllers
                     await _serviceOrderService.EnsurePartsEditableAsync(serviceOrderId);
                 }
 
-                var entity = _mapper.Map<MaterialRequestDetail>(itemDto);
-                var createdItem = await _materialRequestDetailService.AddAsync(entity);
-                var responseDto = _mapper.Map<MaterialRequestDetailResponseDto>(createdItem);
-                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+                var responseDto = await _materialRequestDetailService.CreateDtoAsync(itemDto);
+                return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -112,19 +95,17 @@ namespace MyGarage.Controllers
                     await _serviceOrderService.EnsurePartsEditableAsync(serviceOrderId);
                 }
 
-                _mapper.Map(itemDto, existingItem);
-                var updatedItem = await _materialRequestDetailService.UpdateAsync(id, existingItem);
-                if (updatedItem == null)
+                var responseDto = await _materialRequestDetailService.UpdateDtoAsync(id, itemDto!, existingItem);
+                if (responseDto == null)
                 {
                     return NotFound();
                 }
 
-                var responseDto = _mapper.Map<MaterialRequestDetailResponseDto>(updatedItem);
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -154,30 +135,12 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
-        private async Task<long> ResolveServiceOrderIdFromRequestIdAsync(long requestId)
-        {
-            if (requestId <= 0)
-            {
-                return 0;
-            }
-
-            var serviceOrderId = await _context.MaterialRequests
-                .AsNoTracking()
-                .Where(request => request.Id == requestId)
-                .Select(request => request.ServiceOrderId)
-                .FirstOrDefaultAsync();
-
-            if (!serviceOrderId.HasValue || serviceOrderId.Value <= 0)
-            {
-                return 0;
-            }
-
-            return serviceOrderId.Value;
-        }
+        private Task<long> ResolveServiceOrderIdFromRequestIdAsync(long requestId)
+            => _queryService.ResolveServiceOrderIdFromRequestIdAsync(requestId, HttpContext.RequestAborted);
     }
 }
 

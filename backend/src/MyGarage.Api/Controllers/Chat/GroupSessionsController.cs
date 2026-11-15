@@ -11,19 +11,18 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/group-sessions")]
     [Route("api/v1/group-sessions")]
     [ApiController]
     [Authorize]
     public class GroupSessionsController : ControllerBase
     {
         private readonly IGroupSessionService _groupSessionService;
-        private readonly IAppointmentService _appointmentService;
+        private readonly IAppointmentBookingCommandService _appointmentBookingService;
 
-        public GroupSessionsController(IGroupSessionService groupSessionService, IAppointmentService appointmentService)
+        public GroupSessionsController(IGroupSessionService groupSessionService, IAppointmentBookingCommandService appointmentBookingService)
         {
             _groupSessionService = groupSessionService;
-            _appointmentService = appointmentService;
+            _appointmentBookingService = appointmentBookingService;
         }
 
         [HttpPost]
@@ -40,17 +39,17 @@ namespace MyGarage.Controllers
             var customerId = isCustomer ? actorUserId.Value : (dto.CustomerId ?? 0);
             if (customerId <= 0)
             {
-                return BadRequest(new { message = "Vui lòng cung cấp CustomerId hợp lệ cho luồng đặt lịch nhóm." });
+                return this.BadRequestProblem("Vui lòng cung cấp CustomerId hợp lệ cho luồng đặt lịch nhóm.");
             }
 
             try
             {
-                var result = await _appointmentService.BookBatchForCustomerAsync(actorUserId.Value, customerId, dto);
+                var result = await _appointmentBookingService.BookBatchForCustomerAsync(actorUserId.Value, customerId, dto);
                 return CreatedAtAction(nameof(GetMyGroupDetail), new { id = result.Id }, MapGroupResponse(result, forceCustomerShape: isCustomer));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -78,7 +77,7 @@ namespace MyGarage.Controllers
 
             if (dto == null || dto.CustomerId <= 0 || dto.BranchId <= 0)
             {
-                return BadRequest(new { message = "CustomerId va BranchId phai lon hon 0 de tao GroupSession cho lenh nhom." });
+                return this.BadRequestProblem("CustomerId va BranchId phai lon hon 0 de tao GroupSession cho lenh nhom.");
             }
 
             var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId.Value);
@@ -87,7 +86,7 @@ namespace MyGarage.Controllers
 
             if (result == null)
             {
-            return NotFound(new { message = "Đã tạo GroupSession nhưng không tải được thông tin chi tiết." });
+                return this.NotFoundProblem("Đã tạo GroupSession nhưng không tải được thông tin chi tiết.");
             }
 
             return CreatedAtAction(nameof(GetByBranchDetail), new { branchId = dto.BranchId, id = result.Id }, result);
@@ -131,7 +130,6 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("{id:long}/cancellations")]
-        [HttpPost("{id:long}/cancel-all")]
         public async Task<ActionResult<CancelGroupSessionResponseDto>> CancelAll(long id, [FromBody] CancelGroupSessionRequestDto dto)
         {
             var actorUserId = this.GetCurrentUserId();
@@ -143,7 +141,7 @@ namespace MyGarage.Controllers
             var reason = dto?.Reason?.Trim();
             if (string.IsNullOrWhiteSpace(reason))
             {
-                return BadRequest(new { message = "Vui lòng nhập lý do hủy nhóm." });
+                return this.BadRequestProblem("Vui lòng nhập lý do hủy nhóm.");
             }
 
             try
@@ -158,7 +156,7 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 

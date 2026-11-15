@@ -1,34 +1,23 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 using MyGarage.Security;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/vehicle-condition-logs")]
     [Route("api/v1/vehicle-condition-logs")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class VehicleConditionLogController : ControllerBase
     {
-        private const string LogTypeCheckIn = "CHECK_IN";
-        private const string LogTypeCheckOut = "CHECK_OUT";
-
         public sealed record ConditionRequestCreateDto
         {
             public long ServiceOrderId { get; init; }
@@ -41,49 +30,44 @@ namespace MyGarage.Controllers
             public long TechnicianId { get; init; }
         }
 
-        private readonly IVehicleConditionLogService _vehicleConditionLogService;
-        private readonly IDiagnosisService _diagnosisService;
-        private readonly IGarageContext _context;
-        private readonly IMapper _mapper;
-        private readonly ICloudStorageService _cloudStorageService;
+        private readonly IVehicleConditionLogCrudService _vehicleConditionLogCrudService;
+        private readonly IVehicleConditionLogReadService _vehicleConditionLogReadService;
+        private readonly IVehicleConditionLogCommandFacade _commandFacade;
         private readonly IFileSecurityScanner _fileSecurityScanner;
+        private readonly ILogger<VehicleConditionLogController> _logger;
 
         public VehicleConditionLogController(
-            IVehicleConditionLogService vehicleConditionLogService,
-            IDiagnosisService diagnosisService,
-            IGarageContext context,
-            IMapper mapper,
-            ICloudStorageService cloudStorageService,
-            IFileSecurityScanner fileSecurityScanner)
+            IVehicleConditionLogCrudService vehicleConditionLogCrudService,
+            IVehicleConditionLogReadService vehicleConditionLogReadService,
+            IVehicleConditionLogCommandFacade commandFacade,
+            IFileSecurityScanner fileSecurityScanner,
+            ILogger<VehicleConditionLogController> logger)
         {
-            _vehicleConditionLogService = vehicleConditionLogService;
-            _diagnosisService = diagnosisService;
-            _context = context;
-            _mapper = mapper;
-            _cloudStorageService = cloudStorageService;
+            _vehicleConditionLogCrudService = vehicleConditionLogCrudService;
+            _vehicleConditionLogReadService = vehicleConditionLogReadService;
+            _commandFacade = commandFacade;
             _fileSecurityScanner = fileSecurityScanner;
+            _logger = logger;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<VehicleConditionLogResponseDto>>> GetAll([FromQuery] long? serviceOrderId = null)
         {
-            var items = serviceOrderId.HasValue
-                ? await _vehicleConditionLogService.GetByOrderAsync(serviceOrderId.Value)
-                : await _vehicleConditionLogService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<VehicleConditionLogResponseDto>>(items);
+            var dtos = serviceOrderId.HasValue
+                ? await _vehicleConditionLogReadService.GetByOrderDtosAsync(serviceOrderId.Value)
+                : await _vehicleConditionLogCrudService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<VehicleConditionLogResponseDto>> GetById(long id)
         {
-            var item = await _vehicleConditionLogService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _vehicleConditionLogCrudService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            var dto = _mapper.Map<VehicleConditionLogResponseDto>(item);
             return Ok(dto);
         }
 
@@ -93,169 +77,60 @@ namespace MyGarage.Controllers
             var type = (requestType ?? "CHECK_IN").Trim().ToUpperInvariant();
             if (type != "CHECK_IN" && type != "CHECK_OUT")
             {
-                return BadRequest(new { message = "requestType must be CHECK_IN or CHECK_OUT." });
+                return this.BadRequestProblem("requestType must be CHECK_IN or CHECK_OUT.");
             }
 
-            var activeRequests = await _vehicleConditionLogService.GetActiveRequestsAsync(type);
-            var dtos = _mapper.Map<IEnumerable<VehicleConditionLogResponseDto>>(activeRequests);
+            var dtos = await _vehicleConditionLogReadService.GetActiveRequestDtosAsync(type);
             return Ok(dtos);
         }
 
         [HttpPost("condition-jobs")]
         public async Task<ActionResult<VehicleConditionLogResponseDto>> CreateRequest([FromBody] ConditionRequestCreateDto request)
         {
-            var type = (request.RequestType ?? string.Empty).Trim().ToUpperInvariant();
-            if (type == "CHECK_IN")
-            {
-                return await CreateRequestByTypeAsync(request.ServiceOrderId, "CHECK_IN");
-            }
-
-            if (type == "CHECK_OUT")
-            {
-                return await CreateRequestByTypeAsync(request.ServiceOrderId, "CHECK_OUT");
-            }
-
-            return BadRequest(new { message = "requestType must be CHECK_IN or CHECK_OUT." });
+            var result = await _commandFacade.CreateRequestAsync(request.ServiceOrderId, request.RequestType);
+            return ToActionResult(result);
         }
 
         [HttpPatch("condition-jobs/{serviceOrderId:long}")]
-        public async Task<ActionResult<VehicleConditionLogResponseDto>> PatchRequestAssignment(
+        public Task<ActionResult<VehicleConditionLogResponseDto>> PatchRequestAssignment(
             long serviceOrderId,
             [FromBody] ConditionRequestAssignmentDto request)
         {
+            _ = serviceOrderId;
             var type = (request.RequestType ?? string.Empty).Trim().ToUpperInvariant();
-            if (type == "CHECK_IN")
+            if (type == "CHECK_IN" || type == "CHECK_OUT")
             {
-                return await AssignRequestByTypeAsync(serviceOrderId, "CHECK_IN", request.TechnicianId);
+                return Task.FromResult<ActionResult<VehicleConditionLogResponseDto>>(
+                    this.BadRequestProblem("Yêu cầu CHECK_IN/CHECK_OUT do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên."));
             }
 
-            if (type == "CHECK_OUT")
-            {
-                return await AssignRequestByTypeAsync(serviceOrderId, "CHECK_OUT", request.TechnicianId);
-            }
-
-            return BadRequest(new { message = "requestType must be CHECK_IN or CHECK_OUT." });
+            return Task.FromResult<ActionResult<VehicleConditionLogResponseDto>>(
+                this.BadRequestProblem("requestType must be CHECK_IN or CHECK_OUT."));
         }
 
         [HttpPost]
         public async Task<ActionResult<VehicleConditionLogResponseDto>> Create([FromBody] VehicleConditionLogCreateDto itemDto)
         {
-            if (itemDto == null)
+            var result = await _commandFacade.CreateAsync(itemDto, HttpContext.RequestAborted);
+            if (result.StatusCode == 201 && result.Data != null)
             {
-                return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
+                return CreatedAtAction(nameof(GetById), new { id = result.Data.Id }, result.Data);
             }
 
-            var logType = NormalizeLogType(itemDto.LogType);
-            if (logType == LogTypeCheckOut)
-            {
-                var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
-                if (!hasSignedCheckIn)
-                {
-                    return BadRequest(new { message = "Chỉ được tạo CHECK_OUT sau khi khách đã ký CHECK_IN." });
-                }
-            }
-            else if (logType == LogTypeCheckIn)
-            {
-                var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
-                if (hasSignedCheckIn)
-                {
-                    return BadRequest(new { message = "CHECK_IN đã được khách hàng ký xác nhận, không thể tạo mới." });
-                }
-
-                if (!string.IsNullOrWhiteSpace(itemDto.CustomerSignatureUrl) &&
-                    !HasRequiredCornerImages(itemDto.DefectsAndImages))
-                {
-                    return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
-                }
-            }
-
-            var entity = _mapper.Map<VehicleConditionLog>(itemDto);
-            var createdItem = await _vehicleConditionLogService.AddAsync(entity);
-
-            if (logType == LogTypeCheckIn)
-            {
-                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, LogTypeCheckIn);
-                await TryMarkServiceOrderCheckedInAsync(logType, itemDto.ServiceOrderId, createdItem.CustomerSignatureUrl);
-                await TryAutoCreateDiagnosisQueueAfterCheckInAsync(logType, itemDto.ServiceOrderId, createdItem.CustomerSignatureUrl);
-            }
-            else if (logType == LogTypeCheckOut)
-            {
-                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, LogTypeCheckOut);
-            }
-
-            var responseDto = _mapper.Map<VehicleConditionLogResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            return ToActionResult(result);
         }
 
         [HttpPut("{id:long}")]
         public async Task<ActionResult<VehicleConditionLogResponseDto>> Update(long id, [FromBody] VehicleConditionLogUpdateDto itemDto)
         {
-            var existingItem = await _vehicleConditionLogService.GetByIdAsync(id);
-            if (existingItem == null)
-            {
-                return NotFound();
-            }
-
-            if (itemDto == null)
-            {
-                return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
-            }
-            var updateDto = itemDto;
-
-            var existingType = NormalizeLogType(existingItem.LogType);
-            if (existingType == LogTypeCheckIn && !string.IsNullOrWhiteSpace(existingItem.CustomerSignatureUrl))
-            {
-                return BadRequest(new { message = "CHECK_IN đã được khách ký, không thể chỉnh sửa." });
-            }
-
-            var targetType = NormalizeLogType(updateDto.LogType);
-            if (string.IsNullOrWhiteSpace(targetType))
-            {
-                targetType = existingType;
-            }
-
-            if (targetType == LogTypeCheckOut)
-            {
-                var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(updateDto.ServiceOrderId);
-                if (!hasSignedCheckIn)
-                {
-                    return BadRequest(new { message = "Chỉ được cập nhật CHECK_OUT sau khi khách đã ký CHECK_IN." });
-                }
-            }
-
-            var effectiveSignature = string.IsNullOrWhiteSpace(updateDto.CustomerSignatureUrl)
-                ? existingItem.CustomerSignatureUrl
-                : updateDto.CustomerSignatureUrl;
-
-            var effectiveDefects = string.IsNullOrWhiteSpace(updateDto.DefectsAndImages)
-                ? existingItem.DefectsAndImages
-                : updateDto.DefectsAndImages;
-
-            if (targetType == LogTypeCheckIn &&
-                !string.IsNullOrWhiteSpace(effectiveSignature) &&
-                !HasRequiredCornerImages(effectiveDefects))
-            {
-                return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
-            }
-
-            _mapper.Map(updateDto, existingItem);
-            var updatedItem = await _vehicleConditionLogService.UpdateAsync(id, existingItem);
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-
-            await TryMarkServiceOrderCheckedInAsync(targetType, updatedItem.ServiceOrderId, updatedItem.CustomerSignatureUrl);
-            await TryAutoCreateDiagnosisQueueAfterCheckInAsync(targetType, updatedItem.ServiceOrderId, updatedItem.CustomerSignatureUrl);
-
-            var responseDto = _mapper.Map<VehicleConditionLogResponseDto>(updatedItem);
-            return Ok(responseDto);
+            var result = await _commandFacade.UpdateAsync(id, itemDto, HttpContext.RequestAborted);
+            return ToActionResult(result);
         }
 
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _vehicleConditionLogService.DeleteAsync(id);
+            var result = await _vehicleConditionLogCrudService.DeleteAsync(id);
             if (!result)
             {
                 return NotFound();
@@ -265,631 +140,99 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("attachments")]
-        public async Task<ActionResult<object>> UploadAttachment(IFormFile file)
+        public Task<ActionResult<object>> UploadAttachment(IFormFile file)
         {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest(new { message = "Dữ liệu ảnh không hợp lệ." });
-            }
-
-            if (string.IsNullOrWhiteSpace(file.ContentType) ||
-                (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
-                 !file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
-            {
-                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh hoặc video." });
-            }
-
-            try
-            {
-                var url = await SaveUploadedFileAsync(file, "vehicle-condition");
-                return Ok(new { url });
-            }
-            catch
-            {
-                return BadRequest(new { message = "Không thể tải tệp lên máy chủ." });
-            }
+            return UploadMediaInternalAsync(
+                file,
+                folderName: "vehicle-condition",
+                emptyFileMessage: "Dữ liệu ảnh không hợp lệ.",
+                allowVideo: true,
+                invalidTypeMessage: "Chỉ hỗ trợ tệp ảnh hoặc video.",
+                uploadErrorMessage: "Không thể tải tệp lên máy chủ.");
         }
 
         [HttpPost("signatures")]
-        public async Task<ActionResult<object>> CreateSignature(IFormFile file)
+        public Task<ActionResult<object>> CreateSignature(IFormFile file)
+        {
+            return UploadMediaInternalAsync(
+                file,
+                folderName: "signatures",
+                emptyFileMessage: "Dữ liệu chữ ký không hợp lệ.",
+                allowVideo: false,
+                invalidTypeMessage: "Chỉ hỗ trợ tệp ảnh cho chữ ký.",
+                uploadErrorMessage: "Không thể tải chữ ký lên máy chủ.");
+        }
+
+        private async Task<ActionResult<object>> UploadMediaInternalAsync(
+            IFormFile? file,
+            string folderName,
+            string emptyFileMessage,
+            bool allowVideo,
+            string invalidTypeMessage,
+            string uploadErrorMessage)
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Dữ liệu chữ ký không hợp lệ." });
+                return this.BadRequestProblem(emptyFileMessage);
             }
 
-            if (string.IsNullOrWhiteSpace(file.ContentType) ||
-                !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            var isImage = !string.IsNullOrWhiteSpace(file.ContentType) &&
+                          file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            var isVideo = allowVideo &&
+                          !string.IsNullOrWhiteSpace(file.ContentType) &&
+                          file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+
+            if (!isImage && !isVideo)
             {
-                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho chữ ký." });
+                return this.BadRequestProblem(invalidTypeMessage);
             }
 
             try
             {
-                var url = await SaveUploadedFileAsync(file, "signatures");
-                return Ok(new { url });
-            }
-            catch
-            {
-                return BadRequest(new { message = "Không thể tải chữ ký lên máy chủ." });
-            }
-        }
-        private async Task<string> SaveUploadedFileAsync(IFormFile file, string folderName)
-        {
-            var extension = Path.GetExtension(file.FileName);
-            if (string.IsNullOrWhiteSpace(extension))
-            {
-                extension = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? ".mp4" : ".png";
-            }
-
-            var scan = await _fileSecurityScanner.ScanFormFileAsync(
-                file,
-                fileNameOverride: string.IsNullOrWhiteSpace(Path.GetExtension(file.FileName)) ? $"upload{extension}" : file.FileName,
-                maxBytes: 20 * 1024 * 1024,
-                cancellationToken: HttpContext.RequestAborted);
-            if (!scan.IsClean)
-            {
-                throw new InvalidOperationException(scan.ErrorMessage ?? "Tệp không hợp lệ.");
-            }
-
-            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-            await using var stream = new MemoryStream(scan.Bytes);
-            return await _cloudStorageService.UploadAsync(
-                stream,
-                folderName,
-                fileName,
-                file.ContentType,
-                HttpContext.RequestAborted);
-        }
-
-        private async Task<ActionResult<VehicleConditionLogResponseDto>> CreateRequestByTypeAsync(long serviceOrderId, string requestType)
-        {
-            var orderExists = await _vehicleConditionLogService.ServiceOrderExistsAsync(serviceOrderId);
-            if (!orderExists)
-            {
-                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
-            }
-            var existing = await _vehicleConditionLogService.GetActiveRequestAsync(serviceOrderId, requestType);
-            if (existing != null)
-            {
-                return Ok(_mapper.Map<VehicleConditionLogResponseDto>(existing));
-            }
-
-            var hasCompletedLog = await _vehicleConditionLogService.HasCompletedLogAsync(serviceOrderId, requestType);
-            if (hasCompletedLog)
-            {
-                var message = requestType == "CHECK_IN"
-                    ? "Xe đã được check-in."
-                    : "Xe đã được checkout.";
-                return BadRequest(new { message });
-            }
-
-            var requestLog = await _vehicleConditionLogService.CreateRequestAsync(serviceOrderId, requestType);
-            return Ok(_mapper.Map<VehicleConditionLogResponseDto>(requestLog));
-        }
-
-        private async Task<ActionResult<VehicleConditionLogResponseDto>> AssignRequestByTypeAsync(long serviceOrderId, string requestType, long technicianId)
-        {
-            _ = serviceOrderId;
-            _ = requestType;
-            _ = technicianId;
-            return BadRequest(new { message = "Yêu cầu CHECK_IN/CHECK_OUT do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên." });
-        }
-
-        private static string NormalizeLogType(string? logType)
-        {
-            return (logType ?? string.Empty).Trim().ToUpperInvariant();
-        }
-
-        private async Task TryMarkServiceOrderCheckedInAsync(string? logType, long serviceOrderId, string? customerSignatureUrl)
-        {
-            if (NormalizeLogType(logType) != LogTypeCheckIn)
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(customerSignatureUrl))
-            {
-                return;
-            }
-
-            await _vehicleConditionLogService.MarkServiceOrderCheckedInAsync(serviceOrderId);
-        }
-
-        private async Task TryAutoCreateDiagnosisQueueAfterCheckInAsync(string? logType, long serviceOrderId, string? customerSignatureUrl)
-        {
-            if (NormalizeLogType(logType) != LogTypeCheckIn)
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(customerSignatureUrl))
-            {
-                return;
-            }
-
-            try
-            {
-                var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
-                if (serviceOrder == null)
+                var extension = Path.GetExtension(file.FileName);
+                if (string.IsNullOrWhiteSpace(extension))
                 {
-                    return;
+                    extension = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? ".mp4" : ".png";
                 }
 
-                var shouldAutoCreateDiagnosis = await ShouldAutoCreateDiagnosisQueueAsync(serviceOrder);
-                if (!shouldAutoCreateDiagnosis)
+                var scan = await _fileSecurityScanner.ScanFormFileAsync(
+                    file,
+                    fileNameOverride: string.IsNullOrWhiteSpace(Path.GetExtension(file.FileName)) ? $"upload{extension}" : file.FileName,
+                    maxBytes: 20 * 1024 * 1024,
+                    cancellationToken: HttpContext.RequestAborted);
+                if (!scan.IsClean)
                 {
-                    return;
+                    return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
                 }
 
-                var hasSignedCheckIn = await _diagnosisService.HasSignedCheckInAsync(serviceOrderId);
-                if (!hasSignedCheckIn)
-                {
-                    return;
-                }
-
-                var existingDiagnoses = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
-                if (existingDiagnoses.Count > 0)
-                {
-                    await _diagnosisService.UpdateServiceOrderStatusAsync(
-                        serviceOrder,
-                        nameof(ServiceOrderLifecycleStatus.DIAGNOSING));
-                    return;
-                }
-
-                var intakeSuggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
-                    serviceOrderId,
-                    dispatchTag: null,
-                    bufferMinutesOverride: null,
-                    requestedPackageCode: null);
-
-                var suggestedTeamId = intakeSuggestion.SuggestedTeamId;
-                if (!suggestedTeamId.HasValue || suggestedTeamId.Value <= 0)
-                {
-                    return;
-                }
-
-                var symptoms = ExtractSymptomsFromNotes(serviceOrder.CustomerNotes);
-                var resolvedDiagnoseBayId = await _diagnosisService.ResolveDiagnoseBayIdForBranchAsync(
-                    serviceOrder.ExecuteBranchId,
-                    intakeSuggestion.SuggestedBayId);
-                var scheduledSlot = await _diagnosisService.ScheduleDiagnosisQueueSlotAsync(
-                    serviceOrderId,
-                    intakeSuggestion.PackageEffectiveMinutes,
-                    bufferMinutes: 15,
-                    preferredBayId: resolvedDiagnoseBayId);
-                var finalAssignedBayId = scheduledSlot?.BayId ?? resolvedDiagnoseBayId;
-                await _diagnosisService.CreatePendingDiagnosesAsync(
-                    serviceOrderId,
-                    technicianId: null,
-                    symptoms,
-                    intakeSuggestion.DispatchTag,
-                    assignedTeamId: suggestedTeamId.Value,
-                    assignedBayId: finalAssignedBayId);
-
-                await _diagnosisService.UpdateServiceOrderStatusAsync(
-                    serviceOrder,
-                    nameof(ServiceOrderLifecycleStatus.DIAGNOSING));
+                var result = await _commandFacade.UploadMediaAsync(
+                    file.FileName,
+                    file.ContentType,
+                    scan.Bytes,
+                    folderName,
+                    HttpContext.RequestAborted);
+                return ToActionResult(result);
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // Keep check-in flow stable even if auto diagnosis bootstrap cannot be created.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload vehicle condition media to folder {FolderName}.", folderName);
+                return this.BadRequestProblem(uploadErrorMessage);
             }
         }
 
-        private async Task<bool> ShouldAutoCreateDiagnosisQueueAsync(ServiceOrder serviceOrder)
+        private ActionResult<T> ToActionResult<T>(VehicleConditionLogCommandResult<T> result)
         {
-            var requestedServiceIds = await LoadRequestedServiceIdsFromServiceOrderAsync(serviceOrder.Id);
-            if (requestedServiceIds.Count == 0 && serviceOrder.AppointmentId.HasValue)
+            return result.StatusCode switch
             {
-                var fromAppointment = await LoadRequestedServiceIdsFromAppointmentAsync(serviceOrder.AppointmentId.Value);
-                requestedServiceIds = fromAppointment;
-            }
-
-            if (requestedServiceIds.Count == 0)
-            {
-                return await HasInspectionKeywordInServiceOrderDetailsAsync(serviceOrder.Id);
-            }
-
-            var serviceRows = await _context.StandardServices
-                .AsNoTracking()
-                .Where(x => requestedServiceIds.Contains(x.Id))
-                .Join(
-                    _context.ServiceCategories.AsNoTracking(),
-                    service => service.CategoryId,
-                    category => category.Id,
-                    (service, category) => new
-                    {
-                        service.Code,
-                        service.Name,
-                        CategoryCode = category.Code,
-                        CategoryName = category.Name
-                    })
-                .ToListAsync();
-
-            return serviceRows.Any(row => IsInspectionService(row.Code, row.Name, row.CategoryCode, row.CategoryName));
-        }
-
-        private async Task<bool> HasInspectionKeywordInServiceOrderDetailsAsync(long serviceOrderId)
-        {
-            var detailRows = await _context.ServiceOrderDetails
-                .AsNoTracking()
-                .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Select(x => new
-                {
-                    x.ItemName,
-                    x.Description
-                })
-                .ToListAsync();
-
-            return detailRows.Any(row => IsInspectionService(
-                serviceCode: null,
-                serviceName: row.ItemName,
-                categoryCode: null,
-                categoryName: row.Description));
-        }
-
-        private async Task<List<long>> LoadRequestedServiceIdsFromServiceOrderAsync(long serviceOrderId)
-        {
-            return await _context.ServiceOrderDetails
-                .AsNoTracking()
-                .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => x.StandardServiceId.HasValue && x.StandardServiceId.Value > 0)
-                .Select(x => x.StandardServiceId!.Value)
-                .Distinct()
-                .ToListAsync();
-        }
-
-        private async Task<List<long>> LoadRequestedServiceIdsFromAppointmentAsync(long appointmentId)
-        {
-            var requestedServiceIdsRaw = await _context.Appointments
-                .AsNoTracking()
-                .Where(x => x.Id == appointmentId)
-                .Select(x => x.RequestedServiceIds)
-                .FirstOrDefaultAsync();
-
-            return ParseRequestedServiceIds(requestedServiceIdsRaw);
-        }
-
-        private static List<long> ParseRequestedServiceIds(string? requestedServiceIds)
-        {
-            if (string.IsNullOrWhiteSpace(requestedServiceIds))
-            {
-                return new List<long>();
-            }
-
-            return requestedServiceIds
-                .Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(token => long.TryParse(token.Trim(), out var parsedId) ? parsedId : 0L)
-                .Where(parsedId => parsedId > 0)
-                .Distinct()
-                .ToList();
-        }
-
-        private static bool IsInspectionService(string? serviceCode, string? serviceName, string? categoryCode, string? categoryName)
-        {
-            _ = serviceName;
-            _ = categoryCode;
-            _ = categoryName;
-
-            // Strict rule per business requirement: only 7 diagnosis package codes trigger auto diagnosis queue.
-            var normalizedCode = NormalizeSearchText(serviceCode)
-                .Replace("_", "-", StringComparison.Ordinal)
-                .Trim()
-                .ToUpperInvariant();
-
-            return normalizedCode is "DG-MINI" or "DG-GEN" or "DG-SCAN" or "DG-ENG" or "DG-ELEC" or "DG-AC" or "DG-NOISE";
-        }
-
-        private static List<string> ExtractSymptomsFromNotes(string? customerNotes)
-        {
-            var fallback = new List<string>();
-            if (string.IsNullOrWhiteSpace(customerNotes))
-            {
-                return fallback;
-            }
-
-            var notes = customerNotes.Trim();
-            try
-            {
-                using var document = JsonDocument.Parse(notes);
-                var root = document.RootElement;
-
-                if (root.ValueKind == JsonValueKind.Array)
-                {
-                    var values = root.EnumerateArray()
-                        .Where(item => item.ValueKind == JsonValueKind.String)
-                        .Select(item => (item.GetString() ?? string.Empty).Trim())
-                        .Where(IsMeaningfulSymptom)
-                        .Distinct()
-                        .ToList();
-                    return values.Count > 0 ? values : fallback;
-                }
-
-                if (root.ValueKind == JsonValueKind.Object)
-                {
-                    if (root.TryGetProperty("symptoms", out var symptomsElement) && symptomsElement.ValueKind == JsonValueKind.Array)
-                    {
-                        var values = symptomsElement.EnumerateArray()
-                            .Where(item => item.ValueKind == JsonValueKind.String)
-                            .Select(item => (item.GetString() ?? string.Empty).Trim())
-                            .Where(IsMeaningfulSymptom)
-                            .Distinct()
-                            .ToList();
-                        return values.Count > 0 ? values : fallback;
-                    }
-
-                    if (root.TryGetProperty("note", out var noteElement) && noteElement.ValueKind == JsonValueKind.String)
-                    {
-                        var note = (noteElement.GetString() ?? string.Empty).Trim();
-                        return IsMeaningfulSymptom(note) ? new List<string> { note } : fallback;
-                    }
-                }
-            }
-            catch
-            {
-                // Legacy non-JSON format.
-            }
-
-            return IsMeaningfulSymptom(notes)
-                ? new List<string> { notes }
-                : fallback;
-        }
-
-        private static bool IsMeaningfulSymptom(string? text)
-        {
-            var value = (text ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            var normalized = NormalizeSearchText(value);
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return false;
-            }
-
-            if (normalized == "khong co" ||
-                normalized == "khong co ghi chu" ||
-                normalized == "khong co ghi chu gi" ||
-                normalized == "khong co mo ta")
-            {
-                return false;
-            }
-
-            if (normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) &&
-                normalized.Contains("khong co", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            if (normalized.StartsWith("[flow:", StringComparison.Ordinal) ||
-                normalized.StartsWith("[cluster:", StringComparison.Ordinal) ||
-                normalized.StartsWith("[dispatch", StringComparison.Ordinal) ||
-                normalized.StartsWith("[auto_dispatch", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            return true;
-        }
-        private static bool HasRequiredCornerImages(string? defectsAndImages)
-        {
-            if (string.IsNullOrWhiteSpace(defectsAndImages))
-            {
-                return false;
-            }
-
-            try
-            {
-                using var document = JsonDocument.Parse(defectsAndImages);
-                var root = document.RootElement;
-
-                if (TryValidateCornerImagesObject(root))
-                {
-                    return true;
-                }
-
-                var items = ExtractDefectItems(root);
-                if (items.Count == 0)
-                {
-                    return false;
-                }
-
-                var hasFrontLeft = false;
-                var hasFrontRight = false;
-                var hasRearLeft = false;
-                var hasRearRight = false;
-
-                foreach (var item in items)
-                {
-                    if (!TryGetStringProperty(item, "part", out var partText))
-                    {
-                        continue;
-                    }
-
-                    if (!TryGetProperty(item, "images", out var imagesElement) || !HasAnyImage(imagesElement))
-                    {
-                        continue;
-                    }
-
-                    var normalizedPart = NormalizeSearchText(partText);
-                    if (!hasFrontLeft && ContainsAny(normalizedPart, "goc truoc trai", "truoc trai", "front left"))
-                    {
-                        hasFrontLeft = true;
-                    }
-                    else if (!hasFrontRight && ContainsAny(normalizedPart, "goc truoc phai", "truoc phai", "front right"))
-                    {
-                        hasFrontRight = true;
-                    }
-                    else if (!hasRearLeft && ContainsAny(normalizedPart, "goc sau trai", "sau trai", "rear left", "back left"))
-                    {
-                        hasRearLeft = true;
-                    }
-                    else if (!hasRearRight && ContainsAny(normalizedPart, "goc sau phai", "sau phai", "rear right", "back right"))
-                    {
-                        hasRearRight = true;
-                    }
-                }
-
-                return hasFrontLeft && hasFrontRight && hasRearLeft && hasRearRight;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryValidateCornerImagesObject(JsonElement root)
-        {
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            if (!TryGetProperty(root, "cornerImages", out var cornerImages) || cornerImages.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            return HasCornerImage(cornerImages, "frontLeft")
-                && HasCornerImage(cornerImages, "frontRight")
-                && HasCornerImage(cornerImages, "rearLeft")
-                && HasCornerImage(cornerImages, "rearRight");
-        }
-
-        private static bool HasCornerImage(JsonElement cornerImages, string key)
-        {
-            return TryGetProperty(cornerImages, key, out var imageElement) && HasAnyImage(imageElement);
-        }
-
-        private static List<JsonElement> ExtractDefectItems(JsonElement root)
-        {
-            if (root.ValueKind == JsonValueKind.Array)
-            {
-                return root.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
-            }
-
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                if (TryGetProperty(root, "defectItems", out var defectItems) && defectItems.ValueKind == JsonValueKind.Array)
-                {
-                    return defectItems.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
-                }
-
-                if (TryGetProperty(root, "items", out var items) && items.ValueKind == JsonValueKind.Array)
-                {
-                    return items.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
-                }
-            }
-
-            return new List<JsonElement>();
-        }
-
-        private static bool HasAnyImage(JsonElement element)
-        {
-            if (element.ValueKind == JsonValueKind.String)
-            {
-                return !string.IsNullOrWhiteSpace(element.GetString());
-            }
-
-            if (element.ValueKind != JsonValueKind.Array)
-            {
-                return false;
-            }
-
-            foreach (var item in element.EnumerateArray())
-            {
-                if (item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
-                {
-                    return true;
-                }
-
-                if (item.ValueKind == JsonValueKind.Object &&
-                    TryGetProperty(item, "url", out var urlElement) &&
-                    urlElement.ValueKind == JsonValueKind.String &&
-                    !string.IsNullOrWhiteSpace(urlElement.GetString()))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool TryGetStringProperty(JsonElement element, string propertyName, out string value)
-        {
-            value = string.Empty;
-            if (!TryGetProperty(element, propertyName, out var propertyElement))
-            {
-                return false;
-            }
-
-            if (propertyElement.ValueKind != JsonValueKind.String)
-            {
-                return false;
-            }
-
-            value = propertyElement.GetString() ?? string.Empty;
-            return true;
-        }
-
-        private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement propertyValue)
-        {
-            propertyValue = default;
-            if (element.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            foreach (var property in element.EnumerateObject())
-            {
-                if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
-                {
-                    propertyValue = property.Value;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool ContainsAny(string source, params string[] tokens)
-        {
-            if (string.IsNullOrWhiteSpace(source))
-            {
-                return false;
-            }
-
-            return tokens.Any(token => source.Contains(token, StringComparison.Ordinal));
-        }
-
-        private static string NormalizeSearchText(string? input)
-        {
-            if (string.IsNullOrWhiteSpace(input))
-            {
-                return string.Empty;
-            }
-
-            var normalized = input.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
-            var builder = new StringBuilder(normalized.Length);
-            foreach (var ch in normalized)
-            {
-                var category = CharUnicodeInfo.GetUnicodeCategory(ch);
-                if (category != UnicodeCategory.NonSpacingMark)
-                {
-                    builder.Append(ch);
-                }
-            }
-
-            return builder.ToString()
-                .Normalize(NormalizationForm.FormC)
-                .Replace('\u0111', 'd')
-                .Replace('\u0110', 'd');
+                200 => Ok(result.Data),
+                404 => result.ErrorPayload == null ? NotFound() : NotFound(result.ErrorPayload),
+                400 => BadRequest(result.ErrorPayload),
+                _ => StatusCode(result.StatusCode, result.ErrorPayload ?? result.Data)
+            };
         }
     }
 }
-
-
-

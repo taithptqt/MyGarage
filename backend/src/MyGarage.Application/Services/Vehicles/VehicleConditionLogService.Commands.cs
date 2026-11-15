@@ -1,7 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Enums;
 using MyGarage.Models;
 
@@ -21,8 +19,7 @@ namespace MyGarage.Services
                 UpdatedAt = VietnamTime.Now
             };
 
-            _context.VehicleConditionLogs.Add(requestLog);
-            await SaveChangesInTransactionAsync();
+            await _store.AddAndSaveAsync(requestLog);
             return requestLog;
         }
 
@@ -31,8 +28,7 @@ namespace MyGarage.Services
             requestLog.InspectorId = technicianId;
             requestLog.DashboardWarningLights = StatusAssigned;
             requestLog.UpdatedAt = VietnamTime.Now;
-            _context.VehicleConditionLogs.Update(requestLog);
-            await SaveChangesInTransactionAsync();
+            await _store.UpdateAndSaveAsync(requestLog);
         }
 
         public async Task MarkActiveRequestCompletedAsync(long serviceOrderId, string logType)
@@ -42,13 +38,12 @@ namespace MyGarage.Services
 
             activeRequest.DashboardWarningLights = StatusCompleted;
             activeRequest.UpdatedAt = VietnamTime.Now;
-            _context.VehicleConditionLogs.Update(activeRequest);
-            await SaveChangesInTransactionAsync();
+            await _store.UpdateAndSaveAsync(activeRequest);
         }
 
         public async Task MarkServiceOrderCheckedInAsync(long serviceOrderId)
         {
-            var serviceOrder = await _context.ServiceOrders.FindAsync(serviceOrderId);
+            var serviceOrder = await _store.FindServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
                 return;
@@ -68,40 +63,7 @@ namespace MyGarage.Services
                 serviceOrder.CheckInTime = now;
             }
             serviceOrder.UpdatedAt = now;
-            _context.ServiceOrders.Update(serviceOrder);
-            await SaveChangesInTransactionAsync();
-        }
-
-        private async Task SaveChangesInTransactionAsync()
-        {
-            await ExecuteInTransactionAsync(async () =>
-            {
-                await _context.SaveChangesAsync();
-            });
-        }
-
-        private async Task ExecuteInTransactionAsync(Func<Task> action)
-        {
-            var strategy = _context.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
-            {
-                await using var tx = await TryBeginTransactionAsync();
-                await action();
-                if (tx != null)
-                {
-                    await tx.CommitAsync();
-                }
-            });
-        }
-
-        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
-        {
-            if (_context.Database.CurrentTransaction != null)
-            {
-                return null;
-            }
-
-            return await _context.Database.BeginTransactionAsync();
+            await _store.UpdateServiceOrderAndSaveAsync(serviceOrder);
         }
     }
 }

@@ -1,34 +1,30 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
+using MyGarage.Application.Interfaces.Queries;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/customer-feedbacks")]
     [Route("api/v1/customer-feedbacks")]
     [ApiController]
     [Authorize]
     public class CustomerFeedbackController : ControllerBase
     {
         private readonly ICustomerFeedbackService _customerFeedbackService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _context;
+        private readonly ICustomerFeedbackQueryService _customerFeedbackQueryService;
 
-        public CustomerFeedbackController(ICustomerFeedbackService customerFeedbackService, IMapper mapper, IGarageContext context)
+        public CustomerFeedbackController(
+            ICustomerFeedbackService customerFeedbackService,
+            ICustomerFeedbackQueryService customerFeedbackQueryService)
         {
             _customerFeedbackService = customerFeedbackService;
-            _mapper = mapper;
-            _context = context;
+            _customerFeedbackQueryService = customerFeedbackQueryService;
         }
 
         [HttpGet]
@@ -36,7 +32,7 @@ namespace MyGarage.Controllers
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
         {
-            var query = _context.CustomerFeedbacks.AsNoTracking().AsQueryable();
+            long? customerId = null;
             if (!this.IsStaffUser())
             {
                 var currentCustomerId = this.GetCurrentUserId();
@@ -45,37 +41,35 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                query = query.Where(x => x.CustomerId == currentCustomerId.Value);
+                customerId = currentCustomerId.Value;
             }
 
-            var envelope = await query
-                .OrderBy(x => x.Id)
-                .ToPagedEnvelopeAsync(page, pageSize, paged => _mapper.Map<IEnumerable<CustomerFeedbackResponseDto>>(paged));
-            return Ok(envelope);
+            var (items, total, normalizedPage, normalizedSize) = await _customerFeedbackQueryService.GetPagedAsync(customerId, page, pageSize);
+            var dtos = _customerFeedbackService.MapToDtos(items);
+            return Ok(PagedEnvelope<CustomerFeedbackResponseDto>.Create(dtos, total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<CustomerFeedbackResponseDto>> GetById(long id)
         {
-            var item = await _customerFeedbackService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _customerFeedbackService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            if (!this.IsStaffUser() && item.CustomerId != this.GetCurrentUserId())
+            if (!this.IsStaffUser() && dto.CustomerId != this.GetCurrentUserId())
             {
                 return Forbid();
             }
 
-            var dto = _mapper.Map<CustomerFeedbackResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<CustomerFeedbackResponseDto>> Create([FromBody] CustomerFeedbackCreateDto itemDto)
         {
-            var entity = _mapper.Map<CustomerFeedback>(itemDto);
+            long? overrideCustomerId = null;
             if (!this.IsStaffUser())
             {
                 var currentCustomerId = this.GetCurrentUserId();
@@ -84,42 +78,34 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                entity.CustomerId = currentCustomerId.Value;
+                overrideCustomerId = currentCustomerId.Value;
             }
 
-            var createdItem = await _customerFeedbackService.AddAsync(entity);
-            var responseDto = _mapper.Map<CustomerFeedbackResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _customerFeedbackService.CreateDtoAsync(itemDto, overrideCustomerId);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<CustomerFeedbackResponseDto>> Update(long id, [FromBody] CustomerFeedbackUpdateDto itemDto)
         {
-            var existingItem = await _customerFeedbackService.GetByIdAsync(id);
+            var existingItem = await _customerFeedbackService.GetDtoByIdAsync(id);
             if (existingItem == null)
             {
                 return NotFound();
             }
 
-            if (!this.IsStaffUser() && existingItem.CustomerId != this.GetCurrentUserId())
+            var isStaff = this.IsStaffUser();
+            if (!isStaff && existingItem.CustomerId != this.GetCurrentUserId())
             {
                 return Forbid();
             }
 
-            var preservedCustomerId = existingItem.CustomerId;
-            _mapper.Map(itemDto, existingItem);
-            if (!this.IsStaffUser())
-            {
-                existingItem.CustomerId = preservedCustomerId;
-            }
-
-            var updatedItem = await _customerFeedbackService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
+            var responseDto = await _customerFeedbackService.UpdateDtoAsync(id, itemDto, preserveCustomerId: !isStaff);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-            var responseDto = _mapper.Map<CustomerFeedbackResponseDto>(updatedItem);
+
             return Ok(responseDto);
         }
 

@@ -2,18 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MyGarage.Application.Authorization;
-using MyGarage.Interfaces;
 
 namespace MyGarage.Services;
 
 public sealed class CatalogAuthorizationService : ICatalogAuthorizationService
 {
-    private readonly IGarageContext _context;
-
-    public CatalogAuthorizationService(IGarageContext context)
-    {
-        _context = context;
-    }
 
     public Task<bool> CanAccessCatalogItemAsync(UserActorContext actor, CancellationToken ct = default)
     {

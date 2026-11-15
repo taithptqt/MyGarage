@@ -1,0 +1,100 @@
+using MyGarage.Application.Payments.DTOs;
+using MyGarage.Interfaces;
+
+namespace MyGarage.Services;
+
+public class OrderService : IOrderStore
+{
+    private readonly List<Order> _orders = [];
+
+    public List<Order> GetAllOrders()
+    {
+        return _orders;
+    }
+
+    public Order? GetOrderById(int id)
+    {
+        return _orders.FirstOrDefault(o => o.Id == id);
+    }
+
+    public Order? GetOrderByOrderCode(long orderCode)
+    {
+        return _orders.FirstOrDefault(o => o.OrderCode == orderCode);
+    }
+
+    public Order? GetOrderByPaymentLinkId(string paymentLinkId)
+    {
+        return _orders.FirstOrDefault(o => o.PaymentLinkId == paymentLinkId);
+    }
+
+    public void CreateOrder(Order order)
+    {
+        order.Id = _orders.Count + 1;
+        _orders.Add(order);
+    }
+
+    public bool UpdateOrder(int id, Order updatedOrder)
+    {
+        var order = _orders.FirstOrDefault(o => o.Id == id);
+        if (order == null) return false;
+
+        // Basic order information
+        order.OrderCode = updatedOrder.OrderCode;
+        order.TotalAmount = updatedOrder.TotalAmount;
+        order.OrderDate = updatedOrder.OrderDate;
+        order.Description = updatedOrder.Description;
+        order.Items = updatedOrder.Items;
+
+        // Payment link related properties
+        order.PaymentLinkId = updatedOrder.PaymentLinkId;
+        order.QrCode = updatedOrder.QrCode;
+        order.CheckoutUrl = updatedOrder.CheckoutUrl;
+        order.Status = updatedOrder.Status;
+
+        // Amount tracking
+        order.Amount = updatedOrder.Amount;
+        order.AmountPaid = updatedOrder.AmountPaid;
+        order.AmountRemaining = updatedOrder.AmountRemaining;
+
+        // Buyer information
+        order.BuyerName = updatedOrder.BuyerName;
+        order.BuyerCompanyName = updatedOrder.BuyerCompanyName;
+        order.BuyerEmail = updatedOrder.BuyerEmail;
+        order.BuyerPhone = updatedOrder.BuyerPhone;
+        order.BuyerAddress = updatedOrder.BuyerAddress;
+
+        // Payment link details
+        order.Bin = updatedOrder.Bin;
+        order.AccountNumber = updatedOrder.AccountNumber;
+        order.AccountName = updatedOrder.AccountName;
+        order.Currency = updatedOrder.Currency;
+
+        // URLs
+        order.ReturnUrl = updatedOrder.ReturnUrl;
+        order.CancelUrl = updatedOrder.CancelUrl;
+
+        // Timestamps
+        order.CreatedAt = updatedOrder.CreatedAt;
+        order.CanceledAt = updatedOrder.CanceledAt;
+        order.ExpiredAt = updatedOrder.ExpiredAt;
+        order.LastTransactionUpdate = updatedOrder.LastTransactionUpdate;
+
+        // Cancellation
+        order.CancellationReason = updatedOrder.CancellationReason;
+
+        // Invoice settings
+        order.BuyerNotGetInvoice = updatedOrder.BuyerNotGetInvoice;
+        order.TaxPercentage = updatedOrder.TaxPercentage;
+
+        return true;
+    }
+
+    public bool DeleteOrder(int id)
+    {
+        var order = _orders.FirstOrDefault(o => o.Id == id);
+        if (order == null) return false;
+        _orders.Remove(order);
+        return true;
+    }
+}
+

@@ -1,42 +1,38 @@
-using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Application.Common.Pagination;
-using MyGarage.Extensions;
+using MyGarage.Application.Notifications;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/notifications")]
     [Route("api/v1/notifications")]
     [ApiController]
     [Authorize]
     public class NotificationController : ControllerBase
     {
         private readonly INotificationService _notificationService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _context;
+        private readonly INotificationApplicationService _notificationApplicationService;
 
-        public NotificationController(INotificationService notificationService, IMapper mapper, IGarageContext context)
+        public NotificationController(
+            INotificationService notificationService,
+            INotificationApplicationService notificationApplicationService)
         {
             _notificationService = notificationService;
-            _mapper = mapper;
-            _context = context;
+            _notificationApplicationService = notificationApplicationService;
         }
 
         [HttpGet]
         public async Task<ActionResult<PagedEnvelope<NotificationResponseDto>>> GetAll(
             [FromQuery] int? page = null,
-            [FromQuery] int? pageSize = null)
+            [FromQuery] int? pageSize = null,
+            CancellationToken ct = default)
         {
-            var query = _context.Notifications.AsNoTracking().AsQueryable();
+            long? scopedCustomerId = null;
             if (!this.IsStaffUser())
             {
                 var currentCustomerId = this.GetCurrentUserId();
@@ -45,12 +41,14 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                query = query.Where(x => x.CustomerId == currentCustomerId.Value);
+                scopedCustomerId = currentCustomerId.Value;
             }
 
-            var envelope = await query
-                .OrderByDescending(x => x.Id)
-                .ToPagedEnvelopeAsync(page, pageSize, paged => _mapper.Map<IEnumerable<NotificationResponseDto>>(paged));
+            var envelope = await _notificationApplicationService.GetPagedNotificationsAsync(
+                scopedCustomerId,
+                page,
+                pageSize,
+                ct);
             return Ok(envelope);
         }
 
@@ -68,7 +66,7 @@ namespace MyGarage.Controllers
                 return Forbid();
             }
 
-            var dto = _mapper.Map<NotificationResponseDto>(item);
+            var dto = _notificationService.MapToDto(item);
             return Ok(dto);
         }
 
@@ -76,10 +74,8 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<NotificationResponseDto>> Create([FromBody] NotificationCreateDto itemDto)
         {
-            var entity = _mapper.Map<Notification>(itemDto);
-            var createdItem = await _notificationService.AddAsync(entity);
-            var responseDto = _mapper.Map<NotificationResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _notificationService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
@@ -97,7 +93,7 @@ namespace MyGarage.Controllers
             }
 
             var preservedCustomerId = existingItem.CustomerId;
-            _mapper.Map(itemDto, existingItem);
+            _notificationService.MapUpdate(itemDto, existingItem);
             if (!this.IsStaffUser())
             {
                 existingItem.CustomerId = preservedCustomerId;
@@ -109,7 +105,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-            var responseDto = _mapper.Map<NotificationResponseDto>(updatedItem);
+            var responseDto = _notificationService.MapToDto(updatedItem);
             return Ok(responseDto);
         }
 

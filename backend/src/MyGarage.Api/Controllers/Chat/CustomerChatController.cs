@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -15,52 +14,18 @@ namespace MyGarage.Controllers
 {
     [ApiController]
     [Authorize]
-    [Route("api/chat")]
     [Route("api/v1/chat")]
     public class CustomerChatController : ControllerBase
     {
-        private const int MaxAttachmentsPerRequest = 6;
-        private const long MaxAttachmentSizeBytes = 10 * 1024 * 1024;
-        private const string SupportedAttachmentHint = "anh, pdf, doc/docx, xls/xlsx, txt/csv, zip/rar";
-        private static readonly HashSet<string> SupportedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
-            ".pdf",
-            ".doc", ".docx",
-            ".xls", ".xlsx",
-            ".txt", ".csv",
-            ".zip", ".rar"
-        };
-        private static readonly Dictionary<string, string> ContentTypeByExtension = new(StringComparer.OrdinalIgnoreCase)
-        {
-            [".jpg"] = "image/jpeg",
-            [".jpeg"] = "image/jpeg",
-            [".png"] = "image/png",
-            [".webp"] = "image/webp",
-            [".gif"] = "image/gif",
-            [".bmp"] = "image/bmp",
-            [".pdf"] = "application/pdf",
-            [".doc"] = "application/msword",
-            [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            [".xls"] = "application/vnd.ms-excel",
-            [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            [".txt"] = "text/plain",
-            [".csv"] = "text/csv",
-            [".zip"] = "application/zip",
-            [".rar"] = "application/vnd.rar"
-        };
         private readonly IChatV2Service _chatService;
-        private readonly ICloudStorageService _cloudStorageService;
-        private readonly IFileSecurityScanner _fileSecurityScanner;
+        private readonly IChatAttachmentUploadService _attachmentUploadService;
 
         public CustomerChatController(
             IChatV2Service chatService,
-            ICloudStorageService cloudStorageService,
-            IFileSecurityScanner fileSecurityScanner)
+            IChatAttachmentUploadService attachmentUploadService)
         {
             _chatService = chatService;
-            _cloudStorageService = cloudStorageService;
-            _fileSecurityScanner = fileSecurityScanner;
+            _attachmentUploadService = attachmentUploadService;
         }
 
         [HttpGet("messenger/conversation")]
@@ -83,7 +48,7 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -188,11 +153,11 @@ namespace MyGarage.Controllers
             }
             catch (ChatConflictException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -222,7 +187,7 @@ namespace MyGarage.Controllers
             }
             catch (ChatConflictException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
             }
             catch (UnauthorizedAccessException)
             {
@@ -230,7 +195,7 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
             catch (KeyNotFoundException)
             {
@@ -287,14 +252,10 @@ namespace MyGarage.Controllers
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
-            if (files is null || files.Count == 0)
+            var countError = _attachmentUploadService.ValidateAttachmentCount(files?.Count ?? 0);
+            if (countError is not null)
             {
-            return BadRequest(new { message = "Vui lòng chọn ít nhất 1 tệp đính kèm." });
-            }
-
-            if (files.Count > MaxAttachmentsPerRequest)
-            {
-                return BadRequest(new { message = $"Toi da {MaxAttachmentsPerRequest} tep moi lan gui." });
+                return this.BadRequestProblem(countError);
             }
 
             try
@@ -325,58 +286,20 @@ namespace MyGarage.Controllers
                 return Forbid();
             }
 
-            var uploaded = new List<ChatUploadAttachmentDto>(files.Count);
-            for (var i = 0; i < files.Count; i++)
+            var uploadResult = await _attachmentUploadService.UploadAsync(
+                files.ToChatAttachmentInputs(),
+                $"chat/conversations/{id}",
+                HttpContext.RequestAborted);
+
+            if (!uploadResult.Succeeded)
             {
-                var file = files[i];
-                if (file is null || file.Length == 0)
-                {
-                return BadRequest(new { message = $"Tệp thứ {i + 1} không hợp lệ." });
-                }
-
-                if (!TryResolveAttachmentMetadata(file, out var extension, out var normalizedContentType))
-                {
-                return BadRequest(new { message = $"Tệp thứ {i + 1} không được hỗ trợ. Chỉ hỗ trợ {SupportedAttachmentHint}." });
-                }
-
-                if (file.Length > MaxAttachmentSizeBytes)
-                {
-                return BadRequest(new { message = $"Tệp thứ {i + 1} vượt quá {MaxAttachmentSizeBytes / (1024 * 1024)}MB." });
-                }
-
-                var scan = await _fileSecurityScanner.ScanFormFileAsync(
-                    file,
-                    fileNameOverride: string.IsNullOrWhiteSpace(Path.GetExtension(file.FileName)) ? $"attachment{extension}" : file.FileName,
-                    contentTypeOverride: normalizedContentType,
-                    maxBytes: MaxAttachmentSizeBytes,
-                    cancellationToken: HttpContext.RequestAborted);
-                if (!scan.IsClean)
-                {
-                    return BadRequest(new { message = $"Tệp thứ {i + 1}: {scan.ErrorMessage}" });
-                }
-
-                var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-                await using var stream = new MemoryStream(scan.Bytes);
-                var attachmentUrl = await _cloudStorageService.UploadAsync(
-                    stream,
-                    $"chat/conversations/{id}",
-                    fileName,
-                    normalizedContentType,
-                    HttpContext.RequestAborted);
-
-                uploaded.Add(new ChatUploadAttachmentDto
-                {
-                    AttachmentUrl = attachmentUrl,
-                    ContentType = normalizedContentType,
-                    FileSize = file.Length,
-                    SortOrder = i + 1
-                });
+                return this.BadRequestProblem(uploadResult.ErrorMessage!);
             }
 
-            return Ok(uploaded);
+            return Ok(uploadResult.Attachments);
         }
 
-        [HttpPut("conversations/{id:long}/read-state")]
+        [HttpPatch("conversations/{id:long}/read-state")]
         public async Task<ActionResult> MarkRead(long id, [FromBody] ChatUpdateReadStateRequestDto request)
         {
             var userId = this.GetCurrentUserId();
@@ -401,7 +324,7 @@ namespace MyGarage.Controllers
             }
             catch (ChatConflictException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return this.ConflictProblem(ex.Message);
             }
             catch (UnauthorizedAccessException)
             {
@@ -411,76 +334,6 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-        }
-
-        private static bool TryResolveAttachmentMetadata(IFormFile file, out string extension, out string contentType)
-        {
-            extension = NormalizeExtension(Path.GetExtension(file.FileName));
-            if (string.IsNullOrWhiteSpace(extension))
-            {
-                extension = InferExtensionFromContentType(file.ContentType);
-            }
-
-            if (string.IsNullOrWhiteSpace(extension) || !SupportedAttachmentExtensions.Contains(extension))
-            {
-                contentType = string.Empty;
-                return false;
-            }
-
-            contentType = NormalizeContentType(file.ContentType, extension);
-            return true;
-        }
-
-        private static string NormalizeExtension(string? extension)
-        {
-            if (string.IsNullOrWhiteSpace(extension))
-            {
-                return string.Empty;
-            }
-
-            var normalized = extension.Trim().ToLowerInvariant();
-            return normalized.StartsWith(".", StringComparison.Ordinal) ? normalized : $".{normalized}";
-        }
-
-        private static string InferExtensionFromContentType(string? contentType)
-        {
-            return (contentType ?? string.Empty).Trim().ToLowerInvariant() switch
-            {
-                "image/jpeg" => ".jpg",
-                "image/png" => ".png",
-                "image/webp" => ".webp",
-                "image/gif" => ".gif",
-                "image/bmp" => ".bmp",
-                "application/pdf" => ".pdf",
-                "application/msword" => ".doc",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
-                "application/vnd.ms-excel" => ".xls",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",
-                "text/plain" => ".txt",
-                "text/csv" => ".csv",
-                "application/zip" => ".zip",
-                "application/x-zip-compressed" => ".zip",
-                "application/vnd.rar" => ".rar",
-                "application/x-rar-compressed" => ".rar",
-                _ => string.Empty
-            };
-        }
-
-        private static string NormalizeContentType(string? contentType, string extension)
-        {
-            var normalized = (contentType ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(normalized)
-                || string.Equals(normalized, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
-            {
-                if (ContentTypeByExtension.TryGetValue(extension, out var mapped))
-                {
-                    return mapped;
-                }
-
-                return "application/octet-stream";
-            }
-
-            return normalized;
         }
 
         private bool IsCustomerRole()

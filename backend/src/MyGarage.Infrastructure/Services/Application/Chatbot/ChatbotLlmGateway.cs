@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyGarage.Interfaces;
@@ -16,29 +14,23 @@ public sealed class ChatbotLlmGateway : IChatbotLlmGateway
 {
     private const string ActionType = "LLM_GATEWAY";
 
-    private readonly IGarageContext _context;
+    private readonly IChatbotLlmPersistence _persistence;
     private readonly IEnumerable<IChatbotLlmProviderClient> _providerClients;
     private readonly IChatbotLlmResponseNormalizer _responseNormalizer;
     private readonly IOptionsMonitor<LlmGatewayOptions> _optionsMonitor;
-    private readonly IConfiguration _configuration;
-    private readonly ISystemClock _clock;
     private readonly ILogger<ChatbotLlmGateway> _logger;
 
     public ChatbotLlmGateway(
-        IGarageContext context,
+        IChatbotLlmPersistence persistence,
         IEnumerable<IChatbotLlmProviderClient> providerClients,
         IChatbotLlmResponseNormalizer responseNormalizer,
         IOptionsMonitor<LlmGatewayOptions> optionsMonitor,
-        IConfiguration configuration,
-        ISystemClock clock,
         ILogger<ChatbotLlmGateway> logger)
     {
-        _context = context;
+        _persistence = persistence;
         _providerClients = providerClients;
         _responseNormalizer = responseNormalizer;
         _optionsMonitor = optionsMonitor;
-        _configuration = configuration;
-        _clock = clock;
         _logger = logger;
     }
 
@@ -234,11 +226,7 @@ public sealed class ChatbotLlmGateway : IChatbotLlmGateway
         bool preferVisionModel,
         CancellationToken cancellationToken)
     {
-        var activeConfigs = await _context.AiModelConfigs
-            .AsNoTracking()
-            .Where(x => x.IsActive == true)
-            .OrderBy(x => x.Id)
-            .ToListAsync(cancellationToken);
+        var activeConfigs = await _persistence.GetActiveModelConfigsAsync(cancellationToken);
 
         if (activeConfigs.Count == 0)
         {
@@ -291,11 +279,7 @@ public sealed class ChatbotLlmGateway : IChatbotLlmGateway
         var isGeminiProvider = modelConfig.Provider.Contains("GEMINI", StringComparison.OrdinalIgnoreCase);
         var geminiCandidates = new[]
         {
-            options.GeminiAI,
-            _configuration[$"{LlmGatewayOptions.SectionName}:geminiAI"],
-            _configuration[$"{LlmGatewayOptions.SectionName}:GeminiAI"],
-            _configuration["geminiAI"],
-            _configuration["GeminiAI"]
+            options.GeminiAI
         };
         var defaultCandidates = new[]
         {
@@ -371,7 +355,7 @@ public sealed class ChatbotLlmGateway : IChatbotLlmGateway
     {
         try
         {
-            _context.ChatbotActionLogs.Add(new ChatbotActionLog
+            await _persistence.AddActionLogAsync(new ChatbotActionLog
             {
                 SessionId = request.SessionId,
                 ActionType = ActionType,
@@ -391,10 +375,8 @@ public sealed class ChatbotLlmGateway : IChatbotLlmGateway
                     response.TotalTokens,
                     toolCallCount = response.ToolCalls.Count,
                     isTransientFailure = response.IsTransientFailure
-                }),
-                CreatedAt = _clock.UtcNow
-            });
-            await _context.SaveChangesAsync(cancellationToken);
+                })
+            }, cancellationToken);
         }
         catch (Exception ex)
         {

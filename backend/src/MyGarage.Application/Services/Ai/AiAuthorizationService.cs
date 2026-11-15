@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using MyGarage.Application.Ai;
 using MyGarage.Application.Authorization;
 using MyGarage.Interfaces;
 
@@ -9,11 +9,11 @@ namespace MyGarage.Services;
 
 public sealed class AiAuthorizationService : IAiAuthorizationService
 {
-    private readonly IGarageContext _context;
+    private readonly IAiChatbotSessionStore _store;
 
-    public AiAuthorizationService(IGarageContext context)
+    public AiAuthorizationService(IAiChatbotSessionStore store)
     {
-        _context = context;
+        _store = store;
     }
 
     private static bool IsAdminActor(UserActorContext actor)
@@ -121,9 +121,7 @@ public sealed class AiAuthorizationService : IAiAuthorizationService
                 return false;
             }
 
-            return await _context.ChatbotSessions
-                .AsNoTracking()
-                .AnyAsync(s => s.Id == sessionId && s.CustomerId == customerId, ct);
+            return await _store.ChatbotSessionExistsAsync(sessionId, customerId, ct);
         }
 
         return false;

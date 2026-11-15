@@ -5,7 +5,7 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Appointment : IAuditEntity
+public partial class Appointment : IAuditableEntity
 {
     public long Id { get; set; }
 

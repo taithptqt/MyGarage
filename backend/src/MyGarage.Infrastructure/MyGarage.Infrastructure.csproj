@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\MyGarage.Application\MyGarage.Application.csproj" />
     <ProjectReference Include="..\MyGarage.Domain\MyGarage.Domain.csproj" />
     <PackageReference Include="AutoMapper" Version="15.1.4" />
@@ -11,22 +10,16 @@
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
     <PackageReference Include="payOS" Version="2.0.1" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="MyGarage" />
-    <InternalsVisibleTo Include="MyGarage.Tests" />
-  </ItemGroup>
-
-  <!-- Implicit usings matching Microsoft.NET.Sdk.Web, required by code moved out of the WebAPI host. -->
+  <!-- Implicit usings matching non-Web Infrastructure needs. -->
   <ItemGroup>
     <Using Include="System.Net.Http.Json" />
-    <Using Include="Microsoft.AspNetCore.Builder" />
-    <Using Include="Microsoft.AspNetCore.Hosting" />
-    <Using Include="Microsoft.AspNetCore.Http" />
-    <Using Include="Microsoft.AspNetCore.Routing" />
     <Using Include="Microsoft.Extensions.Configuration" />
     <Using Include="Microsoft.Extensions.DependencyInjection" />
     <Using Include="Microsoft.Extensions.Hosting" />

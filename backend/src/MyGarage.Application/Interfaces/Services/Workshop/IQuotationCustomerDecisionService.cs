@@ -1,0 +1,10 @@
+using System.Threading.Tasks;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
+
+namespace MyGarage.Interfaces;
+
+public interface IQuotationCustomerDecisionService
+{
+    Task<QuotationResponseDto> ApplyCustomerDecisionAsync(long quotationId, QuotationCustomerDecisionRequestDto request);
+}

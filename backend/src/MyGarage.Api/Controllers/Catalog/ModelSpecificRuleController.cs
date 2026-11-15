@@ -2,12 +2,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/model-specific-rules")]
     [Route("api/v1/model-specific-rules")]
     [ApiController]
     [Authorize(Roles = "Staff")]
@@ -21,57 +21,64 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ModelSpecificRule>>> GetAll()
+        public async Task<ActionResult<IEnumerable<ModelSpecificRuleResponseDto>>> GetAll()
         {
-            var items = await _modelSpecificRuleService.GetAllAsync();
+            var items = await _modelSpecificRuleService.GetAllDtosAsync(HttpContext.RequestAborted);
             return Ok(items);
         }
 
         [HttpGet("{modelId}/{productId}")]
-        public async Task<ActionResult<ModelSpecificRule>> GetById(long modelId, long productId)
+        public async Task<ActionResult<ModelSpecificRuleResponseDto>> GetById(long modelId, long productId)
         {
-            var item = await _modelSpecificRuleService.GetByIdAsync(new object[] { modelId, productId });
+            var item = await _modelSpecificRuleService.GetDtoByKeyAsync(modelId, productId, HttpContext.RequestAborted);
             if (item == null)
             {
                 return NotFound();
             }
+
             return Ok(item);
         }
 
         [HttpPost]
-        public async Task<ActionResult<ModelSpecificRule>> Create([FromBody] ModelSpecificRule item)
+        public async Task<ActionResult<ModelSpecificRuleResponseDto>> Create([FromBody] ModelSpecificRuleCreateDto itemDto)
         {
-            var createdItem = await _modelSpecificRuleService.AddAsync(item);
-            return CreatedAtAction(nameof(GetById), new { modelId = createdItem.ModelId, productId = createdItem.ProductId }, createdItem);
+            var createdItem = await _modelSpecificRuleService.CreateDtoAsync(itemDto, HttpContext.RequestAborted);
+            return CreatedAtAction(
+                nameof(GetById),
+                new { modelId = createdItem.ModelId, productId = createdItem.ProductId },
+                createdItem);
         }
 
         [HttpPut("{modelId}/{productId}")]
-        public async Task<ActionResult<ModelSpecificRule>> Update(long modelId, long productId, [FromBody] ModelSpecificRule item)
+        public async Task<ActionResult<ModelSpecificRuleResponseDto>> Update(
+            long modelId,
+            long productId,
+            [FromBody] ModelSpecificRuleUpdateDto itemDto)
         {
-            item.ModelId = modelId;
-            item.ProductId = productId;
-            var updatedItem = await _modelSpecificRuleService.UpdateAsync(new object[] { modelId, productId }, item);
-            
+            var updatedItem = await _modelSpecificRuleService.UpdateDtoAsync(
+                modelId,
+                productId,
+                itemDto,
+                HttpContext.RequestAborted);
+
             if (updatedItem == null)
             {
                 return NotFound();
             }
+
             return Ok(updatedItem);
         }
 
         [HttpDelete("{modelId}/{productId}")]
         public async Task<IActionResult> Delete(long modelId, long productId)
         {
-            var result = await _modelSpecificRuleService.DeleteAsync(new object[] { modelId, productId });
+            var result = await _modelSpecificRuleService.DeleteByKeyAsync(modelId, productId, HttpContext.RequestAborted);
             if (!result)
             {
                 return NotFound();
             }
+
             return NoContent();
         }
     }
 }
-
-
-
-

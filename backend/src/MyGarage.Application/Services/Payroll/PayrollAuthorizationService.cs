@@ -1,20 +1,19 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
+using MyGarage.Application.Payroll;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Services;
 
 public sealed class PayrollAuthorizationService : IPayrollAuthorizationService
 {
-    private readonly IGarageContext _context;
+    private readonly IPayrollStore _store;
 
-    public PayrollAuthorizationService(IGarageContext context)
+    public PayrollAuthorizationService(IPayrollStore store)
     {
-        _context = context;
+        _store = store;
     }
 
     private static bool IsStaff(UserActorContext actor)
@@ -115,11 +114,7 @@ public sealed class PayrollAuthorizationService : IPayrollAuthorizationService
 
         if (actor.BranchId.HasValue)
         {
-            var runBranchId = await _context.PayrollRuns
-                .AsNoTracking()
-                .Where(r => r.Id == payrollRunId)
-                .Select(r => (long?)r.BranchId)
-                .FirstOrDefaultAsync(ct);
+            var runBranchId = await _store.GetPayrollRunBranchIdAsync(payrollRunId, ct);
 
             if (runBranchId.HasValue && runBranchId.Value != actor.BranchId.Value)
             {
@@ -148,11 +143,7 @@ public sealed class PayrollAuthorizationService : IPayrollAuthorizationService
 
         if (actor.BranchId.HasValue)
         {
-            var runBranchId = await _context.PayrollRuns
-                .AsNoTracking()
-                .Where(r => r.Id == payrollRunId)
-                .Select(r => (long?)r.BranchId)
-                .FirstOrDefaultAsync(ct);
+            var runBranchId = await _store.GetPayrollRunBranchIdAsync(payrollRunId, ct);
 
             if (runBranchId.HasValue && runBranchId.Value != actor.BranchId.Value)
             {

@@ -11,7 +11,6 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/bays")]
     [Route("api/v1/bays")]
     [ApiController]
     [Authorize]

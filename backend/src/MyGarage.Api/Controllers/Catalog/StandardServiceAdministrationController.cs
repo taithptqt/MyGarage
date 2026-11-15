@@ -6,7 +6,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize(Roles = "Staff")]
-[Route("api/standard-services/admin-list")]
 [Route("api/v1/standard-services/admin-list")]
 public sealed class StandardServiceAdministrationController(StandardServicePageQuery query) : ControllerBase
 {

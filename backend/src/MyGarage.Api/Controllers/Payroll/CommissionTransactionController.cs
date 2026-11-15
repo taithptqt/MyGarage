@@ -1,42 +1,34 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/commission-transactions")]
     [Route("api/v1/commission-transactions")]
     [ApiController]
     [Authorize]
     public class CommissionTransactionController : ControllerBase
     {
         private readonly ICommissionTransactionService _commissionTransactionService;
-        private readonly IGarageContext _context;
-        private readonly IMapper _mapper;
+        private readonly ICommissionTransactionQueryService _queryService;
 
         public CommissionTransactionController(
             ICommissionTransactionService commissionTransactionService,
-            IGarageContext context,
-            IMapper mapper)
+            ICommissionTransactionQueryService queryService)
         {
             _commissionTransactionService = commissionTransactionService;
-            _context = context;
-            _mapper = mapper;
+            _queryService = queryService;
         }
 
-        [HttpGet("/api/commissions")]
         [HttpGet("/api/v1/commissions")]
         public async Task<IActionResult> GetCommissions(
             [FromQuery] long? branchId = null,
@@ -53,19 +45,7 @@ namespace MyGarage.Controllers
             var canViewBranchAll = this.IsStaffWithAnyKeyword(
                 "ADMIN", "MANAGER", "SERVICE_MANAGER", "ACCOUNTANT", "FINANCE", "KE_TOAN", "HR_MANAGER", "NHAN_SU", "FOREMAN", "TEAM_LEAD", "QUAN_DOC");
 
-            var query = _context.CommissionTransactions
-                .AsNoTracking()
-                .Include(ct => ct.Staff)
-                .Include(ct => ct.ServiceOrder)
-                .AsQueryable();
-
-            if (scopedBranchId.HasValue)
-            {
-                query = query.Where(ct =>
-                    ct.Staff.BranchId == scopedBranchId.Value ||
-                    (ct.ServiceOrder != null && ct.ServiceOrder.ExecuteBranchId == scopedBranchId.Value));
-            }
-
+            long? effectiveStaffId = staffId;
             if (!canViewBranchAll)
             {
                 if (!currentUserId.HasValue)
@@ -73,19 +53,11 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                query = query.Where(ct => ct.StaffId == currentUserId.Value);
-            }
-            else if (staffId.HasValue && staffId.Value > 0)
-            {
-                query = query.Where(ct => ct.StaffId == staffId.Value);
+                effectiveStaffId = currentUserId.Value;
             }
 
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                var normalizedStatus = status.Trim().ToUpperInvariant();
-                query = query.Where(ct => ct.Status != null && ct.Status.ToUpper() == normalizedStatus);
-            }
-
+            DateTime? monthStart = null;
+            DateTime? monthEndExclusive = null;
             if (!string.IsNullOrWhiteSpace(period))
             {
                 if (!DateTime.TryParseExact(
@@ -93,21 +65,22 @@ namespace MyGarage.Controllers
                         "yyyy-MM",
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.None,
-                        out var monthStart))
+                        out var parsedStart))
                 {
-                    return BadRequest(new { message = "Định dạng period phải là yyyy-MM." });
+                    return this.BadRequestProblem("Định dạng period phải là yyyy-MM.");
                 }
 
-                var monthEndExclusive = monthStart.AddMonths(1);
-                query = query.Where(ct =>
-                    (ct.CreatedAt ?? ct.ApprovedAt) >= monthStart &&
-                    (ct.CreatedAt ?? ct.ApprovedAt) < monthEndExclusive);
+                monthStart = parsedStart;
+                monthEndExclusive = parsedStart.AddMonths(1);
             }
 
-            var rows = await query
-                .OrderByDescending(ct => ct.CreatedAt ?? ct.ApprovedAt)
-                .ThenByDescending(ct => ct.Id)
-                .ToListAsync();
+            var rows = await _queryService.GetCommissionsAsync(
+                scopedBranchId,
+                effectiveStaffId,
+                status,
+                monthStart,
+                monthEndExclusive,
+                HttpContext.RequestAborted);
 
             var items = rows.Select(ct => new
             {
@@ -146,16 +119,10 @@ namespace MyGarage.Controllers
                 return (ActionResult)denied!;
             }
 
-            var query = _context.CommissionTransactions.AsNoTracking().AsQueryable();
-            if (scopedBranchId.HasValue)
-            {
-                query = query.Where(ct => ct.Staff.BranchId == scopedBranchId.Value);
-            }
-
-            var envelope = await query
-                .OrderByDescending(ct => ct.Id)
-                .ToPagedEnvelopeAsync(page, pageSize, paged => _mapper.Map<IEnumerable<CommissionTransactionResponseDto>>(paged));
-            return Ok(envelope);
+            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
+            var (items, total) = await _queryService.GetPageAsync(scopedBranchId, normalizedPage, normalizedSize, HttpContext.RequestAborted);
+            var dtos = _commissionTransactionService.MapToDtos(items);
+            return Ok(PagedEnvelope<CommissionTransactionResponseDto>.Create(dtos, total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id:long}")]
@@ -166,10 +133,7 @@ namespace MyGarage.Controllers
                 return (ActionResult)denied!;
             }
 
-            var item = await _context.CommissionTransactions
-                .AsNoTracking()
-                .Include(ct => ct.Staff)
-                .FirstOrDefaultAsync(ct => ct.Id == id);
+            var item = await _queryService.GetByIdWithStaffAsync(id, HttpContext.RequestAborted);
             if (item == null)
             {
                 return NotFound();
@@ -180,7 +144,7 @@ namespace MyGarage.Controllers
                 return Forbid();
             }
 
-            var dto = _mapper.Map<CommissionTransactionResponseDto>(item);
+            var dto = _commissionTransactionService.MapToDto(item);
             return Ok(dto);
         }
 
@@ -199,21 +163,15 @@ namespace MyGarage.Controllers
 
             if (scopedBranchId.HasValue && itemDto != null)
             {
-                var staffBranchId = await _context.Staffs
-                    .AsNoTracking()
-                    .Where(s => s.Id == itemDto.StaffId)
-                    .Select(s => (long?)s.BranchId)
-                    .FirstOrDefaultAsync();
+                var staffBranchId = await _queryService.GetStaffBranchIdAsync(itemDto.StaffId, HttpContext.RequestAborted);
                 if (!staffBranchId.HasValue || staffBranchId.Value != scopedBranchId.Value)
                 {
                     return Forbid();
                 }
             }
 
-            var entity = _mapper.Map<CommissionTransaction>(itemDto);
-            var createdItem = await _commissionTransactionService.AddAsync(entity);
-            var responseDto = _mapper.Map<CommissionTransactionResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _commissionTransactionService.CreateDtoAsync(itemDto!);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id:long}")]
@@ -237,25 +195,21 @@ namespace MyGarage.Controllers
 
             if (scopedBranchId.HasValue)
             {
-                var staffBranchId = await _context.Staffs
-                    .AsNoTracking()
-                    .Where(s => s.Id == existingItem.StaffId)
-                    .Select(s => (long?)s.BranchId)
-                    .FirstOrDefaultAsync();
+                var staffBranchId = await _queryService.GetStaffBranchIdAsync(existingItem.StaffId, HttpContext.RequestAborted);
                 if (!staffBranchId.HasValue || staffBranchId.Value != scopedBranchId.Value)
                 {
                     return Forbid();
                 }
             }
 
-            _mapper.Map(itemDto, existingItem);
+            _commissionTransactionService.MapUpdate(itemDto, existingItem);
             var updatedItem = await _commissionTransactionService.UpdateAsync(id, existingItem);
             if (updatedItem == null)
             {
                 return NotFound();
             }
 
-            var responseDto = _mapper.Map<CommissionTransactionResponseDto>(updatedItem);
+            var responseDto = _commissionTransactionService.MapToDto(updatedItem);
             return Ok(responseDto);
         }
 
@@ -280,11 +234,7 @@ namespace MyGarage.Controllers
 
             if (scopedBranchId.HasValue)
             {
-                var staffBranchId = await _context.Staffs
-                    .AsNoTracking()
-                    .Where(s => s.Id == existingItem.StaffId)
-                    .Select(s => (long?)s.BranchId)
-                    .FirstOrDefaultAsync();
+                var staffBranchId = await _queryService.GetStaffBranchIdAsync(existingItem.StaffId, HttpContext.RequestAborted);
                 if (!staffBranchId.HasValue || staffBranchId.Value != scopedBranchId.Value)
                 {
                     return Forbid();
@@ -300,9 +250,3 @@ namespace MyGarage.Controllers
         }
     }
 }
-
-
-
-
-
-

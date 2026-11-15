@@ -7,7 +7,6 @@ using MyGarage.Application.Inventory;
 namespace MyGarage.Controllers;
 
 [ApiController]
-[Route("api/inventory-management/catalog")]
 [Route("api/v1/inventory-management/catalog")]
 [Authorize(Roles = "Staff")]
 public sealed class InventoryCatalogController : ControllerBase

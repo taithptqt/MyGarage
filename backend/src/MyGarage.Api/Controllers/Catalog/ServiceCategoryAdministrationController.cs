@@ -6,7 +6,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize(Roles = "Staff")]
-[Route("api/service-categories/admin-list")]
 [Route("api/v1/service-categories/admin-list")]
 public sealed class ServiceCategoryAdministrationController : ControllerBase
 {

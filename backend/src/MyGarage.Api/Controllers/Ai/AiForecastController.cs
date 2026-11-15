@@ -1,9 +1,5 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -13,20 +9,17 @@ using MyGarage.Extensions;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/ai-forecasts")]
     [Route("api/v1/ai-forecasts")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class AiForecastController : ControllerBase
     {
         private readonly IAiForecastService _aiForecastService;
-        private readonly IMapper _mapper;
         private readonly ForecastListQuery _list;
 
-        public AiForecastController(IAiForecastService aiForecastService, IMapper mapper, ForecastListQuery list)
+        public AiForecastController(IAiForecastService aiForecastService, ForecastListQuery list)
         {
             _aiForecastService = aiForecastService;
-            _mapper = mapper;
             _list = list;
         }
 
@@ -41,41 +34,29 @@ namespace MyGarage.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<AiForecastResponseDto>> GetById(long id)
         {
-            var item = await _aiForecastService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _aiForecastService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<AiForecastResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<AiForecastResponseDto>> Create([FromBody] AiForecastCreateDto itemDto)
         {
-            var entity = _mapper.Map<AiForecast>(itemDto);
-            var createdItem = await _aiForecastService.AddAsync(entity);
-            var responseDto = _mapper.Map<AiForecastResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _aiForecastService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<AiForecastResponseDto>> Update(long id, [FromBody] AiForecastUpdateDto itemDto)
         {
-            var existingItem = await _aiForecastService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _aiForecastService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _aiForecastService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<AiForecastResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

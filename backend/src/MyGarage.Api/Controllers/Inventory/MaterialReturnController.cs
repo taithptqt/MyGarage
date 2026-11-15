@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -13,7 +10,6 @@ using MyGarage.Extensions;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/material-returns")]
     [Route("api/v1/material-returns")]
     [ApiController]
     [Authorize(Roles = "Staff")]
@@ -21,19 +17,16 @@ namespace MyGarage.Controllers
     {
         private readonly IMaterialReturnService _materialReturnService;
         private readonly IServiceOrderService _serviceOrderService;
-        private readonly IInventoryAdminService _inventoryAdminService;
-        private readonly IMapper _mapper;
+        private readonly IStockAlertSyncService _stockAlertSyncService;
 
         public MaterialReturnController(
             IMaterialReturnService materialReturnService,
             IServiceOrderService serviceOrderService,
-            IInventoryAdminService inventoryAdminService,
-            IMapper mapper)
+            IStockAlertSyncService stockAlertSyncService)
         {
             _materialReturnService = materialReturnService;
             _serviceOrderService = serviceOrderService;
-            _inventoryAdminService = inventoryAdminService;
-            _mapper = mapper;
+            _stockAlertSyncService = stockAlertSyncService;
         }
 
         [HttpGet]
@@ -44,19 +37,18 @@ namespace MyGarage.Controllers
             var envelope = await _materialReturnService.ToPagedEnvelopeAsync(
                 page,
                 pageSize,
-                paged => _mapper.Map<IEnumerable<MaterialReturnResponseDto>>(paged));
+                _materialReturnService.MapToDtos);
             return Ok(envelope);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<MaterialReturnResponseDto>> GetById(long id)
         {
-            var item = await _materialReturnService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _materialReturnService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<MaterialReturnResponseDto>(item);
             return Ok(dto);
         }
 
@@ -68,7 +60,7 @@ namespace MyGarage.Controllers
                 var request = itemDto;
                 if (request == null)
                 {
-                    return BadRequest(new { message = "Dữ liệu trả vật tư không hợp lệ." });
+                    return this.BadRequestProblem("Dữ liệu trả vật tư không hợp lệ.");
                 }
 
                 if (request.ServiceOrderId > 0)
@@ -76,14 +68,13 @@ namespace MyGarage.Controllers
                     await _serviceOrderService.EnsurePartsEditableAsync(request.ServiceOrderId.Value);
                 }
 
-                var createdItem = await _materialReturnService.ProcessReturnAsync(request);
-                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
-                var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
-                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+                var responseDto = await _materialReturnService.ProcessReturnDtoAsync(request);
+                await _stockAlertSyncService.RebuildStockAlertsAsync(this.GetCurrentUserId());
+                return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -104,20 +95,18 @@ namespace MyGarage.Controllers
                     await _serviceOrderService.EnsurePartsEditableAsync(targetServiceOrderId.Value);
                 }
 
-                _mapper.Map(itemDto, existingItem);
-                var updatedItem = await _materialReturnService.UpdateAsync(id, existingItem);
-                if (updatedItem == null)
+                var responseDto = await _materialReturnService.UpdateDtoAsync(id, itemDto!, existingItem);
+                if (responseDto == null)
                 {
                     return NotFound();
                 }
 
-                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
-                var responseDto = _mapper.Map<MaterialReturnResponseDto>(updatedItem);
+                await _stockAlertSyncService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -142,12 +131,12 @@ namespace MyGarage.Controllers
                 {
                     return NotFound();
                 }
-                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
+                await _stockAlertSyncService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 return NoContent();
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
     }

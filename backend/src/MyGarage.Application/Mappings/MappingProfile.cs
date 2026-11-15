@@ -2,6 +2,7 @@ using AutoMapper;
 using MyGarage.Models;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Common.Audit;
 
 namespace MyGarage.Mappings
 {
@@ -37,9 +38,15 @@ namespace MyGarage.Mappings
             CreateMap<ApprovalRequestCreateDto, ApprovalRequest>();
             CreateMap<ApprovalRequestUpdateDto, ApprovalRequest>();
             // AuditLog Mappings
-            CreateMap<AuditLog, AuditLogResponseDto>();
-            CreateMap<AuditLogCreateDto, AuditLog>();
-            CreateMap<AuditLogUpdateDto, AuditLog>();
+            CreateMap<AuditLog, AuditLogResponseDto>()
+                .ForMember(dest => dest.OldValue, opt => opt.MapFrom(src => AuditValueRedactor.RedactForRead(src.OldValue)))
+                .ForMember(dest => dest.NewValue, opt => opt.MapFrom(src => AuditValueRedactor.RedactForRead(src.NewValue)));
+            CreateMap<AuditLogCreateDto, AuditLog>()
+                .ForMember(dest => dest.OldValue, opt => opt.MapFrom(src => AuditValueRedactor.Redact(src.OldValue)))
+                .ForMember(dest => dest.NewValue, opt => opt.MapFrom(src => AuditValueRedactor.Redact(src.NewValue)));
+            CreateMap<AuditLogUpdateDto, AuditLog>()
+                .ForMember(dest => dest.OldValue, opt => opt.MapFrom(src => AuditValueRedactor.Redact(src.OldValue)))
+                .ForMember(dest => dest.NewValue, opt => opt.MapFrom(src => AuditValueRedactor.Redact(src.NewValue)));
             // Bay Mappings
             CreateMap<Bay, BayResponseDto>();
             CreateMap<BayCreateDto, Bay>();

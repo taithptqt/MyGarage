@@ -29,6 +29,9 @@ public sealed class PasswordResetTokenConfiguration : IEntityTypeConfiguration<P
             .IsUnicode(false);
 
         entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+        // Both consumption and revocation must invalidate a stale reader.
+        entity.Property(e => e.UsedAt).IsConcurrencyToken();
+        entity.Property(e => e.RevokedAt).IsConcurrencyToken();
 
         entity.HasOne(d => d.Customer)
             .WithMany()

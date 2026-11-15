@@ -2,22 +2,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Interfaces;
+using MyGarage.Application.Interfaces.Queries;
 
 namespace MyGarage.Controllers;
 
-[Route("api/payslips")]
 [Route("api/v1/payslips")]
 [ApiController]
 [Authorize]
 public sealed class PayslipsController : ControllerBase
 {
-    private readonly IGarageContext _context;
+    private readonly IPayslipQueryService _payslipQueryService;
 
-    public PayslipsController(IGarageContext context)
+    public PayslipsController(IPayslipQueryService payslipQueryService)
     {
-        _context = context;
+        _payslipQueryService = payslipQueryService;
     }
 
     [HttpGet("my")]
@@ -31,28 +29,10 @@ public sealed class PayslipsController : ControllerBase
         var staffId = this.GetCurrentUserId();
         if (!staffId.HasValue || staffId.Value <= 0)
         {
-            return Unauthorized(new { message = "Không xác định được nhân viên hiện tại." });
+            return this.UnauthorizedProblem("Không xác định được nhân viên hiện tại.");
         }
 
-        var query = _context.Payslips
-            .AsNoTracking()
-            .Include(p => p.PayrollItem)
-                .ThenInclude(pi => pi.PayrollRun)
-                    .ThenInclude(pr => pr.PayrollPeriod)
-            .Include(p => p.PayrollItem)
-                .ThenInclude(pi => pi.Staff)
-            .Where(p => p.PayrollItem.StaffId == staffId.Value);
-
-        if (!string.IsNullOrWhiteSpace(period))
-        {
-            var normalizedPeriod = period.Trim().ToUpperInvariant();
-            query = query.Where(p => p.PayrollItem.PayrollRun.PayrollPeriod.PeriodCode.ToUpper() == normalizedPeriod);
-        }
-
-        var rows = await query
-            .OrderByDescending(p => p.IssuedAt)
-            .ThenByDescending(p => p.Id)
-            .ToListAsync();
+        var rows = await _payslipQueryService.GetMyPayslipsAsync(staffId.Value, period);
 
         var items = rows.Select(p =>
         {

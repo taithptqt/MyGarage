@@ -1,34 +1,29 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/customer-vehicles")]
     [Route("api/v1/customer-vehicles")]
     [ApiController]
     [Authorize]
     public class CustomerVehiclesController : ControllerBase
     {
         private readonly ICustomerVehicleService _customerVehicleService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _context;
+        private readonly ICustomerVehicleQueryService _customerVehicleQueryService;
 
-        public CustomerVehiclesController(ICustomerVehicleService customerVehicleService, IMapper mapper, IGarageContext context)
+        public CustomerVehiclesController(
+            ICustomerVehicleService customerVehicleService,
+            ICustomerVehicleQueryService customerVehicleQueryService)
         {
             _customerVehicleService = customerVehicleService;
-            _mapper = mapper;
-            _context = context;
+            _customerVehicleQueryService = customerVehicleQueryService;
         }
 
         [HttpGet]
@@ -36,7 +31,7 @@ namespace MyGarage.Controllers
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
         {
-            var query = _context.CustomerVehicles.AsNoTracking().AsQueryable();
+            long? customerId = null;
             if (!this.IsStaffUser())
             {
                 var currentCustomerId = this.GetCurrentUserId();
@@ -45,37 +40,35 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                query = query.Where(x => x.CustomerId == currentCustomerId.Value);
+                customerId = currentCustomerId.Value;
             }
 
-            var envelope = await query
-                .OrderBy(x => x.Id)
-                .ToPagedEnvelopeAsync(page, pageSize, paged => _mapper.Map<IEnumerable<CustomerVehicleResponseDto>>(paged));
-            return Ok(envelope);
+            var (items, total, normalizedPage, normalizedSize) = await _customerVehicleQueryService.GetPagedAsync(customerId, page, pageSize);
+            var dtos = _customerVehicleService.MapToDtos(items);
+            return Ok(PagedEnvelope<CustomerVehicleResponseDto>.Create(dtos, total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<CustomerVehicleResponseDto>> GetById(long id)
         {
-            var item = await _customerVehicleService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _customerVehicleService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            if (!this.IsStaffUser() && item.CustomerId != this.GetCurrentUserId())
+            if (!this.IsStaffUser() && dto.CustomerId != this.GetCurrentUserId())
             {
                 return Forbid();
             }
 
-            var dto = _mapper.Map<CustomerVehicleResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<CustomerVehicleResponseDto>> Create([FromBody] CustomerVehicleCreateDto itemDto)
         {
-            var entity = _mapper.Map<CustomerVehicle>(itemDto);
+            long? overrideCustomerId = null;
             if (!this.IsStaffUser())
             {
                 var currentCustomerId = this.GetCurrentUserId();
@@ -84,42 +77,34 @@ namespace MyGarage.Controllers
                     return Forbid();
                 }
 
-                entity.CustomerId = currentCustomerId.Value;
+                overrideCustomerId = currentCustomerId.Value;
             }
 
-            var createdItem = await _customerVehicleService.AddAsync(entity);
-            var responseDto = _mapper.Map<CustomerVehicleResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _customerVehicleService.CreateDtoAsync(itemDto, overrideCustomerId);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id:long}")]
         public async Task<ActionResult<CustomerVehicleResponseDto>> Update(long id, [FromBody] CustomerVehicleUpdateDto itemDto)
         {
-            var existingItem = await _customerVehicleService.GetByIdAsync(id);
+            var existingItem = await _customerVehicleService.GetDtoByIdAsync(id);
             if (existingItem == null)
             {
                 return NotFound();
             }
 
-            if (!this.IsStaffUser() && existingItem.CustomerId != this.GetCurrentUserId())
+            var isStaff = this.IsStaffUser();
+            if (!isStaff && existingItem.CustomerId != this.GetCurrentUserId())
             {
                 return Forbid();
             }
 
-            var preservedCustomerId = existingItem.CustomerId;
-            _mapper.Map(itemDto, existingItem);
-            if (!this.IsStaffUser())
-            {
-                existingItem.CustomerId = preservedCustomerId;
-            }
-
-            var updatedItem = await _customerVehicleService.UpdateAsync(id, existingItem);
-            if (updatedItem == null)
+            var responseDto = await _customerVehicleService.UpdateDtoAsync(id, itemDto, preserveCustomerId: !isStaff);
+            if (responseDto == null)
             {
                 return NotFound();
             }
 
-            var responseDto = _mapper.Map<CustomerVehicleResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

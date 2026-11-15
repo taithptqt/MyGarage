@@ -1,8 +1,6 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
 using MyGarage.Interfaces;
 
@@ -10,11 +8,11 @@ namespace MyGarage.Services;
 
 public sealed class VehicleAuthorizationService : IVehicleAuthorizationService
 {
-    private readonly IGarageContext _context;
+    private readonly IVehicleAuthorizationStore _store;
 
-    public VehicleAuthorizationService(IGarageContext context)
+    public VehicleAuthorizationService(IVehicleAuthorizationStore store)
     {
-        _context = context;
+        _store = store;
     }
 
     public async Task<bool> CanAccessVehicleAsync(long vehicleId, UserActorContext actor, CancellationToken ct = default)
@@ -31,9 +29,7 @@ public sealed class VehicleAuthorizationService : IVehicleAuthorizationService
 
         if (string.Equals(actor.Role, "Customer", StringComparison.OrdinalIgnoreCase))
         {
-            return await _context.CustomerVehicles
-                .AsNoTracking()
-                .AnyAsync(cv => cv.VehicleId == vehicleId && cv.CustomerId == actor.UserId.Value && cv.IsDeleted != true, ct);
+            return await _store.CustomerHasVehicleAccessAsync(vehicleId, actor.UserId.Value, ct);
         }
 
         return false;
@@ -53,9 +49,7 @@ public sealed class VehicleAuthorizationService : IVehicleAuthorizationService
 
         if (string.Equals(actor.Role, "Customer", StringComparison.OrdinalIgnoreCase))
         {
-            return await _context.CustomerVehicles
-                .AsNoTracking()
-                .AnyAsync(cv => cv.VehicleId == vehicleId && cv.CustomerId == actor.UserId.Value && cv.IsCurrentOwner == true && cv.IsDeleted != true, ct);
+            return await _store.CustomerIsCurrentOwnerAsync(vehicleId, actor.UserId.Value, ct);
         }
 
         return false;
@@ -75,9 +69,7 @@ public sealed class VehicleAuthorizationService : IVehicleAuthorizationService
 
         if (string.Equals(actor.Role, "Customer", StringComparison.OrdinalIgnoreCase))
         {
-            return await _context.CustomerVehicles
-                .AsNoTracking()
-                .AnyAsync(cv => cv.Id == customerVehicleId && cv.CustomerId == actor.UserId.Value && cv.IsDeleted != true, ct);
+            return await _store.CustomerOwnsCustomerVehicleAsync(customerVehicleId, actor.UserId.Value, ct);
         }
 
         return false;

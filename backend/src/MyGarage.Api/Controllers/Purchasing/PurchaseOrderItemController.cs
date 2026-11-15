@@ -1,36 +1,54 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Authorization;
+using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Common.Pagination;
+using MyGarage.Extensions;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/purchase-order-items")]
     [Route("api/v1/purchase-order-items")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class PurchaseOrderItemController : ControllerBase
     {
         private readonly IPurchaseOrderItemService _purchaseOrderItemService;
-        private readonly IMapper _mapper;
+        private readonly IPurchaseOrderItemQueryService _purchaseOrderItemQueryService;
+        private readonly IPurchaseOrderAuthorizationService _authorization;
 
-        public PurchaseOrderItemController(IPurchaseOrderItemService purchaseOrderItemService, IMapper mapper)
+        public PurchaseOrderItemController(
+            IPurchaseOrderItemService purchaseOrderItemService,
+            IPurchaseOrderItemQueryService purchaseOrderItemQueryService,
+            IPurchaseOrderAuthorizationService authorization)
         {
             _purchaseOrderItemService = purchaseOrderItemService;
-            _mapper = mapper;
+            _purchaseOrderItemQueryService = purchaseOrderItemQueryService;
+            _authorization = authorization;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<PurchaseOrderItemResponseDto>>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var items = await _purchaseOrderItemService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<PurchaseOrderItemResponseDto>>(items);
+            if (!this.TryResolveBranchScope(null, out var branchId, out var denied)) return denied!;
+            var items = await _purchaseOrderItemQueryService.GetAllByBranchAsync(branchId);
+            var dtos = _purchaseOrderItemService.MapToDtos(items);
             return Ok(dtos);
+        }
+
+        [HttpGet("page")]
+        public async Task<ActionResult<PagedEnvelope<PurchaseOrderItemResponseDto>>> GetPage(
+            [FromQuery] int? page = null, [FromQuery] int? pageSize = null)
+        {
+            if (!this.TryResolveBranchScope(null, out var branchId, out var denied)) return (ActionResult)denied!;
+            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
+            var (items, total) = await _purchaseOrderItemQueryService.GetPageByBranchAsync(
+                branchId, normalizedPage, normalizedSize, HttpContext.RequestAborted);
+            return Ok(PagedEnvelope<PurchaseOrderItemResponseDto>.Create(
+                _purchaseOrderItemService.MapToDtos(items), total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id}")]
@@ -41,17 +59,15 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<PurchaseOrderItemResponseDto>(item);
+            if (!await _authorization.CanViewPurchaseOrderAsync(item.PurchaseOrderId, this.ToUserActorContext())) return Forbid();
+            var dto = _purchaseOrderItemService.MapToDto(item);
             return Ok(dto);
         }
 
         [HttpPost]
-        public async Task<ActionResult<PurchaseOrderItemResponseDto>> Create([FromBody] PurchaseOrderItemCreateDto itemDto)
+        public ActionResult<PurchaseOrderItemResponseDto> Create([FromBody] PurchaseOrderItemCreateDto itemDto)
         {
-            var entity = _mapper.Map<PurchaseOrderItem>(itemDto);
-            var createdItem = await _purchaseOrderItemService.AddAsync(entity);
-            var responseDto = _mapper.Map<PurchaseOrderItemResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            return this.ConflictProblem("Không hỗ trợ thay đổi dòng đơn mua qua API này.");
         }
 
         [HttpPut("{id}")]
@@ -63,26 +79,17 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _purchaseOrderItemService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<PurchaseOrderItemResponseDto>(updatedItem);
-            return Ok(responseDto);
+            if (!await _authorization.CanUpdatePurchaseOrderAsync(existingItem.PurchaseOrderId, this.ToUserActorContext())) return Forbid();
+            return this.ConflictProblem("Không hỗ trợ thay đổi dòng đơn mua qua API này.");
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _purchaseOrderItemService.DeleteAsync(id);
-            if (!result)
-            {
-                return NotFound();
-            }
-            return NoContent();
+            var item = await _purchaseOrderItemService.GetByIdAsync(id);
+            if (item == null) return NotFound();
+            if (!await _authorization.CanUpdatePurchaseOrderAsync(item.PurchaseOrderId, this.ToUserActorContext())) return Forbid();
+            return this.ConflictProblem("Không hỗ trợ thay đổi dòng đơn mua qua API này.");
         }
     }
 }

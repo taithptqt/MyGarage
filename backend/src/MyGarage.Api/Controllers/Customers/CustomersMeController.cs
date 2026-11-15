@@ -10,7 +10,6 @@ namespace MyGarage.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
-[Route("api/customers/me")]
 [Route("api/v1/customers/me")]
 public sealed class CustomersMeController : ControllerBase
 {
@@ -76,7 +75,7 @@ public sealed class CustomersMeController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
     }
 
@@ -97,7 +96,7 @@ public sealed class CustomersMeController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return this.BadRequestProblem(ex.Message);
         }
     }
 
@@ -123,7 +122,7 @@ public sealed class CustomersMeController : ControllerBase
         return Ok(new { unreadCount, items, totalCount, page = normalizedPage, pageSize = normalizedSize });
     }
 
-    [HttpPost("notifications/{id:long}/read")]
+    [HttpPost("notifications/{id:long}/reads")]
     public async Task<ActionResult> MarkNotificationRead(long id, CancellationToken cancellationToken)
     {
         if (!TryResolveCustomerId(out var customerId, out var err))
@@ -134,7 +133,7 @@ public sealed class CustomersMeController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("notifications/read-all")]
+    [HttpPost("notifications/bulk-reads")]
     public async Task<ActionResult> MarkAllRead(CancellationToken cancellationToken)
     {
         if (!TryResolveCustomerId(out var customerId, out var err))

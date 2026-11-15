@@ -92,9 +92,7 @@ public static class InvoiceLifecycleRules
 
     public static string ResolvePaymentStatus(decimal paidAmount, decimal totalAmount)
     {
-        if (totalAmount <= 0m) return PaymentStatusPaid;
-        if (paidAmount <= 0m) return PaymentStatusUnpaid;
-        return paidAmount < totalAmount ? PaymentStatusPartial : PaymentStatusPaid;
+        return MyGarage.Domain.Payments.DocumentPaymentStatusRules.Resolve(paidAmount, totalAmount);
     }
 
     public static decimal CalculateRemainingDue(decimal totalAmount, decimal paidAmount)

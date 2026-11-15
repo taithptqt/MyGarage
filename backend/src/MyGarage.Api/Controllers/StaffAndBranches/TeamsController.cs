@@ -1,29 +1,24 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/teams")]
     [Route("api/v1/teams")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class TeamsController : ControllerBase
     {
         private readonly ITeamService _teamService;
-        private readonly IMapper _mapper;
 
-        public TeamsController(ITeamService teamService, IMapper mapper)
+        public TeamsController(ITeamService teamService)
         {
             _teamService = teamService;
-            _mapper = mapper;
         }
 
         [HttpGet]
@@ -42,47 +37,38 @@ namespace MyGarage.Controllers
                 items = items.Where(x => string.Equals((x.Status ?? string.Empty).Trim(), normalized, System.StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
-            return Ok(_mapper.Map<IEnumerable<TeamResponseDto>>(items));
+            return Ok(_teamService.MapToDtos(items));
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<TeamResponseDto>> GetById(long id)
         {
-            var item = await _teamService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _teamService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
 
-            return Ok(_mapper.Map<TeamResponseDto>(item));
+            return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<TeamResponseDto>> Create([FromBody] TeamCreateDto itemDto)
         {
-            var entity = _mapper.Map<Team>(itemDto);
-            var createdItem = await _teamService.AddAsync(entity);
-            var responseDto = _mapper.Map<TeamResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _teamService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id:long}")]
         public async Task<ActionResult<TeamResponseDto>> Update(long id, [FromBody] TeamUpdateDto itemDto)
         {
-            var existingItem = await _teamService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _teamService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _teamService.UpdateAsync(id, existingItem);
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(_mapper.Map<TeamResponseDto>(updatedItem));
+            return Ok(responseDto);
         }
 
         [HttpDelete("{id:long}")]

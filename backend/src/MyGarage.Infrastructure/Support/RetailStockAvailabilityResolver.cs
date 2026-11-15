@@ -1,19 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Support;
-
-public sealed record RetailStockAvailabilityEntry(
-    long ProductId,
-    long? BranchId,
-    int AvailableQuantity
-);
-
-public sealed record RetailBranchAvailabilityRow(
-    long BranchId,
-    string BranchName,
-    int AvailableQuantity
-);
 
 public static class RetailStockAvailabilityResolver
 {

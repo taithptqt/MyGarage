@@ -6,7 +6,6 @@ namespace MyGarage.Controllers;
 
 [ApiController]
 [Authorize(Policy = "AdminStaffOnly")]
-[Route("api/ai-knowledge-bases/page")]
 [Route("api/v1/ai-knowledge-bases/page")]
 public sealed class AiKnowledgePageController(AiKnowledgePageQuery query) : ControllerBase
 {

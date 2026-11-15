@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Application.Purchasing;
@@ -15,7 +14,6 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/goods-receipts")]
     [Route("api/v1/goods-receipts")]
     [ApiController]
     [Authorize]
@@ -45,14 +43,11 @@ namespace MyGarage.Controllers
         }
 
         private readonly IGoodsReceiptApplicationService _grnAppService;
-        private readonly IGarageContext _context;
 
         public GoodsReceiptController(
-            IGoodsReceiptApplicationService grnAppService,
-            IGarageContext context)
+            IGoodsReceiptApplicationService grnAppService)
         {
             _grnAppService = grnAppService;
-            _context = context;
         }
 
         [HttpGet]
@@ -71,15 +66,15 @@ namespace MyGarage.Controllers
             var actor = this.ToUserActorContext();
             try
             {
+                var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
                 var result = await _grnAppService.GetGoodsReceiptsAsync(new GoodsReceiptFilterDto(
                     scopedBranchId,
                     purchaseOrderId,
-                    page,
-                    pageSize,
+                    normalizedPage,
+                    normalizedSize,
                     envelope
                 ), actor);
 
-                var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
                 var items = result.Items.Select(MapGoodsReceiptPayload).ToList();
 
                 return Ok(PagedEnvelope<object>.Create(items, result.Total, normalizedPage, normalizedSize));
@@ -104,7 +99,7 @@ namespace MyGarage.Controllers
                 var grn = await _grnAppService.GetGoodsReceiptByIdAsync(id, actor);
                 if (grn == null)
                 {
-                    return NotFound(new { message = "Không tìm thấy phiếu nhập kho." });
+                    return this.NotFoundProblem("Không tìm thấy phiếu nhập kho.");
                 }
 
                 if (scopedBranchId.HasValue && grn.BranchId.HasValue && grn.BranchId.Value != scopedBranchId.Value)
@@ -130,7 +125,7 @@ namespace MyGarage.Controllers
 
             if (payload == null || payload.PurchaseOrderId <= 0)
             {
-                return BadRequest(new { message = "PurchaseOrderId là bắt buộc để lập phiếu nhập kho." });
+                return this.BadRequestProblem("PurchaseOrderId là bắt buộc để lập phiếu nhập kho.");
             }
 
             if (!this.TryResolveBranchScope(payload.BranchId, out var scopedBranchId, out var denied))
@@ -192,15 +187,11 @@ namespace MyGarage.Controllers
             }
             catch (KeyNotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return Conflict(new { message = "Tồn kho vừa được cập nhật bởi giao dịch khác, vui lòng tải lại và thử lại." });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 

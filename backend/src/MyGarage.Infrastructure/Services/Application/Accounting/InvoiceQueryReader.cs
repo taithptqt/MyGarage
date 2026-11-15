@@ -13,7 +13,7 @@ public sealed class InvoiceQueryReader(IGarageContext context) : IInvoiceQueryRe
         var query = context.Invoices.AsNoTracking();
         if (scope.Kind == InvoiceScopeKind.Branch)
             query = query.Where(x => (x.ServiceOrder != null && x.ServiceOrder.ExecuteBranchId == scope.Id) ||
-                                     (x.RetailOrder != null && x.RetailOrder.BranchId == scope.Id));
+                                     (x.ServiceOrderId == null && x.RetailOrder != null && x.RetailOrder.BranchId == scope.Id));
         else if (scope.Kind == InvoiceScopeKind.Customer)
             query = query.Where(x => (x.ServiceOrder != null && x.ServiceOrder.CustomerId == scope.Id) ||
                                      (x.RetailOrder != null && x.RetailOrder.CustomerId == scope.Id));

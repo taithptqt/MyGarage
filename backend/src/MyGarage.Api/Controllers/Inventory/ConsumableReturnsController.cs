@@ -10,20 +10,19 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Route("api/consumable-returns")]
     [Route("api/v1/consumable-returns")]
     [Authorize]
     public sealed class ConsumableReturnsController : ControllerBase
     {
         private readonly IConsumableReturnService _consumableReturnService;
-        private readonly IInventoryAdminService _inventoryAdminService;
+        private readonly IStockAlertSyncService _stockAlertSyncService;
 
         public ConsumableReturnsController(
             IConsumableReturnService consumableReturnService,
-            IInventoryAdminService inventoryAdminService)
+            IStockAlertSyncService stockAlertSyncService)
         {
             _consumableReturnService = consumableReturnService;
-            _inventoryAdminService = inventoryAdminService;
+            _stockAlertSyncService = stockAlertSyncService;
         }
 
         [HttpPost]
@@ -32,22 +31,22 @@ namespace MyGarage.Controllers
             var actorId = ResolveActorStaffId();
             if (!actorId.HasValue || actorId.Value <= 0)
             {
-                return Unauthorized(new { message = "Không xác định được nhân sự thao tác." });
+                return this.UnauthorizedProblem("Không xác định được nhân sự thao tác.");
             }
 
             try
             {
                 var data = await _consumableReturnService.CreateBundleAsync(request, actorId.Value);
-                await _inventoryAdminService.RebuildStockAlertsAsync(actorId);
+                await _stockAlertSyncService.RebuildStockAlertsAsync(actorId);
                 return Ok(data);
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return this.NotFoundProblem(ex.Message);
             }
             catch (BadRequestException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 

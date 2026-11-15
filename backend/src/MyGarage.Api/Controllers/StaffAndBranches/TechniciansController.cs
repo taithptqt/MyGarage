@@ -7,7 +7,6 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Route("api/technicians")]
     [Route("api/v1/technicians")]
     [Authorize]
     public sealed class TechniciansController : ControllerBase
@@ -27,13 +26,13 @@ namespace MyGarage.Controllers
         {
             if (id <= 0)
             {
-                return BadRequest(new { message = "Technician id is invalid." });
+                return this.BadRequestProblem("Technician id is invalid.");
             }
 
             var result = await _technicianProductivityService.GetTechnicianProductivityAsync(id, from, to);
             if (result == null)
             {
-                return NotFound(new { message = "Technician not found." });
+                return this.NotFoundProblem("Technician not found.");
             }
 
             return Ok(result);

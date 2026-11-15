@@ -1,21 +1,19 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
+using MyGarage.Application.Interfaces.Stores.Retail;
 using MyGarage.Domain.Rules;
-using MyGarage.Interfaces;
 
 namespace MyGarage.Services;
 
 public sealed class RetailOrderAuthorizationService : IRetailOrderAuthorizationService
 {
-    private readonly IGarageContext _context;
+    private readonly IRetailOrderAuthorizationStore _store;
 
-    public RetailOrderAuthorizationService(IGarageContext context)
+    public RetailOrderAuthorizationService(IRetailOrderAuthorizationStore store)
     {
-        _context = context;
+        _store = store;
     }
 
     private static bool IsStaff(UserActorContext actor)
@@ -56,12 +54,7 @@ public sealed class RetailOrderAuthorizationService : IRetailOrderAuthorizationS
         if (retailOrderId <= 0 || !actor.UserId.HasValue) return false;
         if (actor.IsAdmin) return true;
 
-        var order = await _context.RetailOrders
-            .AsNoTracking()
-            .Where(o => o.Id == retailOrderId)
-            .Select(o => new { o.BranchId, o.CustomerId })
-            .FirstOrDefaultAsync(ct);
-
+        var order = await _store.GetRetailOrderAuthInfoAsync(retailOrderId, ct);
         if (order == null) return false;
 
         if (IsStaff(actor))
@@ -100,12 +93,7 @@ public sealed class RetailOrderAuthorizationService : IRetailOrderAuthorizationS
         if (retailOrderId <= 0 || !actor.UserId.HasValue) return false;
         if (actor.IsAdmin) return true;
 
-        var order = await _context.RetailOrders
-            .AsNoTracking()
-            .Where(o => o.Id == retailOrderId)
-            .Select(o => new { o.BranchId, o.CustomerId, o.Status })
-            .FirstOrDefaultAsync(ct);
-
+        var order = await _store.GetRetailOrderAuthInfoAsync(retailOrderId, ct);
         if (order == null) return false;
 
         if (!RetailOrderLifecycleRules.CanCancel(order.Status))
@@ -131,14 +119,10 @@ public sealed class RetailOrderAuthorizationService : IRetailOrderAuthorizationS
         if (retailOrderId <= 0 || !IsStaff(actor)) return false;
         if (actor.IsAdmin) return true;
 
-        var orderBranchId = await _context.RetailOrders
-            .AsNoTracking()
-            .Where(o => o.Id == retailOrderId)
-            .Select(o => (long?)o.BranchId)
-            .FirstOrDefaultAsync(ct);
+        var order = await _store.GetRetailOrderAuthInfoAsync(retailOrderId, ct);
+        if (order == null) return false;
 
-        if (!orderBranchId.HasValue) return false;
-        return !actor.BranchId.HasValue || actor.BranchId.Value == orderBranchId.Value;
+        return !actor.BranchId.HasValue || actor.BranchId.Value == order.BranchId;
     }
 
     public Task<bool> CanViewRetailReturnsAsync(long? branchId, UserActorContext actor, CancellationToken ct = default)
@@ -157,13 +141,9 @@ public sealed class RetailOrderAuthorizationService : IRetailOrderAuthorizationS
         if (retailReturnId <= 0 || !IsStaff(actor)) return false;
         if (actor.IsAdmin) return true;
 
-        var returnBranchId = await _context.RetailReturns
-            .AsNoTracking()
-            .Where(r => r.Id == retailReturnId)
-            .Select(r => (long?)r.RetailOrder.BranchId)
-            .FirstOrDefaultAsync(ct);
-
+        var returnBranchId = await _store.GetRetailReturnBranchIdAsync(retailReturnId, ct);
         if (!returnBranchId.HasValue) return false;
+
         return !actor.BranchId.HasValue || actor.BranchId.Value == returnBranchId.Value;
     }
 }

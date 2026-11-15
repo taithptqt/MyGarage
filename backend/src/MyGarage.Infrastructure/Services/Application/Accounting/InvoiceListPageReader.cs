@@ -4,12 +4,17 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Services;
 
-// Transitional adapter; the staff-wide scope matches the legacy invoice list.
 public sealed class InvoiceListPageReader(IGarageContext context) : IInvoiceListPageReader
 {
     public async Task<InvoiceListPage> ReadAsync(InvoiceListCriteria criteria, CancellationToken cancellationToken)
     {
         var invoices = context.Invoices.AsNoTracking();
+        if (criteria.BranchId.HasValue)
+        {
+            var branchId = criteria.BranchId.Value;
+            invoices = invoices.Where(x => (x.ServiceOrderId.HasValue && x.ServiceOrder != null && x.ServiceOrder.ExecuteBranchId == branchId) ||
+                (!x.ServiceOrderId.HasValue && x.RetailOrder != null && x.RetailOrder.BranchId == branchId));
+        }
         // SQL Server ignores trailing spaces in string equality. The sentinel makes
         // them significant, matching the legacy JavaScript status comparison.
         if (criteria.Status != "ALL")

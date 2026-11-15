@@ -1,33 +1,20 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Security.Claims;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
-using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Interfaces;
-using MyGarage.Models;
-using MyGarage.Security;
 using MyGarage.Extensions;
-using MyGarage.Application.Authorization;
-using MyGarage.Application.Common.Pagination;
+using MyGarage.Interfaces;
+using MyGarage.Security;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/appointments")]
     [Route("api/v1/appointments")]
     [ApiController]
-    public class AppointmentsController : ControllerBase
+    public partial class AppointmentsController : ControllerBase
     {
         private const long MaxInsuranceAssetBytes = 10 * 1024 * 1024;
 
@@ -38,32 +25,24 @@ namespace MyGarage.Controllers
             public DateTime? ArrivedAt { get; init; }
         }
 
-        private static readonly JsonSerializerOptions EditRequestJsonOptions = new(JsonSerializerDefaults.Web)
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
-        private readonly IAppointmentService _appointmentService;
-        private readonly IAuditLogService _auditLogService;
-        private readonly ICloudStorageService _cloudStorageService;
-        private readonly IGarageContext _context;
+        private readonly IAppointmentAvailabilityQueryService _availabilityQueryService;
+        private readonly IAppointmentSlotHoldService _slotHoldService;
+        private readonly IAppointmentDispatchOpsService _dispatchOpsService;
+        private readonly IAppointmentsCommandFacade _commandFacade;
         private readonly IFileSecurityScanner _fileSecurityScanner;
-        private readonly IAppointmentAuthorizationService _appointmentAuthService;
 
         public AppointmentsController(
-            IAppointmentService appointmentService,
-            IAuditLogService auditLogService,
-            ICloudStorageService cloudStorageService,
-            IGarageContext context,
-            IFileSecurityScanner fileSecurityScanner,
-            IAppointmentAuthorizationService appointmentAuthService)
+            IAppointmentAvailabilityQueryService availabilityQueryService,
+            IAppointmentSlotHoldService slotHoldService,
+            IAppointmentDispatchOpsService dispatchOpsService,
+            IAppointmentsCommandFacade commandFacade,
+            IFileSecurityScanner fileSecurityScanner)
         {
-            _appointmentService = appointmentService;
-            _auditLogService = auditLogService;
-            _cloudStorageService = cloudStorageService;
-            _context = context;
+            _availabilityQueryService = availabilityQueryService;
+            _slotHoldService = slotHoldService;
+            _dispatchOpsService = dispatchOpsService;
+            _commandFacade = commandFacade;
             _fileSecurityScanner = fileSecurityScanner;
-            _appointmentAuthService = appointmentAuthService;
         }
 
         [AllowAnonymous]
@@ -77,7 +56,7 @@ namespace MyGarage.Controllers
             [FromQuery] int vehicleCount = 1,
             [FromQuery] bool isParallel = true)
         {
-            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, requestedPackageIds, bookingFlow, vehicleCount, isParallel);
+            var slots = await _availabilityQueryService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, requestedPackageIds, bookingFlow, vehicleCount, isParallel);
             return Ok(slots);
         }
 
@@ -95,7 +74,7 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var suggestion = await _appointmentService.SuggestNearestSlotAsync(
+                var suggestion = await _availabilityQueryService.SuggestNearestSlotAsync(
                     branchId,
                     checkInAt,
                     requestedServiceIds,
@@ -108,7 +87,7 @@ namespace MyGarage.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -118,12 +97,12 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var result = await _appointmentService.CreateSlotHoldAsync(dto);
+                var result = await _slotHoldService.CreateSlotHoldAsync(dto);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
@@ -131,7 +110,7 @@ namespace MyGarage.Controllers
         [HttpDelete("slot-holds/{holdToken}")]
         public async Task<ActionResult> ReleaseSlotHold(string holdToken)
         {
-            var released = await _appointmentService.ReleaseSlotHoldAsync(holdToken);
+            var released = await _slotHoldService.ReleaseSlotHoldAsync(holdToken);
             if (!released)
             {
                 return NotFound();
@@ -151,9 +130,7 @@ namespace MyGarage.Controllers
                 return (ActionResult)denied!;
             }
 
-            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
-            var (items, total) = await _appointmentService.GetDetailedPageAsync(scopedBranchId, null, status, normalizedPage, normalizedSize);
-            return Ok(PagedEnvelope<object>.Create((IEnumerable<object>)MapAppointmentsResponse(items), total, normalizedPage, normalizedSize));
+            return Ok(await _commandFacade.GetPagedAsync(scopedBranchId, null, status, page, pageSize, BuildActorContext()));
         }
 
         [Authorize]
@@ -165,9 +142,7 @@ namespace MyGarage.Controllers
             var customerId = this.GetCurrentUserId();
             if (customerId == null) return Unauthorized();
 
-            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
-            var (items, total) = await _appointmentService.GetDetailedPageAsync(null, customerId.Value, null, normalizedPage, normalizedSize);
-            return Ok(PagedEnvelope<object>.Create((IEnumerable<object>)MapAppointmentsResponse(items, forceCustomerShape: true), total, normalizedPage, normalizedSize));
+            return Ok(await _commandFacade.GetPagedAsync(null, customerId.Value, null, page, pageSize, BuildActorContext(), forceCustomerShape: true));
         }
 
         [Authorize(Roles = "Staff")]
@@ -184,294 +159,15 @@ namespace MyGarage.Controllers
             }
 
             var targetBranchId = scopedBranchId ?? branchId;
-            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
-            var (items, total) = await _appointmentService.GetDetailedPageAsync(targetBranchId, null, status, normalizedPage, normalizedSize);
-            return Ok(PagedEnvelope<object>.Create((IEnumerable<object>)MapAppointmentsResponse(items), total, normalizedPage, normalizedSize));
+            return Ok(await _commandFacade.GetPagedAsync(targetBranchId, null, status, page, pageSize, BuildActorContext()));
         }
 
         [Authorize]
         [HttpGet("{id:long}")]
         public async Task<ActionResult> GetById(long id)
         {
-            var scopeMeta = await _context.Appointments
-                .AsNoTracking()
-                .Where(a => a.Id == id)
-                .Select(a => new { a.CustomerId, a.BranchId })
-                .FirstOrDefaultAsync();
-            if (scopeMeta == null) return NotFound();
-
-            if (!CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId))
-            {
-                return Forbid();
-            }
-
-            var dto = await _appointmentService.GetDetailedAsync(id);
-            if (dto == null) return NotFound();
-            return Ok(MapAppointmentResponse(dto));
-        }
-
-        [Authorize]
-        [HttpGet("{id:long}/edit-capabilities")]
-        public async Task<ActionResult<AppointmentEditCapabilityResponseDto>> GetEditCapabilities(long id)
-        {
-            var scopeMeta = await _context.Appointments
-                .AsNoTracking()
-                .Where(a => a.Id == id)
-                .Select(a => new { a.CustomerId, a.BranchId })
-                .FirstOrDefaultAsync();
-            if (scopeMeta == null) return NotFound();
-
-            if (!CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId))
-            {
-                return Forbid();
-            }
-
-            var capability = await _appointmentService.GetEditCapabilityAsync(id);
-            if (capability == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(capability);
-        }
-
-        [Authorize(Roles = "Staff")]
-        [HttpGet("{id:long}/edit-requests")]
-        public async Task<IActionResult> GetEditRequests(long id, [FromQuery] string? status = null)
-        {
-            var scopeMeta = await _context.Appointments
-                .AsNoTracking()
-                .Where(a => a.Id == id)
-                .Select(a => new { a.CustomerId, a.BranchId })
-                .FirstOrDefaultAsync();
-            if (scopeMeta == null) return NotFound();
-
-            if (!this.IsAdminStaff() && scopeMeta.BranchId != this.GetCurrentBranchId())
-            {
-                return Forbid();
-            }
-
-            var normalizedStatus = NormalizeToken(status);
-
-            var requestLogs = await _context.AuditLogs
-                .AsNoTracking()
-                .Where(log =>
-                    log.Action == "REQUEST_EDIT" &&
-                    log.TableName == "APPOINTMENTS" &&
-                    log.RecordId == id)
-                .OrderByDescending(log => log.Id)
-                .Take(100)
-                .ToListAsync();
-
-            var result = requestLogs
-                .Select(log => new
-                {
-                    log.Id,
-                    log.UserId,
-                    log.BranchId,
-                    log.Timestamp,
-                    Payload = DeserializeEditRequestPayload(log.NewValue)
-                })
-                .Where(item => item.Payload != null)
-                .Where(item => string.IsNullOrWhiteSpace(normalizedStatus) || NormalizeToken(item.Payload!.Status) == normalizedStatus)
-                .Select(item => new
-                {
-                    requestId = item.Id,
-                    item.UserId,
-                    item.BranchId,
-                    item.Timestamp,
-                    section = item.Payload!.Section,
-                    reason = item.Payload.Reason,
-                    status = item.Payload.Status,
-                    requestedByUserId = item.Payload.RequestedByUserId,
-                    requestedAtUtc = item.Payload.RequestedAtUtc,
-                    decidedByUserId = item.Payload.DecidedByUserId,
-                    decidedAtUtc = item.Payload.DecidedAtUtc,
-                    decisionNote = item.Payload.DecisionNote,
-                    decidedByRoleCode = item.Payload.DecidedByRoleCode,
-                    decidedByRoleName = item.Payload.DecidedByRoleName,
-                    overrideUntilUtc = item.Payload.OverrideUntilUtc
-                })
-                .ToList();
-
-            return Ok(result);
-        }
-
-        [Authorize(Roles = "Staff")]
-        [HttpPost("{id:long}/edit-requests")]
-        public async Task<IActionResult> RequestEdit(long id, [FromBody] EditRequestCreateDto? dto)
-        {
-            var appointment = await _appointmentService.GetByIdAsync(id);
-            if (appointment == null)
-            {
-                return NotFound(new { message = "Không tìm thấy lịch hẹn." });
-            }
-
-            if (!this.IsAdminStaff() && appointment.BranchId != this.GetCurrentBranchId())
-            {
-                return Forbid();
-            }
-
-            var capability = await _appointmentService.GetEditCapabilityAsync(id);
-            if (capability == null)
-            {
-                return NotFound(new { message = "Không tìm thấy lịch hẹn." });
-            }
-
-            if (capability.CanEdit)
-            {
-                return BadRequest(new { message = "Lịch hẹn hiện chưa bị khóa, không cần gửi yêu cầu sửa." });
-            }
-
-            var reason = (dto?.Reason ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(reason))
-            {
-                return BadRequest(new { message = "Vui lòng nhập lý do yêu cầu sửa." });
-            }
-
-            var actorUserId = this.GetCurrentUserId();
-            if (!actorUserId.HasValue || actorUserId.Value <= 0)
-            {
-                return Unauthorized();
-            }
-
-            var now = VietnamTime.Now;
-            var requestedSection = NormalizeSection(dto?.Section, "APPOINTMENT");
-            var payload = new EditRequestPayload
-            {
-                Section = requestedSection,
-                Reason = reason,
-                Status = "PENDING",
-                RequestedByUserId = actorUserId.Value,
-                RequestedAtUtc = now
-            };
-
-            var created = await _auditLogService.AddAsync(new AuditLog
-            {
-                UserId = actorUserId.Value,
-                UserType = "STAFF",
-                BranchId = appointment?.BranchId,
-                Action = "REQUEST_EDIT",
-                TableName = "APPOINTMENTS",
-                RecordId = id,
-                OldValue = JsonSerializer.Serialize(capability),
-                NewValue = JsonSerializer.Serialize(payload),
-                Timestamp = now
-            });
-
-            return Ok(new
-            {
-                message = "Đã ghi nhận yêu cầu sửa lịch hẹn.",
-                requestId = created.Id
-            });
-        }
-
-        [Authorize]
-        [HttpPatch("{id:long}/edit-requests/{requestId:long}")]
-        public async Task<IActionResult> DecideEditRequest(long id, long requestId, [FromBody] EditRequestDecisionDto? dto)
-        {
-            var decision = NormalizeToken(dto?.Decision);
-            if (decision is not ("APPROVE" or "REJECT"))
-            {
-                return BadRequest(new { message = "Decision phải là APPROVE hoặc REJECT." });
-            }
-
-            var actorUserId = this.GetCurrentUserId();
-            if (!actorUserId.HasValue || actorUserId.Value <= 0)
-            {
-                return Unauthorized();
-            }
-
-            var requestLog = await _auditLogService.GetByIdAsync(requestId);
-            if (requestLog == null ||
-                !string.Equals(requestLog.Action, "REQUEST_EDIT", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(requestLog.TableName, "APPOINTMENTS", StringComparison.OrdinalIgnoreCase) ||
-                requestLog.RecordId != id)
-            {
-                return NotFound(new { message = "Không tìm thấy yêu cầu sửa cần xử lý." });
-            }
-
-            var payload = DeserializeEditRequestPayload(requestLog.NewValue);
-            if (payload == null)
-            {
-                return BadRequest(new { message = "Dữ liệu yêu cầu sửa không hợp lệ." });
-            }
-
-            var currentStatus = NormalizeToken(payload.Status);
-            if (!string.Equals(currentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
-            {
-                return BadRequest(new { message = "Yêu cầu sửa này đã được xử lý trước đó." });
-            }
-
-            var requestedSection = NormalizeSection(payload.Section, "APPOINTMENT");
-            var (roleCode, roleName) = await ResolveRoleInfoAsync(actorUserId.Value);
-            if (!CanApproveAppointmentRequest(roleCode, roleName))
-            {
-                return Forbid();
-            }
-
-            if (!this.IsAdminStaff() && requestLog.BranchId.HasValue && requestLog.BranchId.Value != this.GetCurrentBranchId())
-            {
-                return Forbid();
-            }
-
-            var note = string.IsNullOrWhiteSpace(dto?.Note) ? null : dto!.Note!.Trim();
-            if (decision == "REJECT" && string.IsNullOrWhiteSpace(note))
-            {
-                return BadRequest(new { message = "Vui lòng nhập lý do từ chối yêu cầu sửa." });
-            }
-
-            var now = VietnamTime.Now;
-            payload.Section = requestedSection;
-            payload.Status = decision == "APPROVE" ? "APPROVED" : "REJECTED";
-            payload.DecisionNote = note;
-            payload.DecidedByUserId = actorUserId.Value;
-            payload.DecidedAtUtc = now;
-            payload.DecidedByRoleCode = string.IsNullOrWhiteSpace(roleCode) ? null : roleCode;
-            payload.DecidedByRoleName = string.IsNullOrWhiteSpace(roleName) ? null : roleName;
-            payload.OverrideUntilUtc = decision == "APPROVE" ? now.AddHours(2) : null;
-
-            var beforeDecision = requestLog.NewValue;
-            var strategy = _context.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync<IActionResult>(async () =>
-            {
-                await using var transaction = await TryBeginTransactionAsync();
-                try
-                {
-                    requestLog.NewValue = JsonSerializer.Serialize(payload);
-                    await _auditLogService.UpdateAsync(requestLog.Id, requestLog);
-
-                    await _auditLogService.AddAsync(new AuditLog
-                    {
-                        UserId = actorUserId.Value,
-                        UserType = "STAFF",
-                        BranchId = requestLog.BranchId,
-                        Action = "DECIDE_EDIT_REQUEST",
-                        TableName = requestLog.TableName,
-                        RecordId = requestLog.RecordId,
-                        OldValue = beforeDecision,
-                        NewValue = requestLog.NewValue,
-                        Timestamp = now
-                    });
-
-                    if (transaction != null) await transaction.CommitAsync();
-
-                    return Ok(new
-                    {
-                        requestId = requestLog.Id,
-                        decision = payload.Status,
-                        overrideUntilUtc = payload.OverrideUntilUtc,
-                        message = decision == "APPROVE"
-                            ? "Đã duyệt yêu cầu sửa lịch hẹn."
-                            : "Đã từ chối yêu cầu sửa lịch hẹn."
-                    });
-                }
-                catch
-                {
-                    if (transaction != null) await transaction.RollbackAsync();
-                    throw;
-                }
-            });
+            var result = await _commandFacade.GetByIdAsync(id, BuildActorContext(), HttpContext.RequestAborted);
+            return ToUntypedActionResult(result);
         }
 
         [Authorize]
@@ -481,54 +177,21 @@ namespace MyGarage.Controllers
             var authUserId = this.GetCurrentUserId();
             if (authUserId == null) return Unauthorized();
 
-            dto.CreatedBy = authUserId;
+            var result = await _commandFacade.CreateAsync(authUserId.Value, dto, BuildActorContext());
+            if (result.StatusCode == 201 && result.Data != null)
+            {
+                return CreatedAtAction(nameof(GetById), new { id = result.Data.AppointmentId }, result.Data.Detail);
+            }
 
-            try
-            {
-                var appointment = await _appointmentService.BookAsync(authUserId.Value, dto);
-                var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
-                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, MapAppointmentResponse(detail));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return ToUntypedActionResult(result);
         }
 
         [Authorize(Roles = "Staff")]
         [HttpPost("reception-bookings")]
         public async Task<ActionResult<ReceptionAppointmentSaveResponseDto>> SaveReceptionBooking([FromBody] ReceptionAppointmentSaveRequestDto dto)
         {
-            if (dto == null)
-            {
-                return BadRequest(new { message = "Dữ liệu đặt lịch không hợp lệ." });
-            }
-
-            if (!this.IsStaffUser())
-            {
-                return Forbid();
-            }
-
-            if (!this.IsAdminStaff() && dto.BranchId > 0 && dto.BranchId != this.GetCurrentBranchId())
-            {
-                return Forbid();
-            }
-
-            var actorUserId = this.GetCurrentUserId();
-            if (actorUserId == null)
-            {
-                return Unauthorized();
-            }
-
-            try
-            {
-                var result = await _appointmentService.SaveReceptionBookingAsync(actorUserId.Value, dto);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var result = await _commandFacade.SaveReceptionBookingAsync(dto, BuildActorContext());
+            return ToTypedActionResult(result);
         }
 
         [Authorize]
@@ -537,18 +200,18 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Dữ liệu ảnh bảo hiểm không hợp lệ." });
+                return this.BadRequestProblem("Dữ liệu ảnh bảo hiểm không hợp lệ.");
             }
 
             if (file.Length > MaxInsuranceAssetBytes)
             {
-                return BadRequest(new { message = "Ảnh bảo hiểm vượt quá dung lượng 10MB." });
+                return this.BadRequestProblem("Ảnh bảo hiểm vượt quá dung lượng 10MB.");
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) ||
                 !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho hồ sơ bảo hiểm." });
+                return this.BadRequestProblem("Chỉ hỗ trợ tệp ảnh cho hồ sơ bảo hiểm.");
             }
 
             var scan = await _fileSecurityScanner.ScanFormFileAsync(
@@ -557,129 +220,50 @@ namespace MyGarage.Controllers
                 cancellationToken: HttpContext.RequestAborted);
             if (!scan.IsClean)
             {
-                return BadRequest(new { message = scan.ErrorMessage });
+                return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
             }
 
-            var normalizedAssetType = NormalizeInsuranceAssetType(assetType);
-            if (normalizedAssetType == null)
-            {
-                return BadRequest(new { message = "Loại ảnh bảo hiểm không hợp lệ." });
-            }
-
-            try
-            {
-                var uploaded = await SaveInsuranceAssetFileAsync(file!, scan.Bytes, normalizedAssetType);
-                _context.AppointmentInsuranceUploads.Add(new AppointmentInsuranceUpload
-                {
-                    AssetType = normalizedAssetType,
-                    BlobPath = uploaded.BlobPath,
-                    FileUrl = uploaded.Url,
-                    Status = AppointmentInsuranceUploadStatuses.Staged
-                });
-                await SaveChangesInTransactionAsync();
-
-                return Ok(new
-                {
-                    url = uploaded.Url,
-                    assetType = normalizedAssetType
-                });
-            }
-            catch
-            {
-                return BadRequest(new { message = "Không thể tải ảnh bảo hiểm lên máy chủ." });
-            }
+            var result = await _commandFacade.UploadInsuranceAssetAsync(
+                file.FileName,
+                file.ContentType,
+                scan.Bytes,
+                assetType,
+                HttpContext.RequestAborted);
+            return ToTypedActionResult(result);
         }
 
         [AllowAnonymous]
         [HttpPost("public-bookings")]
         public async Task<ActionResult> CreateGuest([FromBody] BookAppointmentRequestDto dto)
         {
-            if (!dto.CustomerId.HasValue)
+            var result = await _commandFacade.CreateGuestAsync(dto);
+            if (result.StatusCode == 201 && result.Data != null)
             {
-                return BadRequest(new { message = "Vui lòng cung cấp CustomerId cho luồng guest." });
+                return CreatedAtAction(nameof(GetById), new { id = result.Data.AppointmentId }, result.Data.Detail);
             }
 
-            try
-            {
-                dto.CreatedBy = null;
-                var appointment = await _appointmentService.BookAsync(dto.CustomerId.Value, dto);
-                var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
-                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, MapAppointmentResponse(detail, forceCustomerShape: true));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return ToUntypedActionResult(result);
         }
 
         [Authorize]
         [HttpPatch("{id:long}")]
         public async Task<ActionResult> UpdateStatus(long id, [FromBody] AppointmentStatusPatchRequestDto dto)
         {
-            var requested = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
-            if (requested == "CANCELLED")
-            {
-                requested = "CANCELED";
-            }
-
-            if (string.IsNullOrWhiteSpace(requested))
-            {
-                return BadRequest(new { message = "Status is required." });
-            }
-
-            if (!Enum.TryParse<AppointmentPatchAction>(requested, ignoreCase: true, out var action))
-            {
-                return BadRequest(new { message = "Unsupported status transition." });
-            }
-
-            var scopeMeta = await _context.Appointments
-                .AsNoTracking()
-                .Where(a => a.Id == id)
-                .Select(a => new { a.CustomerId, a.BranchId })
-                .FirstOrDefaultAsync();
-            if (scopeMeta == null) return NotFound();
-
-            if (!CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId))
-            {
-                return Forbid();
-            }
-
-            if (!this.IsStaffUser() && action != AppointmentPatchAction.CANCELED)
-            {
-                return Forbid();
-            }
-
-            try
-            {
-                var actorUserId = this.GetCurrentUserId();
-                Appointment? appointment = action switch
-                {
-                    AppointmentPatchAction.CONFIRMED => await _appointmentService.ConfirmAsync(id, actorUserId),
-                    AppointmentPatchAction.CANCELED => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
-                    AppointmentPatchAction.CHECKED_IN => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
-                    AppointmentPatchAction.ARRIVED => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
-                    _ => null
-                };
-
-                if (appointment == null)
-                {
-                    return NotFound();
-                }
-
-                var detail = await _appointmentService.GetDetailedAsync(id);
-                return Ok(MapAppointmentResponse(detail));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var result = await _commandFacade.UpdateStatusAsync(
+                id,
+                dto?.Status,
+                dto?.Reason,
+                dto?.ArrivedAt,
+                BuildActorContext(),
+                HttpContext.RequestAborted);
+            return ToUntypedActionResult(result);
         }
 
         [Authorize]
         [HttpPost("branches/{branchId:long}/no-show-cycles")]
         public async Task<ActionResult<object>> RunNoShow(long branchId, [FromQuery] DateTime? now = null)
         {
-            var affected = await _appointmentService.AutoMarkNoShowsAsync(branchId, now);
+            var affected = await _dispatchOpsService.AutoMarkNoShowsAsync(branchId, now);
             return Ok(new { updated = affected });
         }
 
@@ -687,7 +271,7 @@ namespace MyGarage.Controllers
         [HttpGet("branches/{branchId:long}/health-metrics")]
         public async Task<ActionResult<BranchBookingHealthResponseDto>> GetBookingHealth(long branchId, [FromQuery] DateTime? at = null)
         {
-            var health = await _appointmentService.GetBranchBookingHealthAsync(branchId, at);
+            var health = await _dispatchOpsService.GetBranchBookingHealthAsync(branchId, at);
             return Ok(health);
         }
 
@@ -695,7 +279,7 @@ namespace MyGarage.Controllers
         [HttpGet("branches/{branchId:long}/allocation-metrics")]
         public async Task<ActionResult<DispatchDashboardResponseDto>> GetDispatchDashboard(long branchId, [FromQuery] DateTime? at = null)
         {
-            var dashboard = await _appointmentService.GetDispatchDashboardAsync(branchId, at);
+            var dashboard = await _dispatchOpsService.GetDispatchDashboardAsync(branchId, at);
             return Ok(dashboard);
         }
 
@@ -703,7 +287,7 @@ namespace MyGarage.Controllers
         [HttpPost("branches/{branchId:long}/allocation-cycles")]
         public async Task<ActionResult<DispatchCycleResponseDto>> CreateDispatchRun(long branchId, [FromQuery] DateTime? at = null)
         {
-            var result = await _appointmentService.RunDispatchCycleAsync(branchId, at);
+            var result = await _dispatchOpsService.RunDispatchCycleAsync(branchId, at);
             return Ok(result);
         }
 
@@ -711,259 +295,8 @@ namespace MyGarage.Controllers
         [HttpPost("branches/{branchId:long}/overnight-slot-constraints")]
         public async Task<ActionResult<OvernightLockResponseDto>> CreateOvernightLock(long branchId, [FromBody] OvernightLockRequestDto? dto)
         {
-            var result = await _appointmentService.LockOvernightSlotsAsync(branchId, dto?.BusinessDate);
+            var result = await _dispatchOpsService.LockOvernightSlotsAsync(branchId, dto?.BusinessDate);
             return Ok(result);
-        }
-
-        private static EditRequestPayload? DeserializeEditRequestPayload(string? raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw))
-            {
-                return null;
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<EditRequestPayload>(raw, EditRequestJsonOptions);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private bool CanAccessAppointment(long customerId, long branchId)
-        {
-            if (this.IsStaffUser())
-            {
-                return this.IsAdminStaff() || branchId == this.GetCurrentBranchId();
-            }
-
-            var currentCustomerId = this.GetCurrentUserId();
-            return currentCustomerId.HasValue && customerId == currentCustomerId.Value;
-        }
-
-        private async Task<(string Url, string BlobPath)> SaveInsuranceAssetFileAsync(IFormFile file, byte[] fileBytes, string assetType)
-        {
-            var extension = Path.GetExtension(file.FileName);
-            if (string.IsNullOrWhiteSpace(extension))
-            {
-                extension = ".png";
-            }
-
-            var folderName = string.Equals(assetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase)
-                ? "appointments/insurance-cards"
-                : "appointments/insurance-damage";
-            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-            var blobPath = $"{folderName.Trim('/')}/{fileName}";
-            await using var stream = new MemoryStream(fileBytes);
-            var url = await _cloudStorageService.UploadAsync(
-                stream,
-                folderName,
-                fileName,
-                file.ContentType,
-                HttpContext.RequestAborted);
-            return (url, blobPath);
-        }
-
-        private static string? NormalizeInsuranceAssetType(string? assetType)
-        {
-            var normalized = string.IsNullOrWhiteSpace(assetType)
-                ? string.Empty
-                : assetType.Trim().ToUpperInvariant();
-
-            return normalized switch
-            {
-                AppointmentInsuranceAssetTypes.Card => AppointmentInsuranceAssetTypes.Card,
-                AppointmentInsuranceAssetTypes.Damage => AppointmentInsuranceAssetTypes.Damage,
-                _ => null
-            };
-        }
-
-        private async Task<(string RoleCode, string RoleName)> ResolveRoleInfoAsync(long staffId)
-        {
-            var claimRoleCode = this.GetCurrentRoleCode();
-            var claimRoleName = this.GetCurrentRoleName();
-            if (!string.IsNullOrWhiteSpace(claimRoleCode) || !string.IsNullOrWhiteSpace(claimRoleName))
-            {
-                return (claimRoleCode ?? string.Empty, claimRoleName ?? string.Empty);
-            }
-
-            var roleInfo = await (
-                from staff in _context.Staffs.AsNoTracking()
-                join role in _context.Roles.AsNoTracking() on staff.RoleId equals role.Id into roleJoin
-                from role in roleJoin.DefaultIfEmpty()
-                where staff.Id == staffId
-                select new
-                {
-                    role.RoleCode,
-                    role.RoleName
-                }).FirstOrDefaultAsync();
-
-            return (roleInfo?.RoleCode ?? string.Empty, roleInfo?.RoleName ?? string.Empty);
-        }
-
-        private static bool CanApproveAppointmentRequest(string roleCode, string roleName)
-            => ContainsAnyKeyword(roleCode, roleName, "MANAGER", "SERVICE_MANAGER", "FOREMAN", "ADMIN", "OWNER", "DIRECTOR", "QUAN_DOC");
-
-        private static bool ContainsAnyKeyword(string roleCode, string roleName, params string[] keywords)
-        {
-            var normalizedCode = NormalizeSearchToken(roleCode);
-            var normalizedName = NormalizeSearchToken(roleName);
-
-            foreach (var keyword in keywords)
-            {
-                var token = NormalizeSearchToken(keyword);
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    continue;
-                }
-
-                if (normalizedCode.Contains(token, StringComparison.OrdinalIgnoreCase) ||
-                    normalizedName.Contains(token, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static string NormalizeSearchToken(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return string.Empty;
-            }
-
-            var text = value.Trim().Normalize(NormalizationForm.FormD);
-            var builder = new StringBuilder(text.Length);
-            foreach (var character in text)
-            {
-                if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
-                {
-                    builder.Append(character);
-                }
-            }
-
-            return builder
-                .ToString()
-                .Normalize(NormalizationForm.FormC)
-                .Replace('đ', 'd')
-                .Replace('Đ', 'D')
-                .ToUpperInvariant()
-                .Replace('-', '_')
-                .Replace(' ', '_');
-        }
-
-        private static string NormalizeSection(string? section, string fallback)
-        {
-            var token = NormalizeToken(section);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                token = NormalizeToken(fallback);
-            }
-
-            return token;
-        }
-
-        private static string NormalizeToken(string? value)
-        {
-            return string.IsNullOrWhiteSpace(value)
-                ? string.Empty
-                : value.Trim()
-                    .ToUpperInvariant()
-                    .Replace("-", "_")
-                    .Replace(" ", "_");
-        }
-
-        private object MapAppointmentsResponse(IEnumerable<AppointmentDetailResponseDto> appointments, bool forceCustomerShape = false)
-        {
-            var list = appointments?.ToList() ?? new List<AppointmentDetailResponseDto>();
-            if (!ShouldHidePartsFollowUp(forceCustomerShape))
-            {
-                return list;
-            }
-
-            return list.Select(item => item.ToCustomerResponse()).ToList();
-        }
-
-        private object? MapAppointmentResponse(AppointmentDetailResponseDto? appointment, bool forceCustomerShape = false)
-        {
-            if (appointment == null)
-            {
-                return null;
-            }
-
-            return ShouldHidePartsFollowUp(forceCustomerShape)
-                ? appointment.ToCustomerResponse()
-                : appointment;
-        }
-
-        private bool ShouldHidePartsFollowUp(bool forceCustomerShape = false)
-        {
-            if (forceCustomerShape)
-            {
-                return true;
-            }
-
-            var claimRole = User.FindFirst(ClaimTypes.Role)?.Value;
-            if (IsCustomerRole(claimRole))
-            {
-                return true;
-            }
-
-            return IsCustomerRole(this.GetCurrentRoleCode()) || IsCustomerRole(this.GetCurrentRoleName());
-        }
-
-        private static bool IsCustomerRole(string? roleValue)
-        {
-            if (string.IsNullOrWhiteSpace(roleValue))
-            {
-                return false;
-            }
-
-            var normalized = NormalizeSearchToken(roleValue);
-            return normalized.Contains("CUSTOMER", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Contains("KHACH_HANG", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private sealed class EditRequestPayload
-        {
-            public string? Section { get; set; }
-            public string? Reason { get; set; }
-            public string? Status { get; set; }
-            public long? RequestedByUserId { get; set; }
-            public DateTime? RequestedAtUtc { get; set; }
-            public long? DecidedByUserId { get; set; }
-            public DateTime? DecidedAtUtc { get; set; }
-            public string? DecisionNote { get; set; }
-            public string? DecidedByRoleCode { get; set; }
-            public string? DecidedByRoleName { get; set; }
-            public DateTime? OverrideUntilUtc { get; set; }
-        }
-        private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> TryBeginTransactionAsync()
-        {
-            if (_context.Database.CurrentTransaction != null)
-            {
-                return null;
-            }
-
-            return await _context.Database.BeginTransactionAsync();
-        }
-
-        private async Task SaveChangesInTransactionAsync()
-        {
-            var strategy = _context.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await TryBeginTransactionAsync();
-                await _context.SaveChangesAsync();
-                if (transaction != null)
-                {
-                    await transaction.CommitAsync();
-                }
-            });
         }
     }
 }

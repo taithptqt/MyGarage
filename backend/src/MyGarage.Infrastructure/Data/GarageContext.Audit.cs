@@ -1,9 +1,8 @@
-using System.Security.Claims;
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MyGarage.Models;
+using MyGarage.Domain.Rules;
 
 namespace MyGarage.Data;
 
@@ -34,12 +33,32 @@ public partial class GarageContext
         }
 
         var pendingAudits = PrepareAuditEntries();
-        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-
         if (pendingAudits.Count == 0)
         {
-            return result;
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
+
+        if (Database.IsRelational() && Database.CurrentTransaction == null)
+        {
+            var strategy = Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await Database.BeginTransactionAsync(cancellationToken);
+                var result = await SaveWithAuditAsync(pendingAudits, acceptAllChangesOnSuccess, cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+                return result;
+            });
+        }
+
+        return await SaveWithAuditAsync(pendingAudits, acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private async Task<int> SaveWithAuditAsync(
+        List<PendingAuditEntry> pendingAudits,
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken)
+    {
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
 
         try
         {
@@ -64,19 +83,15 @@ public partial class GarageContext
     {
         ChangeTracker.DetectChanges();
 
-        var accessor = new HttpContextAccessor();
-        var httpContext = accessor.HttpContext;
-        var user = httpContext?.User;
+        var actor = _auditContextAccessor?.GetCurrentContext();
 
-        var userId = ParseLong(user?.FindFirstValue(ClaimTypes.NameIdentifier)) ?? 0;
-        var userType = NormalizeAuditUserType(user?.FindFirstValue(ClaimTypes.Role));
-        var requestBranchId =
-            ParseLong(user?.FindFirstValue("branchId")) ??
-            ParseLong(user?.FindFirstValue("BranchId"));
+        var userId = actor?.UserId ?? 0;
+        var userType = NormalizeAuditUserType(actor?.Role);
+        var requestBranchId = actor?.BranchId;
 
-        var ipAddress = httpContext?.Connection.RemoteIpAddress?.ToString();
-        var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
-        var sessionId = httpContext?.TraceIdentifier;
+        var ipAddress = actor?.IpAddress;
+        var userAgent = actor?.UserAgent;
+        var sessionId = actor?.TraceId;
         var timestamp = VietnamTime.Now;
 
         var result = new List<PendingAuditEntry>();
@@ -107,8 +122,15 @@ public partial class GarageContext
                 tableName,
                 timestamp);
 
+            var hasSensitiveChange = false;
             foreach (var property in entry.Properties)
             {
+                if (entry.State == EntityState.Modified && property.IsModified &&
+                    SharedOperationsDomainRules.IsSensitiveAuditField(property.Metadata.Name) &&
+                    !Equals(property.OriginalValue, property.CurrentValue))
+                {
+                    hasSensitiveChange = true;
+                }
                 if (!IsAuditableProperty(property)) continue;
 
                 var propertyName = property.Metadata.Name;
@@ -134,7 +156,8 @@ public partial class GarageContext
                 }
             }
 
-            if (entry.State == EntityState.Modified && pending.OldValues.Count == 0 && pending.NewValues.Count == 0)
+            if (entry.State == EntityState.Modified && pending.OldValues.Count == 0 &&
+                pending.NewValues.Count == 0 && !hasSensitiveChange)
             {
                 continue;
             }
@@ -149,6 +172,7 @@ public partial class GarageContext
     {
         if (propertyEntry.Metadata.IsShadowProperty()) return false;
         if (propertyEntry.Metadata.IsConcurrencyToken) return false;
+        if (SharedOperationsDomainRules.IsSensitiveAuditField(propertyEntry.Metadata.Name)) return false;
 
         var type = Nullable.GetUnderlyingType(propertyEntry.Metadata.ClrType) ?? propertyEntry.Metadata.ClrType;
         if (type.IsEnum) return true;

@@ -1,33 +1,36 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Application.Common.Pagination;
 using MyGarage.Extensions;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Invoices;
+using MyGarage.Application.Authorization;
 
 namespace MyGarage.Controllers
 {
     [Authorize(Roles = "Staff")]
-    [Route("api/invoices")]
     [Route("api/v1/invoices")]
     [ApiController]
     public class InvoiceController : ControllerBase
     {
         private readonly IInvoiceService _invoiceService;
         private readonly IServiceOrderService _serviceOrderService;
-        private readonly IMapper _mapper;
+        private readonly IInvoiceRepository _invoiceRepository;
+        private readonly IInvoiceBranchLookupStore _branchLookup;
+        private readonly IInvoiceAuthorizationService _authorization;
 
-        public InvoiceController(IInvoiceService invoiceService, IServiceOrderService serviceOrderService, IMapper mapper)
+        public InvoiceController(IInvoiceService invoiceService, IServiceOrderService serviceOrderService,
+            IInvoiceRepository invoiceRepository, IInvoiceBranchLookupStore branchLookup, IInvoiceAuthorizationService authorization)
         {
             _invoiceService = invoiceService;
             _serviceOrderService = serviceOrderService;
-            _mapper = mapper;
+            _invoiceRepository = invoiceRepository;
+            _branchLookup = branchLookup;
+            _authorization = authorization;
         }
 
         [HttpGet]
@@ -35,23 +38,23 @@ namespace MyGarage.Controllers
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
         {
-            var envelope = await _invoiceService.ToPagedEnvelopeAsync(
-                page,
-                pageSize,
-                paged => _mapper.Map<IEnumerable<InvoiceResponseDto>>(paged));
+            if (!this.TryResolveBranchScope(null, out var branchId, out var denied)) return (ActionResult)denied!;
+            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
+            var (items, total) = await _invoiceRepository.GetScopedPageAsync(branchId, normalizedPage, normalizedSize, HttpContext.RequestAborted);
+            var envelope = PagedEnvelope<InvoiceResponseDto>.Create(_invoiceService.MapToDtos(items), total, normalizedPage, normalizedSize);
             return Ok(envelope);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<InvoiceResponseDto>> GetById(long id)
         {
-            var item = await _invoiceService.GetByIdAsync(id);
+            if (!this.TryResolveBranchScope(null, out var branchId, out var denied)) return (ActionResult)denied!;
+            var item = await _invoiceRepository.GetScopedAsync(id, branchId, HttpContext.RequestAborted);
             if (item == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<InvoiceResponseDto>(item);
-            return Ok(dto);
+            return Ok(_invoiceService.MapToDto(item));
         }
 
         [HttpPost]
@@ -67,24 +70,35 @@ namespace MyGarage.Controllers
 
                 if ((itemDto?.ServiceOrderId ?? 0) <= 0 && (itemDto?.RetailOrderId ?? 0) <= 0)
                 {
-                    return BadRequest(new { message = "Invoice must be created from a service order or retail order." });
+                    return this.BadRequestProblem("Invoice must be created from a service order or retail order.");
                 }
+
+                if (!this.TryResolveBranchScope(null, out var scopedBranchId, out var denied)) return (ActionResult)denied!;
+                if ((itemDto?.ServiceOrderId ?? 0) > 0 && (itemDto?.RetailOrderId ?? 0) > 0)
+                    return this.BadRequestProblem("Invoice must have exactly one source order.");
+                var sourceBranch = (itemDto?.ServiceOrderId ?? 0) > 0
+                    ? await _branchLookup.GetBranchIdForServiceOrderAsync(itemDto!.ServiceOrderId!.Value, HttpContext.RequestAborted)
+                    : await _branchLookup.GetBranchIdForRetailOrderAsync(itemDto!.RetailOrderId!.Value, HttpContext.RequestAborted);
+                if (!sourceBranch.HasValue) return NotFound();
+                if (scopedBranchId.HasValue && sourceBranch.Value != scopedBranchId.Value) return Forbid();
+                if (!await _authorization.CanCreateInvoiceAsync(sourceBranch, this.ToUserActorContext(), HttpContext.RequestAborted)) return Forbid();
 
                 var lockError = await ValidateInvoiceMutationAsync(itemDto?.ServiceOrderId);
                 if (!string.IsNullOrWhiteSpace(lockError))
                 {
-                    return BadRequest(new { message = lockError });
+                    return this.BadRequestProblem(lockError);
                 }
 
-                var createdItem = await _invoiceService.EnsureForPaymentContextAsync(
+                var outcome = await _invoiceService.EnsureForPaymentContextWithOutcomeAsync(
                     itemDto?.ServiceOrderId,
                     itemDto?.RetailOrderId,
                     itemDto?.PayerType,
                     itemDto?.PayerId);
+                var createdItem = outcome.Invoice;
 
                 if (createdItem == null)
                 {
-                return BadRequest(new { message = "Không thể tạo hóa đơn từ nguồn dữ liệu hiện tại." });
+                return this.BadRequestProblem("Không thể tạo hóa đơn từ nguồn dữ liệu hiện tại.");
                 }
 
                 createdItem.Phone = itemDto?.Phone ?? createdItem.Phone;
@@ -101,18 +115,21 @@ namespace MyGarage.Controllers
                 createdItem.UpdatedAt = VietnamTime.Now;
 
                 createdItem = await _invoiceService.UpdateAsync(createdItem.Id, createdItem) ?? createdItem;
-                var responseDto = _mapper.Map<InvoiceResponseDto>(createdItem);
-                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+                var responseDto = _invoiceService.MapToDto(createdItem);
+                return outcome.Created
+                    ? CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto)
+                    : Ok(responseDto);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return this.BadRequestProblem(ex.Message);
             }
         }
 
-        [HttpPost("backfill-completed-payments")]
+        [HttpPost("completed-payment-backfills")]
         public async Task<ActionResult<InvoiceBackfillResponseDto>> BackfillCompletedPayments()
         {
+            if (!this.IsAdminStaff()) return Forbid();
             var result = await _invoiceService.BackfillCompletedPaymentsAsync();
             return Ok(result);
         }
@@ -120,19 +137,13 @@ namespace MyGarage.Controllers
         [HttpPut("{id}")]
         public async Task<ActionResult<InvoiceResponseDto>> Update(long id, [FromBody] InvoiceUpdateDto itemDto)
         {
-            return StatusCode(405, new
-            {
-                    message = "Hóa đơn là chứng từ bất biến và không được phép chỉnh sửa trực tiếp."
-            });
+            return this.ProblemMessage(405, "Hóa đơn là chứng từ bất biến và không được phép chỉnh sửa trực tiếp.");
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            return StatusCode(405, new
-            {
-                    message = "Hóa đơn là chứng từ bất biến và không được phép xóa trực tiếp."
-            });
+            return this.ProblemMessage(405, "Hóa đơn là chứng từ bất biến và không được phép xóa trực tiếp.");
         }
 
         private async Task<string?> ValidateInvoiceMutationAsync(long? serviceOrderId)

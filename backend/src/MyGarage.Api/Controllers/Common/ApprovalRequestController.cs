@@ -1,9 +1,7 @@
-using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -13,20 +11,17 @@ using MyGarage.Application.Common.Pagination;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/approval-requests")]
     [Route("api/v1/approval-requests")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class ApprovalRequestController : ControllerBase
     {
         private readonly IApprovalRequestService _approvalRequestService;
-        private readonly IMapper _mapper;
         private readonly ApprovalListQuery _list;
 
-        public ApprovalRequestController(IApprovalRequestService approvalRequestService, IMapper mapper, ApprovalListQuery list)
+        public ApprovalRequestController(IApprovalRequestService approvalRequestService, ApprovalListQuery list)
         {
             _approvalRequestService = approvalRequestService;
-            _mapper = mapper;
             _list = list;
         }
 
@@ -44,41 +39,29 @@ namespace MyGarage.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<ApprovalRequestResponseDto>> GetById(long id)
         {
-            var item = await _approvalRequestService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _approvalRequestService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<ApprovalRequestResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<ApprovalRequestResponseDto>> Create([FromBody] ApprovalRequestCreateDto itemDto)
         {
-            var entity = _mapper.Map<ApprovalRequest>(itemDto);
-            var createdItem = await _approvalRequestService.AddAsync(entity);
-            var responseDto = _mapper.Map<ApprovalRequestResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _approvalRequestService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<ApprovalRequestResponseDto>> Update(long id, [FromBody] ApprovalRequestUpdateDto itemDto)
         {
-            var existingItem = await _approvalRequestService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _approvalRequestService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _approvalRequestService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<ApprovalRequestResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

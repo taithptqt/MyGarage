@@ -13,6 +13,8 @@ namespace MyGarage.Interfaces
         Task<VoucherValidationResultResponseDto> CheckEligibilityAsync(VoucherRedemptionRequestDto request);
         Task<VoucherRedeemResultResponseDto> RedeemAsync(VoucherRedemptionRequestDto request);
         Task<VoucherRedeemResultResponseDto> ReverseAsync(long redemptionId, VoucherRedemptionReverseDto request);
+        List<VoucherRedemptionResponseDto> MapToDtos(IEnumerable<VoucherRedemption> items);
+        Task<VoucherRedemptionResponseDto?> GetDetailedDtoByIdAsync(long id);
     }
 }
 

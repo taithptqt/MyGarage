@@ -1,6 +1,5 @@
 using System.IO;
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -54,7 +53,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
 
     public async Task<ChatbotImageUploadResponseDto> UploadAndAnalyzeAsync(
         long customerId,
-        UploadChatbotImageRequestDto request,
+        UploadChatbotImageInput request,
         CancellationToken cancellationToken = default)
     {
         if (request is null)
@@ -62,13 +61,12 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             throw new InvalidOperationException("Request body is required.");
         }
 
-        var file = request.File;
-        if (file is null)
+        if (request.Content is null)
         {
             throw new InvalidOperationException("File is required.");
         }
 
-        if (file.Length <= 0)
+        if (request.Length <= 0)
         {
             throw new InvalidOperationException("Uploaded file is empty.");
         }
@@ -83,20 +81,20 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             throw new InvalidOperationException("Session is locked and cannot accept new uploads.");
         }
 
-        var extension = ResolveExtension(file);
+        var extension = ResolveExtension(request.FileName, request.ContentType);
         if (string.IsNullOrWhiteSpace(extension) || !MimeTypeByExtension.ContainsKey(extension))
         {
             throw new InvalidOperationException("Unsupported image type. Allowed types: .jpg, .jpeg, .png, .webp.");
         }
 
-        var normalizedContentType = NormalizeAndValidateContentType(file.ContentType, extension);
-        var imageBytes = await ReadFileBytesAsync(file, cancellationToken);
+        var normalizedContentType = NormalizeAndValidateContentType(request.ContentType, extension);
+        var imageBytes = await ReadFileBytesAsync(request.Content, cancellationToken);
         ValidateFileSignature(imageBytes, extension);
 
         var scanResult = await _fileSecurityScanner.ScanAsync(
             new FileSecurityScanRequest
             {
-                FileName = file.FileName ?? string.Empty,
+                FileName = request.FileName ?? string.Empty,
                 ContentType = normalizedContentType,
                 FileBytes = imageBytes
             },
@@ -150,7 +148,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             analysis = await _visionAnalyzer.AnalyzeAsync(
                 new VisionAnalyzerRequest
                 {
-                    FileName = file.FileName ?? storageFileName,
+                    FileName = request.FileName ?? storageFileName,
                     ContentType = normalizedContentType,
                     ImageBytes = imageBytes,
                     AttachmentUrl = attachmentUrl,
@@ -289,7 +287,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
 
     private async Task<ChatbotSession?> ResolveOwnedSessionAsync(
         long customerId,
-        UploadChatbotImageRequestDto request,
+        UploadChatbotImageInput request,
         CancellationToken cancellationToken)
     {
         if (request.SessionId.GetValueOrDefault() > 0)
@@ -326,15 +324,15 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             or nameof(ChatbotSessionStatus.ARCHIVED);
     }
 
-    private static string ResolveExtension(IFormFile file)
+    private static string ResolveExtension(string? fileName, string? contentType)
     {
-        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant() ?? string.Empty;
+        var extension = Path.GetExtension(fileName)?.Trim().ToLowerInvariant() ?? string.Empty;
         if (MimeTypeByExtension.ContainsKey(extension))
         {
             return extension;
         }
 
-        return (file.ContentType ?? string.Empty).Trim().ToLowerInvariant() switch
+        return (contentType ?? string.Empty).Trim().ToLowerInvariant() switch
         {
             "image/jpeg" => ".jpg",
             "image/png" => ".png",
@@ -369,9 +367,8 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
         return expectedMime;
     }
 
-    private static async Task<byte[]> ReadFileBytesAsync(IFormFile file, CancellationToken cancellationToken)
+    private static async Task<byte[]> ReadFileBytesAsync(Stream stream, CancellationToken cancellationToken)
     {
-        await using var stream = file.OpenReadStream();
         await using var memory = new MemoryStream();
         var buffer = new byte[81920];
         int read;

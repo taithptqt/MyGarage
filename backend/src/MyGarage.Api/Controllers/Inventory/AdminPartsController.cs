@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 using MyGarage.Security;
 
 namespace MyGarage.Controllers;
 
-[Route("api/admin")]
 [Route("api/v1/admin")]
 [ApiController]
 [Authorize(Policy = "AdminStaffOnly")]
@@ -23,18 +21,18 @@ public class AdminPartsController : ControllerBase
         "image/webp",
     };
 
-    private readonly IGarageContext _context;
+    private readonly IAdminPartsDataService _dataService;
     private readonly ICloudStorageService _cloudStorageService;
     private readonly IFileSecurityScanner _fileSecurityScanner;
     private readonly ILogger<AdminPartsController> _logger;
 
     public AdminPartsController(
-        IGarageContext context,
+        IAdminPartsDataService dataService,
         ICloudStorageService cloudStorageService,
         IFileSecurityScanner fileSecurityScanner,
         ILogger<AdminPartsController> logger)
     {
-        _context = context;
+        _dataService = dataService;
         _cloudStorageService = cloudStorageService;
         _fileSecurityScanner = fileSecurityScanner;
         _logger = logger;
@@ -73,58 +71,19 @@ public class AdminPartsController : ControllerBase
             cancellationToken: cancellationToken);
         if (!scan.IsClean)
         {
-            return BadRequest(new { message = scan.ErrorMessage });
+            return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
         }
 
-        var product = await _context.Products
-            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted != true, cancellationToken);
-        if (product == null)
+        var product = await _dataService.GetActiveProductSummaryAsync(id, cancellationToken);
+        if (!product.Found)
         {
-            return NotFound(new { message = "Không tìm thấy sản phẩm." });
+            return this.NotFoundProblem("Không tìm thấy sản phẩm.");
         }
 
         try
         {
             var imageUrl = await UploadToBlobAsync(id, file!, scan.Bytes, cancellationToken);
-
-            var images = await _context.ProductImages
-                .Where(pi => pi.ProductId == id)
-                .ToListAsync(cancellationToken);
-
-            foreach (var image in images.Where(i => i.IsMain == true))
-            {
-                image.IsMain = false;
-            }
-
-            var mainImage = images
-                .OrderBy(i => i.SortOrder ?? int.MaxValue)
-                .ThenBy(i => i.Id)
-                .FirstOrDefault();
-
-            if (mainImage == null)
-            {
-                mainImage = new ProductImage
-                {
-                    ProductId = id,
-                    ImageUrl = imageUrl,
-                    IsMain = true,
-                    SortOrder = 1,
-                };
-                await _context.ProductImages.AddAsync(mainImage, cancellationToken);
-            }
-            else
-            {
-                mainImage.ImageUrl = imageUrl;
-                mainImage.IsMain = true;
-                if (!mainImage.SortOrder.HasValue || mainImage.SortOrder <= 0)
-                {
-                    mainImage.SortOrder = 1;
-                }
-
-                _context.ProductImages.Update(mainImage);
-            }
-
-            await _context.SaveChangesAsync(cancellationToken);
+            await _dataService.SavePrimaryProductImageAsync(id, imageUrl, cancellationToken);
 
             return Ok(new
             {
@@ -136,10 +95,7 @@ public class AdminPartsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to upload image for product {ProductId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new
-            {
-                message = "Không thể tải ảnh lên lúc này."
-            });
+            return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Không thể tải ảnh lên lúc này.");
         }
     }
 
@@ -159,39 +115,19 @@ public class AdminPartsController : ControllerBase
             cancellationToken: cancellationToken);
         if (!scan.IsClean)
         {
-            return BadRequest(new { message = scan.ErrorMessage });
+            return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
         }
 
-        var product = await _context.Products
-            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted != true, cancellationToken);
-        if (product == null)
+        var product = await _dataService.GetActiveProductSummaryAsync(id, cancellationToken);
+        if (!product.Found)
         {
-            return NotFound(new { message = "Không tìm thấy sản phẩm." });
+            return this.NotFoundProblem("Không tìm thấy sản phẩm.");
         }
 
         try
         {
             var imageUrl = await UploadToBlobAsync(id, file!, scan.Bytes, cancellationToken);
-
-            var existing = await _context.ProductImages
-                .Where(pi => pi.ProductId == id)
-                .ToListAsync(cancellationToken);
-
-            var maxOrder = existing.Count == 0
-                ? 0
-                : existing.Max(i => i.SortOrder ?? 0);
-
-            var isFirst = existing.Count == 0;
-
-            var row = new ProductImage
-            {
-                ProductId = id,
-                ImageUrl = imageUrl,
-                IsMain = isFirst,
-                SortOrder = isFirst ? 1 : maxOrder + 1,
-            };
-            await _context.ProductImages.AddAsync(row, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+            var row = await _dataService.AppendGalleryProductImageAsync(id, imageUrl, cancellationToken);
 
             return Ok(new
             {
@@ -205,10 +141,7 @@ public class AdminPartsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to append gallery image for product {ProductId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new
-            {
-                message = "Không thể tải ảnh lên lúc này."
-            });
+            return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Không thể tải ảnh lên lúc này.");
         }
     }
 
@@ -217,19 +150,19 @@ public class AdminPartsController : ControllerBase
         errorResult = null;
         if (file == null || file.Length <= 0)
         {
-            errorResult = BadRequest(new { message = "Tệp ảnh là bắt buộc." });
+            errorResult = this.BadRequestProblem("Tệp ảnh là bắt buộc.");
             return false;
         }
 
         if (file.Length > MaxUploadBytes)
         {
-            errorResult = BadRequest(new { message = "Kích thước ảnh không được vượt quá 5MB." });
+            errorResult = this.BadRequestProblem("Kích thước ảnh không được vượt quá 5MB.");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(file.ContentType) || !AllowedMimeTypes.Contains(file.ContentType))
         {
-            errorResult = BadRequest(new { message = "Chỉ hỗ trợ ảnh JPEG, PNG hoặc WEBP." });
+            errorResult = this.BadRequestProblem("Chỉ hỗ trợ ảnh JPEG, PNG hoặc WEBP.");
             return false;
         }
 

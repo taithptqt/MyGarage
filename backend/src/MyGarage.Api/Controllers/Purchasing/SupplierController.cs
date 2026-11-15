@@ -1,33 +1,26 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Application.Interfaces.Queries;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/suppliers")]
     [Route("api/v1/suppliers")]
     [ApiController]
     [Authorize(Roles = "Staff")]
     public class SupplierController : ControllerBase
     {
         private readonly ISupplierService _supplierService;
-        private readonly IMapper _mapper;
-        private readonly IGarageContext _db;
+        private readonly ISupplierQueryService _supplierQueryService;
 
-        public SupplierController(ISupplierService supplierService, IMapper mapper, IGarageContext db)
+        public SupplierController(ISupplierService supplierService, ISupplierQueryService supplierQueryService)
         {
             _supplierService = supplierService;
-            _mapper = mapper;
-            _db = db;
+            _supplierQueryService = supplierQueryService;
         }
 
         [HttpGet]
@@ -45,18 +38,9 @@ namespace MyGarage.Controllers
                 if (normalizedPageSize < 1) normalizedPageSize = 1;
                 if (normalizedPageSize > 200) normalizedPageSize = 200;
 
-                var query = _db.Suppliers
-                    .AsNoTracking()
-                    .Where(x => x.IsDeleted != true)
-                    .OrderByDescending(x => x.Id);
+                var (items, total) = await _supplierQueryService.GetPagedAsync(normalizedPage, normalizedPageSize);
 
-                var total = await query.CountAsync();
-                var items = await query
-                    .Skip((normalizedPage - 1) * normalizedPageSize)
-                    .Take(normalizedPageSize)
-                    .ToListAsync();
-
-                var pagedDtos = _mapper.Map<List<SupplierResponseDto>>(items);
+                var pagedDtos = _supplierService.MapToDtos(items);
                 return Ok(new
                 {
                     items = pagedDtos,
@@ -67,49 +51,36 @@ namespace MyGarage.Controllers
                 });
             }
 
-            var allItems = await _supplierService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<SupplierResponseDto>>(allItems);
+            var dtos = await _supplierService.GetAllDtosAsync();
             return Ok(dtos);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<SupplierResponseDto>> GetById(long id)
         {
-            var item = await _supplierService.GetByIdAsync(id);
-            if (item == null)
+            var dto = await _supplierService.GetDtoByIdAsync(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = _mapper.Map<SupplierResponseDto>(item);
             return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<SupplierResponseDto>> Create([FromBody] SupplierCreateDto itemDto)
         {
-            var entity = _mapper.Map<Supplier>(itemDto);
-            var createdItem = await _supplierService.AddAsync(entity);
-            var responseDto = _mapper.Map<SupplierResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            var responseDto = await _supplierService.CreateDtoAsync(itemDto);
+            return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<SupplierResponseDto>> Update(long id, [FromBody] SupplierUpdateDto itemDto)
         {
-            var existingItem = await _supplierService.GetByIdAsync(id);
-            if (existingItem == null)
+            var responseDto = await _supplierService.UpdateDtoAsync(id, itemDto);
+            if (responseDto == null)
             {
                 return NotFound();
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _supplierService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<SupplierResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 

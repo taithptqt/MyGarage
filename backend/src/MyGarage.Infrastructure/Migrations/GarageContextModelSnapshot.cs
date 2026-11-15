@@ -4478,6 +4478,7 @@ namespace MyGarage.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("RevokedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("datetime2");
 
                     b.Property<long?>("StaffId")
@@ -4490,6 +4491,7 @@ namespace MyGarage.Migrations
                         .HasColumnType("varchar(64)");
 
                     b.Property<DateTime?>("UsedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id")

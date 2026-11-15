@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using MyGarage.Application.Authorization;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers;
 
-[Route("api/inventory-management")]
 [Route("api/v1/inventory-management")]
 [ApiController]
 [Authorize]
@@ -27,6 +27,7 @@ public class InventoryAdminController : ControllerBase
     private readonly IInventoryAdminService _inventoryAdminService;
     private readonly IInventoryAuthorizationService _inventoryAuthService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<InventoryAdminController> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -35,11 +36,13 @@ public class InventoryAdminController : ControllerBase
     public InventoryAdminController(
         IInventoryAdminService inventoryAdminService,
         IInventoryAuthorizationService inventoryAuthService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ILogger<InventoryAdminController> logger)
     {
         _inventoryAdminService = inventoryAdminService;
         _inventoryAuthService = inventoryAuthService;
         _environment = environment;
+        _logger = logger;
     }
 
     [HttpGet("dashboards/overview")]
@@ -68,7 +71,6 @@ public class InventoryAdminController : ControllerBase
         return Ok(await _inventoryAdminService.GetStockAlertsAsync(false, 200));
     }
 
-    [HttpGet("/api/stock-alerts")]
     [HttpGet("/api/v1/stock-alerts")]
     public async Task<IActionResult> GetStockAlerts(
         [FromQuery] bool? resolved = false,
@@ -83,7 +85,7 @@ public class InventoryAdminController : ControllerBase
         return Ok(await _inventoryAdminService.GetStockAlertsAsync(resolved, take));
     }
 
-    [HttpPost("alert-items/rebuild")]
+    [HttpPost("alert-items/rebuilds")]
     public async Task<IActionResult> RebuildAlerts()
     {
         var actor = this.ToUserActorContext();
@@ -97,12 +99,12 @@ public class InventoryAdminController : ControllerBase
         return Ok(rows);
     }
 
-    [HttpPatch("alert-items/{id:long}/resolve")]
+    [HttpPost("alert-items/{id:long}/resolutions")]
     public async Task<IActionResult> ResolveAlert(long id, [FromBody] ResolveStockAlertRequestDto? payload)
     {
         if (payload == null || payload.PurchaseOrderId <= 0)
         {
-            return BadRequest(new { message = "PurchaseOrderId is required." });
+            return this.BadRequestProblem("PurchaseOrderId is required.");
         }
 
         var actor = this.ToUserActorContext();
@@ -114,7 +116,7 @@ public class InventoryAdminController : ControllerBase
         var ok = await _inventoryAdminService.ResolveStockAlertAsync(id, payload.PurchaseOrderId, ResolveCurrentUserId());
         if (!ok)
         {
-            return NotFound(new { message = "Alert not found or cannot resolve with the provided purchase order." });
+            return this.NotFoundProblem("Alert not found or cannot resolve with the provided purchase order.");
         }
 
         return Ok(new { message = "Stock alert resolved." });
@@ -146,7 +148,6 @@ public class InventoryAdminController : ControllerBase
         return Ok(await _inventoryAdminService.GetTransactionsAsync(scopedBranchId, warehouseId, productId, type, from, to, page, pageSize, search));
     }
 
-    [HttpGet("/api/inventory/history")]
     [HttpGet("/api/v1/inventory/history")]
     public async Task<IActionResult> GetInventoryHistory(
         [FromQuery] long? branchId,
@@ -194,7 +195,7 @@ public class InventoryAdminController : ControllerBase
         {
             if (decision is not "APPROVE" and not "REJECT")
             {
-                return BadRequest(new { message = "Decision must be APPROVE or REJECT." });
+                return this.BadRequestProblem("Decision must be APPROVE or REJECT.");
             }
 
             return NotFound();
@@ -224,7 +225,7 @@ public class InventoryAdminController : ControllerBase
         {
             if (decision is not "APPROVE" and not "REJECT")
             {
-                return BadRequest(new { message = "Decision must be APPROVE or REJECT." });
+                return this.BadRequestProblem("Decision must be APPROVE or REJECT.");
             }
 
             return NotFound();
@@ -279,8 +280,13 @@ public class InventoryAdminController : ControllerBase
             return await JsonSerializer.DeserializeAsync<InventoryAdminSettings>(stream, _jsonOptions)
                 ?? InventoryAdminSettings.CreateDefault();
         }
-        catch
+        catch (OperationCanceledException)
         {
+            throw;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _logger.LogWarning(ex, "Failed to read inventory admin settings from {SettingsPath}; falling back to defaults.", SettingsPath);
             return InventoryAdminSettings.CreateDefault();
         }
     }

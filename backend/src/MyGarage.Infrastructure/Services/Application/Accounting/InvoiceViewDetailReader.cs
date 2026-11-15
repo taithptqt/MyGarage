@@ -7,9 +7,13 @@ namespace MyGarage.Services;
 // Transitional adapter: the legacy EF context still belongs to the Web project.
 public sealed class InvoiceViewDetailReader(IGarageContext db) : IInvoiceViewDetailReader
 {
-    public async Task<InvoiceViewDetail?> ReadAsync(long invoiceId, int detailsPage, int paymentsPage, int pageSize, CancellationToken cancellationToken)
+    public async Task<InvoiceViewDetail?> ReadAsync(long invoiceId, int detailsPage, int paymentsPage, int pageSize, CancellationToken cancellationToken, long? branchId = null)
     {
-        var invoice = await db.Invoices.AsNoTracking().Where(x => x.Id == invoiceId)
+        var invoices = db.Invoices.AsNoTracking().Where(x => x.Id == invoiceId);
+        if (branchId.HasValue)
+            invoices = invoices.Where(x => (x.ServiceOrderId.HasValue && x.ServiceOrder != null && x.ServiceOrder.ExecuteBranchId == branchId.Value) ||
+                (!x.ServiceOrderId.HasValue && x.RetailOrder != null && x.RetailOrder.BranchId == branchId.Value));
+        var invoice = await invoices
             .Select(x => new InvoiceViewRow(x.Id, x.ServiceOrderId, x.RetailOrderId, x.VehicleId, x.Phone, x.Address,
                 x.InvoiceUrl, x.CompanyName, x.CompanyAddress, x.ReceiveEmail, x.TaxCode, x.SubTotalAmount, x.TaxAmount,
                 x.TotalAmount, x.PayerType, x.PayerId, x.PaidAmount, x.PaymentStatus, x.CreditApprovedByStaffId,
