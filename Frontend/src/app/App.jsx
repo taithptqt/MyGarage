@@ -1,17 +1,20 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import PublicBrandTheme from "@shared/brand/PublicBrandTheme";
 import ErrorBoundary from "@shared/core/components/ErrorBoundary";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { BranchProvider } from "@shared/core/context/BranchContext";
 import useIdleTimeout from "@shared/core/hooks/useIdleTimeout";
 import CustomerLayout from "@shared/layouts/CustomerLayout";
+import HomeChatVisibility from "@shared/components/HomeChatVisibility";
 
 // Lazy-loaded route components
 const AuthPage = lazy(() => import("@features/auth/pages/AuthPage"));
 const ForgotPasswordPage = lazy(() => import("@features/auth/recovery/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@features/auth/recovery/ResetPasswordPage"));
 const HomePage = lazy(() => import("@features/home/pages/HomePage"));
+const ReferencePage = lazy(() => import("@shared/brand/ReferencePage"));
 const AdminPage = lazy(() => import("@features/admin/pages/AdminPage"));
 const DispatchCenterPage = lazy(() => import("@features/admin/pages/DispatchCenterPage"));
 const WorkshopPage = lazy(() => import("@features/workshop/pages/WorkshopPage"));
@@ -76,6 +79,9 @@ const CustomerChatbotWidget = lazy(() => import("@features/chatbot/components/Cu
 const AccountingMain = lazy(() => import("@horizon/AccountingMain"));
 const ContactPage = lazy(() => import("@features/contact/pages/ContactPage"));
 const StorageServicesPage = lazy(() => import("@features/storage/pages/StorageServicesPage"));
+const Garage3DPage = lazy(() => import("@features/storage/garage3d/Garage3DEntry"));
+const CustomerGarage3DPage = lazy(() => import("@features/storage/garage3d/CustomerGarage3DPage"));
+const CustomRequestsPage = lazy(() => import("@features/storage/garage3d/CustomRequestsPage"));
 const NewsJournalPage = lazy(() => import("@features/news/pages/NewsJournalPage"));
 
 function RouteLoadingSpinner() {
@@ -146,6 +152,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <PublicBrandTheme />
       <BranchProvider>
         <Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
@@ -159,7 +166,13 @@ function App() {
             <Route path="/home" element={<HomePage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/storage" element={<StorageServicesPage />} />
+            <Route path="/storage/garage-3d" element={<Garage3DPage />} />
+            <Route path="/my-garage-3d" element={<ProtectedRoute allowedRoles={["CUSTOMER"]}><CustomerRoute><CustomerGarage3DPage /></CustomerRoute></ProtectedRoute>} />
             <Route path="/news" element={<NewsJournalPage />} />
+            <Route path="/discover/about-my-garage" element={<Navigate to="/home" replace />} />
+            <Route path="/events" element={<ReferencePage sourcePath="/en/meetings-events" />} />
+            <Route path="/partners" element={<ReferencePage sourcePath="/en/partners" />} />
+            <Route path="/discover/*" element={<ReferencePage />} />
 
             {/* Customer Appointment Routes */}
             <Route
@@ -347,6 +360,7 @@ function App() {
               <Route path="reception/orders/:orderId/vehicleconditionlogs" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><VehicleConditionLogsPage /></WorkshopChildRoute>} />
               <Route path="reception/orders/:orderId/edit" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderEditPage /></WorkshopChildRoute>} />
               <Route path="manager" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></WorkshopChildRoute>} />
+              <Route path="custom-requests" element={<WorkshopChildRoute allowedRoles={["ADMIN", "MANAGER"]}><CustomRequestsPage /></WorkshopChildRoute>} />
               <Route path="manager/dispatch/:orderId" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></WorkshopChildRoute>} />
               <Route path="manager/orders/:orderId/quote" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDiagnosisApprovalPage /></WorkshopChildRoute>} />
               <Route path="foreman" element={<WorkshopChildRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></WorkshopChildRoute>} />
@@ -408,8 +422,10 @@ function App() {
           </Routes>
         </Suspense>
         <Suspense fallback={null}>
-          <CustomerChatbotWidget />
-          <CustomerMessengerWidget />
+          <HomeChatVisibility>
+            <CustomerChatbotWidget />
+            <CustomerMessengerWidget />
+          </HomeChatVisibility>
         </Suspense>
       </BranchProvider>
     </ErrorBoundary>

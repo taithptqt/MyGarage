@@ -6,6 +6,8 @@ import { getCustomerDashboard } from "@features/customerPortal/api/customerPorta
 import "./CustomerPortalShell.css";
 import "./GarageDashboardPage.css";
 
+const LOCATION_LABELS = { unknown: 'Chưa xác nhận vị trí', title: 'Vị trí garage 3D' };
+
 function fmtDt(v) {
   if (!v) return "—";
   try {
@@ -23,21 +25,25 @@ export default function GarageDashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError("");
+    let cancelled = false, busy = false;
+    const load = async () => {
+      if (busy) return; busy = true;
       try {
         const nextData = await getCustomerDashboard();
-        if (!cancelled) setData(nextData);
+        if (!cancelled) { setData(nextData); setError(''); }
       } catch (e) {
         if (!cancelled) setError(e?.message || "Không tải được dữ liệu.");
       } finally {
         if (!cancelled) setLoading(false);
+        busy = false;
       }
-    })();
+    };
+    void load();
+    const refresh = () => { if (!document.hidden) void load(); };
+    const timer = setInterval(refresh, 15000); window.addEventListener('focus', refresh);
     return () => {
       cancelled = true;
+      clearInterval(timer); window.removeEventListener('focus', refresh);
     };
   }, []);
 
@@ -96,6 +102,7 @@ export default function GarageDashboardPage() {
               </p>
 
               <div className="cp-dashboard-actions">
+                <Link className="cp-btn cp-btn-ghost" to="/my-garage-3d">{LOCATION_LABELS.title}</Link>
                 <Link className="cp-btn" to="/my-vehicles">
                   Đội xe của tôi
                 </Link>
@@ -211,8 +218,10 @@ export default function GarageDashboardPage() {
                           <dt>Bay / khu vực</dt>
                           <dd>
                             {track.bayCode || track.bayName
-                              ? [track.bayCode, track.bayName].filter(Boolean).join(" · ")
-                              : "—"}
+                              ? [track.serviceArea, track.bayCode, track.bayName].filter(Boolean).join(" · ")
+                              : LOCATION_LABELS.unknown}
+                            {track.locationReportedAt && <><br/><small>{fmtDt(track.locationReportedAt)}{track.locationReportedBy ? ` · ${track.locationReportedBy}` : ''}</small></>}
+                            {track.locationNote && <><br/><small>{track.locationNote}</small></>}
                           </dd>
                         </div>
                         <div className="cp-track-meta-card">

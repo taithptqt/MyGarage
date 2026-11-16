@@ -6,4 +6,7 @@
 .env
 .env.*
 !.env.example
+design-reference/ui-reverse/mirror-cache/
+design-reference/ui-reverse/node_modules/
+design-reference/ui-reverse/evidence/
 

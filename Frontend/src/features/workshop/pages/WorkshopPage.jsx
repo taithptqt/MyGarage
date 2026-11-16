@@ -26,6 +26,7 @@ const ROLES_META = {
 };
 
 const WORKSHOP_SIDEBAR_EXPANDED_WIDTH = 280;
+const CUSTOM_REQUESTS_LABEL = "Yêu cầu custom xe";
 const WORKSHOP_SIDEBAR_COLLAPSED_WIDTH = 5;
 const WORKSHOP_SIDEBAR_COLLAPSE_STORAGE_KEY = "mygarage.workshop.sidebar.collapsed";
 
@@ -322,6 +323,9 @@ export default function WorkshopPage() {
             ))}
             {["ADMIN", "MANAGER", "RECEPTIONIST", "GATE_SECURITY"].includes(userRole) && (
               <button type="button" className="role-sub-item" onClick={() => navigate("/workshop/gate")}>{gateLabels.title}</button>
+            )}
+            {["ADMIN", "MANAGER"].includes(userRole) && (
+              <button type="button" className={`role-sub-item ${currentNormalizedPath === "/workshop/custom-requests" ? "active" : ""}`} onClick={() => navigate("/workshop/custom-requests")}>{CUSTOM_REQUESTS_LABEL}</button>
             )}
             {isReceptionDashboard && (
               <div className="role-sub-nav">

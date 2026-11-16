@@ -1,0 +1,14 @@
+{
+  "mode": "repair",
+  "processed": 328,
+  "discoveredPages": 300,
+  "routeData": 300,
+  "downloaded": [],
+  "failures": [],
+  "deferred": [],
+  "upstreamNotFound": [
+    "https://mygarage.dk/mclaren-til-salg/"
+  ],
+  "exhaustiveOfflineArchive": false,
+  "note": "Covers discovered public file URLs; dynamic UI states still require browser verification."
+}

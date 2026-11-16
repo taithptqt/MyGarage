@@ -296,6 +296,8 @@ builder.Services.AddScoped<IBayRepository, BayRepository>();
 builder.Services.AddScoped<IBayService, BayService>();
 builder.Services.AddScoped<IBayAuthorizationService, BayAuthorizationService>();
 builder.Services.AddScoped<IBayApplicationService, BayApplicationService>();
+builder.Services.AddScoped<IVehicleLocationService, VehicleLocationService>();
+builder.Services.AddScoped<IBayOccupancySnapshotSource, BayOccupancySnapshotSource>();
 builder.Services.AddScoped<IInventoryAuthorizationService, InventoryAuthorizationService>();
 builder.Services.AddScoped<IInventoryApplicationService, InventoryApplicationService>();
 builder.Services.AddScoped<IPurchaseOrderAuthorizationService, PurchaseOrderAuthorizationService>();

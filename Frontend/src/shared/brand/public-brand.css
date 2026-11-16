@@ -1,0 +1,107 @@
+html[data-public-ui]{--brand-green:#203b33;--brand-green-dark:#112a24;--brand-gold:#b9a365;--brand-paper:#f3f2ef;--brand-ink:#26342e;--brand-line:#d7d8d0;scroll-behavior:smooth}
+html[data-public-ui] body{background:var(--brand-paper);color:var(--brand-ink);font-family:"Garage Sans","Segoe UI",sans-serif}
+html[data-public-ui] :is(h1,h2,h3,h4,h5){font-family:"Garage Display","Segoe UI",sans-serif!important;font-weight:500;letter-spacing:.025em}
+html[data-public-ui] :is(button,input,textarea,select){font-family:"Garage Sans","Segoe UI",sans-serif}
+html[data-public-ui] :focus-visible{outline:2px solid var(--brand-gold);outline-offset:5px}
+html[data-public-ui] .container-xl{width:min(1240px,calc(100% - 80px));margin-inline:auto}
+html[data-public-ui] :is(.stitch-home,.storage-page,.news-page,.contact-page,.booking-intro,.customer-layout){background:var(--brand-paper);font-family:"Garage Sans","Segoe UI",sans-serif}
+html[data-public-ui] .mg-header-wrap{font-family:"Garage Display","Segoe UI",sans-serif;position:absolute;inset:0 0 auto;z-index:1200}
+html[data-public-ui] .mg-header-main{display:grid;grid-template-columns:1fr 140px 1fr;gap:34px;max-width:1600px;width:100%;height:170px;min-height:170px;padding:64px 70px 24px;margin:auto;align-items:center;background:transparent!important;box-shadow:none!important}
+html[data-public-ui] .mg-header-hotline{position:absolute;left:42px;top:23px;transform:none;color:var(--brand-gold);font:500 14px "Garage Display",sans-serif;letter-spacing:.08em}
+html[data-public-ui] .mg-header-side{position:static;transform:none;display:flex;gap:24px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
+html[data-public-ui] .mg-header-side.right{justify-content:flex-start}
+html[data-public-ui] .mg-header-side a{font:700 17px "Garage Display","Segoe UI",sans-serif;letter-spacing:.04em;color:var(--brand-green);text-decoration:none;white-space:nowrap}
+html[data-public-ui] .mg-header-wrap.overlay .mg-header-side a{color:#fff}
+html[data-public-ui] .mg-header-side a:hover{color:var(--brand-gold)}
+html[data-public-ui] .mg-header-logo{position:static;transform:none;justify-self:center;display:flex;flex-direction:column;align-items:center;background:none;border:0;cursor:pointer;color:var(--brand-gold);padding:0;line-height:1}
+html[data-public-ui] .mg-header-logo span{font:700 60px/.85 "Garage Display",sans-serif;letter-spacing:-.015em}
+html[data-public-ui] .mg-header-logo small{font:500 22px/1.5 "Garage Display",sans-serif;letter-spacing:.37em;margin-left:.37em}
+html[data-public-ui] .mg-header-brandmark{display:block;width:125px;height:80px;object-fit:contain}
+html[data-public-ui] :is(.mg-header-user,.mg-header-login-btn){position:absolute;top:17px;right:42px;left:auto;transform:none;justify-self:auto}
+html[data-public-ui] .mg-header-login-btn{font:500 14px "Garage Display",sans-serif;color:var(--brand-gold);letter-spacing:.06em;border:0;padding:5px 0;background:transparent}
+html[data-public-ui] .mg-header-user{display:flex;align-items:center;gap:20px}
+html[data-public-ui] .mg-header-user-trigger{background:none;border:0;padding:0;display:flex;align-items:center;gap:10px;color:var(--brand-green)}
+html[data-public-ui] .overlay .mg-header-user-trigger{color:#fff}
+html[data-public-ui] .mg-header-user-name{font-size:13px;letter-spacing:0}
+html[data-public-ui] .mg-header-user-avatar{width:31px;height:31px;border-radius:50%;background:var(--brand-gold);color:#17332b;display:grid;place-items:center;overflow:hidden}
+html[data-public-ui] .mg-header-user-avatar img{width:100%;height:100%;object-fit:cover}
+html[data-public-ui] .mg-header-notify-fixed-btn{position:static;inset:auto;transform:none;background:none;color:var(--brand-gold);padding:0;border:0;box-shadow:none}
+html[data-public-ui] .mg-header-notify-fixed-btn svg{width:19px;height:19px}
+html[data-public-ui] .mg-header-user-menu{top:45px;right:0;border-radius:0;border:1px solid var(--brand-line);box-shadow:0 15px 35px #132b2418;background:#fafaf7;color:var(--brand-green);min-width:240px}
+.mg-header-menu-toggle{display:none}
+html[data-public-ui] .mg-footer{background:#1d362e;color:#f4f3ee;border:0;border-radius:0;padding:80px max(40px,calc((100vw - 1240px)/2)) 28px;font-family:"Garage Sans",sans-serif}
+html[data-public-ui] .mg-footer-columns{max-width:1240px;margin:0 auto 55px;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:70px}
+html[data-public-ui] .mg-footer h3{font-size:40px;color:var(--brand-gold);margin:0 0 22px}
+html[data-public-ui] .mg-footer h4{font-size:21px;color:var(--brand-gold);margin:0 0 22px}
+html[data-public-ui] .mg-footer p{font-size:15px;line-height:1.8;color:#d9ded7}
+html[data-public-ui] .mg-footer-input{border-bottom:1px solid #aeb9a66b;border-radius:0;display:flex}
+html[data-public-ui] .mg-footer-input input{min-width:0;background:none;color:white;border:0;outline:0;padding:15px 0;flex:1}
+html[data-public-ui] .mg-footer-input button{border:0;background:none;color:var(--brand-gold);font-size:25px}
+html[data-public-ui] .mg-footer-bottom{max-width:1240px;margin:auto;padding-top:25px;border-top:1px solid #85978255;font-size:11px;letter-spacing:.04em;color:#b5c0b5;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+html[data-public-ui] .mg-footer-bottom a{color:inherit}
+.brand-footer-nav{display:flex;flex-direction:column;gap:13px}.brand-footer-nav a{color:#e7e9df;text-decoration:none;font-size:15px}.brand-footer-nav a:hover{color:var(--brand-gold)}
+.brand-branch-select{display:flex;flex-direction:column;gap:12px;color:#798471;font-size:13px;text-transform:uppercase;letter-spacing:.1em}.brand-branch-select select{padding:14px 0;background:none;color:#203b33;border:0;border-bottom:1px solid #b7bfb1;border-radius:0;font-size:18px;letter-spacing:0}.brand-form-note{font-size:13px;line-height:1.6;color:#687460}
+html[data-public-ui] .contact-details .reference-button{display:inline-flex;color:#b9a365;font:500 18px "Garage Display",sans-serif;max-width:fit-content;text-decoration:none}
+html[data-public-ui] .stitch-home{--surface:#f3f2ef;--surface-low:#ecebe6;--gold:#b9a365;--text:#26342e;--primary:#203b33}
+html[data-public-ui] .home-hero{height:100svh;min-height:650px}
+html[data-public-ui] .hero-video{width:100%;height:100%;object-fit:cover}
+html[data-public-ui] .hero-dim{background:rgba(0,0,0,.5)}
+html[data-public-ui] .hero-scroll{left:auto;right:6%;bottom:10%;font:500 16px "Garage Display",sans-serif;letter-spacing:.08em}
+html[data-public-ui] .brand-strip{background:#deded9;gap:20px;padding:40px 5%;min-height:150px;display:flex;justify-content:space-around;align-items:center}
+html[data-public-ui] .brand-tile{padding:10px;min-width:0;flex:1;max-width:180px}.brand-tile img{object-fit:contain}
+html[data-public-ui] .brand-line{display:none}
+html[data-public-ui] .cars-section{padding:100px max(40px,calc((100vw - 1240px)/2))}
+html[data-public-ui] .cars-head h2{font-size:42px;line-height:1.15;font-weight:500;max-width:680px;letter-spacing:.02em;margin:0 0 55px;color:var(--brand-green)}
+html[data-public-ui] .cars-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px}
+html[data-public-ui] .car-card{background:none;box-shadow:none;border-radius:0;border:0;overflow:visible}
+html[data-public-ui] .car-image{aspect-ratio:4/3;overflow:hidden;background:#deded8}.car-image img{transition:transform .5s}
+html[data-public-ui] .car-card:hover .car-image img{transform:scale(1.04)}
+html[data-public-ui] .car-content{padding:22px 0}.car-content h3{font-size:24px!important;color:var(--brand-green);letter-spacing:.02em!important}
+html[data-public-ui] .car-facts{font-size:12px;letter-spacing:.05em}.brand-card-link{display:block;color:inherit;text-decoration:none}
+html[data-public-ui] .experience-section{background:#203b33}
+html[data-public-ui] .experience-row{min-height:570px;display:grid;grid-template-columns:1fr 1fr;gap:0;background:#203b33;margin:0;border-radius:0}
+html[data-public-ui] .experience-media{min-height:570px;background-position:center;background-size:cover}
+html[data-public-ui] .experience-content{padding:90px clamp(40px,7vw,110px);display:flex;justify-content:center;flex-direction:column;color:#f4f3ed;background:#203b33}
+html[data-public-ui] .experience-content h2{font-size:52px;font-weight:500;color:#f4f3ed;margin:0 0 24px}
+html[data-public-ui] .experience-content p{font-size:17px;line-height:1.85;color:#d0d8cb}
+html[data-public-ui] .experience-btn{align-self:flex-start;border:1px solid var(--brand-gold);color:var(--brand-gold);border-radius:0;background:none;padding:15px 28px;font:500 17px "Garage Display",sans-serif;letter-spacing:.06em;margin-top:22px}
+html[data-public-ui] .partners-section{padding:100px 7%;background:#e7e7e1}.partners-head{max-width:740px}
+html[data-public-ui] .partners-head h2{font-size:44px;color:var(--brand-green)}
+html[data-public-ui] .partners-head p{font-size:17px;line-height:1.8}
+html[data-public-ui] .partners-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:45px;align-items:center;margin-top:60px}
+html[data-public-ui] .partners-grid img{height:65px;width:100%;object-fit:contain}
+html[data-public-ui] :is(.storage-hero,.news-hero,.parts-shop-hero,.booking-intro-hero){min-height:650px;height:85svh;max-height:1000px;border-radius:0;background:#203b33}
+html[data-public-ui] :is(.storage-hero__title,.news-hero h1,.parts-shop-hero h1,.booking-intro-hero h1){font-size:clamp(46px,5.4vw,82px);font-weight:500;line-height:1.03;letter-spacing:.015em}
+html[data-public-ui] :is(.storage-hero__content,.news-hero__content-wrap,.parts-shop-hero-content,.booking-intro-hero-content){padding-top:190px}
+html[data-public-ui] :is(.storage-tier,.news-article-card){border-radius:0;box-shadow:none;background:#f3f2ef;border:0}
+html[data-public-ui] .booking-intro :is(.booking-intro-service-card,.booking-intro-type-card){border:1px solid #c9cec4;border-radius:16px;background:#fffefa;box-shadow:0 5px 18px #203b3309}
+html[data-public-ui] .booking-intro .booking-intro-type-grid{gap:24px;margin-top:24px}
+html[data-public-ui] .booking-intro .booking-intro-type-card{display:flex;flex-direction:column;padding:24px}
+html[data-public-ui] .booking-intro .booking-intro-type-meta{margin-top:auto;padding-top:20px}
+html[data-public-ui] .booking-intro .booking-intro-type-promo{margin-bottom:20px}
+html[data-public-ui] :is(.storage-tier__button,.news-outline-btn,.booking-intro-primary,.parts-shop-btn){border-radius:0;background:#203b33;color:#fff;box-shadow:none}
+html[data-public-ui] .contact-page__top-space{height:190px}
+html[data-public-ui] .contact-content{padding-block:60px 110px;gap:100px}.contact-content h1{font-size:clamp(65px,8vw,110px)!important;line-height:1!important;color:var(--brand-green)!important}
+html[data-public-ui] .contact-form-wrap{background:#e7e8e0;border-radius:0;padding:45px;border:0;box-shadow:none}
+html[data-public-ui] .contact-form :is(input,textarea,select){background:none;border:0;border-bottom:1px solid #b7bfb1;border-radius:0;color:#203b33;box-shadow:none}
+html[data-public-ui] .contact-form button{background:#203b33;border:1px solid #203b33;color:white;border-radius:0}
+html[data-public-ui] .customer-layout{background:#f3f2ef}
+html[data-public-ui] .cp-page{--cp-bg-top:#f3f2ef;--cp-bg-mid:#f3f2ef;--cp-bg-bottom:#f3f2ef;--cp-heading:#203b33;--cp-body:#37483e;--cp-blue:#416451;--cp-blue-deep:#203b33;--cp-surface:#fafaf7;--cp-surface-soft:#e8eae2;--cp-border:#d4d8cd;--cp-shadow-soft:none;--cp-shadow-strong:none;background:#f3f2ef;font-family:"Garage Sans","Segoe UI",sans-serif}
+html[data-public-ui] .cp-page::before{display:none}
+html[data-public-ui] :is(.cp-card,.cp-panel,.cp-stat-card,.booking-card,.booking-panel,.parts-shop-product-card,.retail-cart-card){border-radius:0!important;box-shadow:none!important;border:1px solid var(--brand-line);background:#fafaf7}
+html[data-public-ui] .cp-page :is(button,a[class*="btn"]){border-radius:0}
+html[data-public-ui] .page .auth-shell{border-radius:0;box-shadow:0 30px 90px #0c211b30;border:1px solid #bac4b0}
+html[data-public-ui] .page .auth-showcase{background:#203b33;color:#f3f2ef}
+html[data-public-ui] .page :is(.auth-feature-card,.card,input,.btn-primary,.google-login-btn-container){border-radius:0}
+html[data-public-ui] .page .auth-feature-card{background:#ffffff08;border-color:#b9a36544}
+html[data-public-ui] .parts-shop-page{--parts-bg:#f3f2ef;--parts-gold:#b9a365;--parts-emerald:#203b33;--parts-shadow-soft:none;--parts-shadow-card:none;background:#f3f2ef;font-family:"Garage Sans","Segoe UI",sans-serif}
+html[data-public-ui] .parts-shop-page::before{display:none}
+html[data-public-ui] .booking-page-shell{--booking-header-offset:185px;--booking-bg:#f3f2ef;--booking-card:#fafaf7;--booking-primary:#203b33;--booking-accent:#b9a365;background:#f3f2ef}
+html[data-public-ui] .cp-shell{padding-top:180px}
+html[data-public-ui] .experience-btn{text-decoration:none}
+@media(max-width:800px){html[data-public-ui] .cp-shell{padding-top:120px}html[data-public-ui] .booking-page-shell{--booking-header-offset:130px}html[data-public-ui] .menu-open .mg-header-side{padding:0 24px}html[data-public-ui] .menu-open .mg-header-side.right{top:320px;padding:0 24px 20px}html[data-public-ui] .menu-open .mg-header-side a{display:flex;align-items:center;height:50px;padding:12px 0}}
+@media(max-width:1100px){html[data-public-ui] .mg-header-main{padding-inline:30px;gap:18px;grid-template-columns:1fr 105px 1fr}html[data-public-ui] .mg-header-side{gap:16px}html[data-public-ui] .mg-header-side a{font-size:15px}html[data-public-ui] .mg-footer-columns{gap:35px}html[data-public-ui] .cars-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){html[data-public-ui] .mg-header-main{height:120px;min-height:120px;padding:42px 24px 18px;display:flex;justify-content:center}html[data-public-ui] .mg-header-logo span{font-size:47px}html[data-public-ui] .mg-header-logo small{font-size:17px}html[data-public-ui] .mg-header-hotline{left:24px;top:14px;font-size:12px}html[data-public-ui] .mg-header-login-btn,html[data-public-ui] .mg-header-user{right:24px;top:12px}html[data-public-ui] .mg-header-user-name{display:none}html[data-public-ui] .mg-header-user-avatar{width:27px;height:27px}html[data-public-ui] .mg-header-menu-toggle{display:flex;position:absolute;left:24px;top:65px;background:none;color:var(--brand-green);border:0;padding:4px;gap:8px;align-items:center;font:500 15px "Garage Display",sans-serif}html[data-public-ui] .overlay .mg-header-menu-toggle{color:white}html[data-public-ui] .mg-header-side{display:none}html[data-public-ui] .menu-open .mg-header-side{position:absolute;left:0;right:0;top:120px;display:flex;flex-direction:column;gap:0;align-items:stretch;padding:15px 24px 0;background:#203b33}html[data-public-ui] .menu-open .mg-header-side.right{top:267px;padding-top:0;padding-bottom:20px}html[data-public-ui] .menu-open .mg-header-side a{color:white;padding:14px 0;border-bottom:1px solid #ffffff20;font-size:18px}html[data-public-ui] .mg-footer-columns{grid-template-columns:1fr;gap:40px}html[data-public-ui] .mg-footer{padding:60px 26px 24px}html[data-public-ui] .mg-header-user-menu{min-width:220px}html[data-public-ui] .container-xl{width:calc(100% - 40px)}html[data-public-ui] .home-hero{min-height:560px}html[data-public-ui] .brand-strip{padding:25px 15px;gap:12px;flex-wrap:wrap}html[data-public-ui] .brand-tile{flex:0 0 25%;height:65px}html[data-public-ui] .cars-section{padding:65px 24px}html[data-public-ui] .cars-grid{gap:18px}html[data-public-ui] .cars-head h2{font-size:32px;margin-bottom:30px}html[data-public-ui] .car-content h3{font-size:21px!important}html[data-public-ui] .experience-row{grid-template-columns:1fr;min-height:0}html[data-public-ui] .experience-row.reverse .experience-content{order:2}html[data-public-ui] .experience-media{min-height:340px}html[data-public-ui] .experience-content{padding:50px 26px}html[data-public-ui] .experience-content h2{font-size:42px}html[data-public-ui] .partners-section{padding:60px 25px}html[data-public-ui] .partners-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:25px}html[data-public-ui] .partners-head h2{font-size:34px}html[data-public-ui] .contact-page__top-space{height:125px}html[data-public-ui] .contact-content{gap:40px;padding-block:35px 60px}html[data-public-ui] .contact-form-wrap{padding:25px}html[data-public-ui] :is(.storage-hero,.news-hero,.booking-intro-hero,.parts-shop-hero){height:75svh;min-height:540px}}
+@media(prefers-reduced-motion:reduce){html[data-public-ui]{scroll-behavior:auto}html[data-public-ui] *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media(max-width:800px){html[data-public-ui] .mg-header-wrap.menu-open{position:fixed;inset:0;background:#203b33;height:100dvh;overflow-y:auto}html[data-public-ui] .menu-open .mg-header-menu-toggle,html[data-public-ui] .menu-open .mg-header-user-trigger{color:white}}
+@media(max-width:800px){html[data-public-ui] .mg-header-brandmark{width:95px;height:60px}}

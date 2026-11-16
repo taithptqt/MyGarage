@@ -42,6 +42,7 @@ import {
   MdTimer,
 } from "react-icons/md";
 import { request } from "@app/apiClient";
+import TechnicianVehicleLocation from './TechnicianVehicleLocation';
 
 const TAB_DIAGNOSIS = "DIAGNOSIS";
 const TAB_REPAIR = "REPAIR";
@@ -675,6 +676,7 @@ export default function TechnicianDashboard() {
   return (
     <Box p={{ base: 4, md: 6 }} minH="100vh" bg="linear-gradient(180deg, #f4f7ff 0%, #eef4ff 100%)">
       <VStack align="stretch" spacing={5}>
+        <TechnicianVehicleLocation />
         <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={3} flexWrap="wrap">
           <Box>
             <Heading size="lg" color="#1b2559">Bảng điều khiển Kỹ thuật viên</Heading>

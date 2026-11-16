@@ -1,0 +1,9 @@
+.custom-requests-page { padding:24px; color:#17283e; }
+.custom-requests-page header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
+.custom-requests-page h1 { font-size:26px; margin:0 0 8px; }.custom-requests-page h2 { font-size:17px; margin:0; }
+.custom-requests-page p,.custom-requests-page time { color:#607188; font-size:13px; }
+.custom-requests-page button { padding:9px 16px; border:1px solid #bacad9; border-radius:7px; background:#fff; cursor:pointer; }.custom-requests-page button:disabled { opacity:.45; cursor:default; }
+.custom-requests-list { display:grid; gap:16px; margin:22px 0; }
+.custom-requests-list article { padding:20px; border:1px solid #d5e0e9; border-radius:12px; background:#fff; }
+.custom-requests-list pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:14px; line-height:1.9; margin:16px 0 0; }
+.custom-requests-page nav { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:16px; font-size:13px; }

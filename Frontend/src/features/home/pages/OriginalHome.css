@@ -1,0 +1,82 @@
+@font-face { font-family: 'Home Condensed'; src: url('/brand/fonts/DINNextLTPro-Condensed.283ef4d9.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'Home Bold Condensed'; src: url('/brand/fonts/DINNextLTPro-BoldCondensed.b5e4b358.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'Home Light'; src: url('/brand/fonts/DINNextLTPro-Light.a02aed2f.woff') format('woff'); font-display: swap; }
+.original-home { background: #ebe7de; color: #133922; }
+.home-founder { background: #ebe7de; color: #133922; padding: 95px 25px 65px; }
+.home-founder-story { text-align: center; }
+html[data-public-ui] body .home-founder h2 { max-width: 1700px; margin: 0 auto 110px; font-family: var(--brand-font-family) !important; font-size: clamp(26px, 2vw, 42px) !important; font-weight: 500; line-height: 1.35 !important; letter-spacing: .06em !important; text-transform: uppercase; }
+.home-founder-copy { width: min(1600px, 85%); margin: auto; }
+html[data-public-ui] .home-founder-copy p { font-family: var(--brand-font-family); font-size: 14px; line-height: 1.8; margin: 0 0 14px; }
+.home-founder-credit { font-style: normal; }
+.home-founder-signature { display: block; width: 250px; max-width: 65%; height: auto; margin: 15px auto 0; }
+.home-founder-videos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 130px; }
+.home-founder-videos figure { margin: 0; min-width: 0; }
+.home-founder-videos video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #111; }
+html[data-public-ui] .home-founder-videos figcaption { text-align: center; font-family: var(--brand-font-family); font-size: 20px; font-weight: 700; text-transform: uppercase; padding-top: 10px; }
+@media(max-width:800px) { .home-founder { padding: 55px 24px 40px; }.home-founder-copy { width: 100%; } html[data-public-ui] body .home-founder h2 { margin-bottom: 45px; }.home-founder-videos { grid-template-columns: 1fr; gap: 30px; margin-top: 55px; } }
+.original-home .reference-featured-cars { padding: 85px 9%; }
+.original-home .featured-cars-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; margin-bottom: 60px; }
+html[data-public-ui] body .original-home .featured-cars-heading h2 { font-family: 'Home Condensed', sans-serif !important; font-size: clamp(32px, 3vw, 60px) !important; font-weight: 400; line-height: .95 !important; letter-spacing: .3rem !important; text-transform: uppercase; margin: 0; }
+.featured-cars-controls { display: flex; gap: 15px; }
+.featured-cars-controls button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #c2a05b; background: transparent; color: #133922; font-size: 25px; line-height: 1; cursor: pointer; }
+.featured-cars-controls button:disabled { opacity: .45; cursor: default; }
+.original-home .featured-cars-grid { gap: 20px; }
+.original-home .featured-car { background: #f2eee7; color: #133922; box-shadow: 0 20px 25px -5px #0000001a, 0 10px 10px -5px #0000000a; transition: transform .4s ease; }
+.original-home .featured-car:hover { transform: translateY(-15px); }
+.original-home .featured-car > img { display: block; width: 100%; aspect-ratio: 100 / 66; object-fit: cover; }
+.original-home .featured-car-info { padding: 20px 15px 35px; text-align: center; text-transform: uppercase; }
+html[data-public-ui] body .original-home .featured-car-info h3 { font-family: 'Home Bold Condensed', sans-serif !important; font-size: 22px !important; line-height: 1 !important; letter-spacing: 1px !important; margin: 0 0 6px; }
+html[data-public-ui] .original-home .featured-car-info p,
+html[data-public-ui] .original-home .featured-car-info small { font-family: 'Home Bold Condensed', sans-serif; letter-spacing: 1px; }
+.original-home .featured-car-variant { min-height: 18px; margin: 0; font-size: 16px; }
+.original-home .featured-car-facts { margin: 18px 0 20px; font-size: 14px; }
+.original-home .featured-car-facts span { padding-inline: 10px; }
+.original-home .featured-car-price { margin: 0; font-size: 25px; color: #c2a05b; }
+.original-home .featured-car-info small { display: block; font-size: 14px; color: #c2a05b; }
+html[data-public-ui] .original-home .reference-featured-cars > .reference-button { margin-top: 70px; background: transparent; border: 2px solid #c2a05b; color: #133922; padding: 20px 23px; text-transform: uppercase; font-family: 'Home Bold Condensed', sans-serif; font-size: 17px; }
+@media(max-width:800px) { .original-home .reference-featured-cars { padding: 55px 24px; } .original-home .featured-cars-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .original-home .featured-cars-heading { margin-bottom: 30px; gap: 15px; } }
+@media(max-width:480px) { .original-home .featured-cars-grid { grid-template-columns: 1fr; } }
+.original-home .reference-hero { padding: 0; min-height: 100svh; height: 100svh; }
+.original-home .reference-hero-copy { display: none; }
+.original-home .reference-section { background: #ebe7de; }
+.original-home .reference-prose { padding-block: 85px; text-align: center; }
+.original-home .reference-prose h2 { margin-bottom: 0; }
+.original-home .reference-partners h2 { text-align: center; }
+.original-home .reference-logo-grid { border: 0; background: transparent; gap: 35px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.original-home .reference-logo-grid a { background: transparent; min-height: 110px; padding: 15px; }
+.original-home .reference-logo-grid span { display: none; }
+.original-home .reference-partners { padding: 85px 0; }
+.original-home .reference-partners h2:empty { display: none; }
+.original-home .reference-logo-window { width: 83.333333%; margin: 60px auto 0; }
+.original-home .reference-logo-group > a,
+.original-home .reference-logo-copy { position: relative; height: 115px; padding: 30px 15px; }
+.original-home .reference-logo-group img { width: auto; max-width: 100%; height: auto; max-height: 55px; }
+.original-home .reference-logo-group > a::after,
+.original-home .reference-logo-copy::after { content: ''; position: absolute; left: calc(50% - 60px); bottom: 0; width: 120px; height: 3px; background: #133922; }
+.original-home .reference-logo-group > a:hover::after { background: #c2a05b; }
+.original-home .reference-logo-group > a img { transition: transform .3s ease; }
+.original-home .reference-logo-group > a:hover img { transform: scale(1.15); }
+.original-home .reference-video-embed { max-width: 1240px; margin-inline: auto; }
+.original-home .reference-split { width: 100%; margin: 0; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; min-height: 540px; background: #e5e6df; color: #133922; align-items: stretch; }
+.original-home .reference-split > .reference-media { width: 100%; height: 100%; min-height: 540px; max-height: none; aspect-ratio: 3 / 2; object-fit: cover; }
+.original-home .reference-split .reference-copy { color: inherit; }
+.original-home .reference-split:not(.reverse) > .reference-media { order: 0; }
+.original-home .reference-split.reverse > .reference-media { order: 2; }
+.original-home .reference-split-copy { padding: 70px clamp(35px, 4vw, 100px); }
+html[data-public-ui] body .original-home .reference-split-copy h2 { font-family: var(--brand-font-family) !important; font-size: clamp(36px,3vw,60px) !important; font-weight: 400; line-height: 1.2 !important; letter-spacing: .12rem !important; text-transform: uppercase; margin: 0 0 70px; }
+html[data-public-ui] .original-home .reference-split .reference-copy,
+html[data-public-ui] .original-home .reference-split .reference-copy p { font-family: var(--brand-font-family); font-size: 16px; line-height: 1.6; }
+.original-home .reference-split .reference-copy p:last-child { margin-bottom: 0; }
+html[data-public-ui] .original-home .reference-split .reference-button { margin: 45px 0 0; padding: 20px 23px; min-height: 60px; border: 2px solid #c2a05b; background: transparent; color: #133922; font-family: var(--brand-font-family); font-size: 17px; text-transform: uppercase; }
+html[data-public-ui] .original-home .reference-split .reference-button:hover { background: #c2a05b; color: white; }
+@media (max-width: 800px) {
+  .original-home .reference-partners { padding-block: 55px; }
+  .original-home .reference-logo-window { width: calc(100% - 30px); margin-top: 30px; }
+  .original-home .reference-logo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .original-home .reference-split { width: 100%; grid-template-columns: 1fr; gap: 0; margin: 0; min-height: 0; }
+  .original-home .reference-split > .reference-media { height: auto; min-height: 0; }
+  .original-home .reference-split > .reference-media,
+  .original-home .reference-split.reverse > .reference-media { order: 0; }
+  .original-home .reference-split-copy { order: 1; padding: 45px 24px; }
+  html[data-public-ui] body .original-home .reference-split-copy h2 { margin-bottom: 30px; }
+}

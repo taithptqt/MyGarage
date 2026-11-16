@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import { mediaUrl } from "@shared/brand/media";
 import { useAuth } from "@shared/core/context/AuthContext";
 import RetailCartEntry from "@features/retail/components/RetailCartEntry";
 import RetailImage from "@features/retail/components/RetailImage";
@@ -433,7 +434,7 @@ export default function PartsSalesPage() {
       <section className="parts-shop-hero">
         <img
           className="parts-shop-hero-image"
-          src="/assets/booking/hero.jpg"
+          src={mediaUrl("/assets/booking/hero.jpg")}
           alt="Không gian trưng bày và chăm sóc xe cao cấp của MyGarage"
         />
         <div className="parts-shop-hero-overlay" />

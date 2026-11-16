@@ -230,7 +230,9 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
 
         var prompt = _promptBuilder.Build(contextualUserInput, detection, updatedIntentState, guardrail);
 
-        var retrieval = await _retrievalService.RetrieveAsync(
+        var retrieval = guardrail.IsRejected
+            ? new ChatbotRetrievalResult { IsGrounded = false, MissingReason = "Request rejected by guardrails." }
+            : await _retrievalService.RetrieveAsync(
             customerId,
             session.BranchId,
             contextualUserInput,

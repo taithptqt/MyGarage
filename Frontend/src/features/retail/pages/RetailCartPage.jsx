@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import { mediaUrl } from "@shared/brand/media";
 import { useAuth } from "@shared/core/context/AuthContext";
 import RetailImage from "@features/retail/components/RetailImage";
 import { createPayosOrder } from "@features/payment/api/payosApi";
@@ -849,7 +850,7 @@ export default function RetailCartPage() {
       <section className="parts-shop-hero retail-cart-hero">
         <img
           className="parts-shop-hero-image"
-          src="/assets/booking/showcase-2.jpg"
+          src={mediaUrl("/assets/booking/showcase-2.jpg")}
           alt="Khu vực phụ tùng và hậu mãi MyGarage"
         />
         <div className="parts-shop-hero-overlay retail-cart-hero-overlay" />

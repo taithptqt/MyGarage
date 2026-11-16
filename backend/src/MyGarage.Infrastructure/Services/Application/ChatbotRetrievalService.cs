@@ -790,6 +790,9 @@ public partial class ChatbotRetrievalService : IChatbotRetrievalService
 
         var records = await _context.AiKnowledgeBases
             .AsNoTracking()
+            // Only explicitly published customer/public documents may leave the server.
+            // Unclassified, staff and admin knowledge is denied before materialization.
+            .Where(x => x.Topic.StartsWith("PUBLIC:") || x.Topic.StartsWith("CUSTOMER:"))
             .Select(x => new
             {
                 Entity = x,

@@ -1,0 +1,16 @@
+{
+  "name": "mygarage-ui-mirror",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "capture": "node capture.mjs",
+    "repair": "node capture.mjs --repair",
+    "audit": "node audit.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "english": "node scripts/build-english.mjs"
+  },
+  "dependencies": {
+    "parse5": "^7.3.0"
+  }
+}

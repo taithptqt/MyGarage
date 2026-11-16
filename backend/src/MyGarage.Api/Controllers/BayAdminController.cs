@@ -1648,23 +1648,39 @@ public class BayAdminController : ControllerBase
 
     private async Task<BayAdminSettings> ReadSettingsAsync()
     {
+        BayAdminSettings settings;
         if (!System.IO.File.Exists(SettingsPath))
         {
-            return BayAdminSettings.CreateDefault();
+            settings = BayAdminSettings.CreateDefault();
         }
-
-        try
+        else try
         {
             await using var stream = System.IO.File.OpenRead(SettingsPath);
-            var settings = await JsonSerializer.DeserializeAsync<BayAdminSettings>(stream, JsonOptions)
+            settings = await JsonSerializer.DeserializeAsync<BayAdminSettings>(stream, JsonOptions)
                            ?? BayAdminSettings.CreateDefault();
-            settings.Normalize();
-            return settings;
         }
         catch
         {
-            return BayAdminSettings.CreateDefault();
+            settings = BayAdminSettings.CreateDefault();
         }
+        settings.Normalize();
+        // Include technician reports in the existing bay-management screen as well.
+        // A newer manual parking action still takes precedence over an older report.
+        var reports = await _context.BayAllocations.AsNoTracking()
+            .Where(allocation => allocation.ReleasedAt == null && allocation.Bay.IsDeleted != true &&
+                allocation.ServiceOrder.VehicleId == allocation.VehicleId && allocation.ServiceOrder.ExecuteBranchId == allocation.Bay.BranchId &&
+                allocation.ServiceOrder.ActualHandover == null && allocation.ServiceOrder.Status != "CLOSED" && allocation.ServiceOrder.Status != "CANCELED" && allocation.ServiceOrder.Status != "DELIVERED")
+            .OrderBy(allocation => allocation.AllocatedAt)
+            .Select(allocation => new { allocation.Id, allocation.BayId, allocation.VehicleId, allocation.AllocatedAt, allocation.Notes }).ToListAsync();
+        foreach (var report in reports)
+        {
+            var latest = settings.Sessions.Where(session => session.VehicleId == report.VehicleId)
+                .OrderByDescending(session => session.ReleasedAt ?? session.AssignedAt).FirstOrDefault();
+            if (latest != null && (latest.ReleasedAt ?? latest.AssignedAt) >= report.AllocatedAt) continue;
+            foreach (var previous in settings.Sessions.Where(session => session.VehicleId == report.VehicleId && session.ReleasedAt == null)) previous.ReleasedAt = report.AllocatedAt;
+            settings.Sessions.Add(new BaySession { SessionId = $"allocation-{report.Id}", BayId = report.BayId, VehicleId = report.VehicleId, AssignedAt = report.AllocatedAt, Note = report.Notes });
+        }
+        return settings;
     }
 
     private async Task WriteSettingsAsync(BayAdminSettings settings)

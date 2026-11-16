@@ -27,6 +27,11 @@ public sealed class CustomerPortalActiveTrackDto
     public List<string> AssignedTechnicianNames { get; set; } = new();
     public string? BayCode { get; set; }
     public string? BayName { get; set; }
+    public string? BayType { get; set; }
+    public string? ServiceArea { get; set; }
+    public DateTime? LocationReportedAt { get; set; }
+    public string? LocationReportedBy { get; set; }
+    public string? LocationNote { get; set; }
 }
 
 public sealed class CustomerPortalTimelineStepDto

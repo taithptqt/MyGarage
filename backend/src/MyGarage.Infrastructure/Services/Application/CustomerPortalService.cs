@@ -10,6 +10,7 @@ using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Options;
 using MyGarage.Support;
+using MyGarage.Application.Bays;
 
 namespace MyGarage.Services;
 
@@ -17,6 +18,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
 {
     private readonly IGarageContext _context;
     private readonly IOptions<CustomerAutomationJobsOptions> _jobOptions;
+    private readonly IVehicleLocationService _locations;
 
     private static readonly HashSet<string> TerminalOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -51,10 +53,11 @@ public sealed class CustomerPortalService : ICustomerPortalService
         nameof(ServiceProgressStatus.PAUSED)
     };
 
-    public CustomerPortalService(IGarageContext context, IOptions<CustomerAutomationJobsOptions> jobOptions)
+    public CustomerPortalService(IGarageContext context, IOptions<CustomerAutomationJobsOptions> jobOptions, IVehicleLocationService? locations = null)
     {
         _context = context;
         _jobOptions = jobOptions;
+        _locations = locations ?? new VehicleLocationService(context);
     }
 
     public async Task<CustomerPortalDashboardDto> GetDashboardAsync(long customerId, CancellationToken cancellationToken = default)
@@ -134,27 +137,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
                 .Select(s => new { s.Id, s.FullName })
                 .ToDictionaryAsync(x => x.Id, x => x.FullName ?? "", cancellationToken);
 
-        var slotByOrder = new Dictionary<long, (string? Code, string? Name)>();
-        if (orderIds.Count > 0)
-        {
-            var slotQ = await (
-                from w in _context.WorkSlots.AsNoTracking()
-                join b in _context.Bays.AsNoTracking() on w.BayId equals b.Id into bj
-                from b in bj.DefaultIfEmpty()
-                where w.ServiceOrderId != null && orderIds.Contains(w.ServiceOrderId.Value)
-                where w.BayId != null && b != null
-                where !TerminalWorkSlotStatuses.Contains(w.Status)
-                orderby w.StartTime descending
-                select new { w.ServiceOrderId, BayCode = b!.Code, BayName = b.Name }
-            ).ToListAsync(cancellationToken);
-            foreach (var row in slotQ)
-            {
-                if (row.ServiceOrderId == null) continue;
-                var oid = row.ServiceOrderId.Value;
-                if (!slotByOrder.ContainsKey(oid))
-                    slotByOrder[oid] = (row.BayCode, row.BayName);
-            }
-        }
+        var physicalGarage = await _locations.GetCustomerGarageAsync(customerId, cancellationToken);
 
         // Issue 4: resolve actual assigned technicians via ServiceStaffAssignments.
         var techByOrder = new Dictionary<long, List<string>>();
@@ -199,7 +182,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
             var timeline = CustomerPortalStageMapper.BuildTimeline(stage, canceled);
             vehicleMap.TryGetValue(o.VehicleId, out var vm);
             branchMap.TryGetValue(o.ExecuteBranchId, out var br);
-            slotByOrder.TryGetValue(o.Id, out var bay);
+            var bay = physicalGarage.Vehicles.FirstOrDefault(vehicle => vehicle.VehicleId == o.VehicleId && vehicle.BranchId == o.ExecuteBranchId);
             string? adv = null;
             if (o.ServiceAdvisorId.HasValue)
                 advisors.TryGetValue(o.ServiceAdvisorId.Value, out adv);
@@ -223,8 +206,13 @@ public sealed class CustomerPortalService : ICustomerPortalService
                 PromisedHandoverTime = o.PromisedHandoverTime,
                 ServiceAdvisorName = adv,
                 AssignedTechnicianNames = techs ?? new List<string>(),
-                BayCode = bay.Code,
-                BayName = bay.Name
+                BayCode = bay?.BayCode,
+                BayName = bay?.BayName,
+                BayType = bay?.BayType,
+                ServiceArea = bay?.ServiceArea,
+                LocationReportedAt = bay?.ReportedAt,
+                LocationReportedBy = bay?.ReportedBy,
+                LocationNote = bay?.Note
             });
         }
 
@@ -591,7 +579,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
         if (orderIds.Count > 0)
         {
             var condRows = await _context.VehicleConditionLogs.AsNoTracking()
-                .Where(l => orderIds.Contains(l.ServiceOrderId))
+                .Where(l => orderIds.Contains(l.ServiceOrderId) && l.LogType != "REPAIR_3D")
                 .OrderBy(l => l.CreatedAt)
                 .Select(l => new
                 {

@@ -4,6 +4,7 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import { mediaUrl } from "@shared/brand/media";
 import "./BookingIntroPage.css";
 
 const showcaseServices = [
@@ -316,7 +317,7 @@ export default function BookingIntroPage() {
         <Header overlay />
         <img
           className="booking-intro-hero-image"
-          src="/assets/booking/hero.jpg"
+          src={mediaUrl("/assets/booking/hero.jpg")}
           alt="Không gian kỹ thuật gara chuyên nghiệp"
         />
         <div className="booking-intro-hero-content">
@@ -347,7 +348,7 @@ export default function BookingIntroPage() {
         <div className="booking-intro-service-grid">
           {showcaseServices.map((service) => (
             <article key={service.title} className="booking-intro-service-card">
-              <img src={service.image} alt={service.title} />
+              <img src={mediaUrl(service.image)} alt={service.title} loading="lazy" />
               <div className="booking-intro-service-body">
                 <h3>{service.title}</h3>
                 <p>{service.desc}</p>
@@ -420,7 +421,7 @@ export default function BookingIntroPage() {
         </div>
         <div className="booking-intro-process-media">
           <img
-            src="/assets/booking/showcase-2.jpg"
+            src={mediaUrl("/assets/booking/showcase-2.jpg")}
             alt="Kỹ thuật viên đang kiểm tra động cơ xe"
           />
         </div>

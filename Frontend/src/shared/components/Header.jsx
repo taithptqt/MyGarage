@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
-import { Bell } from "lucide-react";
+import { Bell, Menu, X } from "lucide-react";
 import "./Header.css";
+import { mediaUrl } from "@shared/brand/media";
 
 function resolveAvatarUrl(avatarUrl) {
   if (!avatarUrl) return "";
@@ -28,6 +29,7 @@ function Header({ overlay = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const menuRef = useRef(null);
 
@@ -72,7 +74,14 @@ function Header({ overlay = false }) {
 
   useEffect(() => {
     setMenuOpen(false);
+    setMobileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const close = event => { if (event.key === "Escape") { setMenuOpen(false); setMobileOpen(false); } };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -87,6 +96,7 @@ function Header({ overlay = false }) {
 
   const handleNavigate = (path) => {
     setMenuOpen(false);
+    setMobileOpen(false);
     if (location.pathname === path) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -105,28 +115,29 @@ function Header({ overlay = false }) {
   };
 
   return (
-    <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"}`}>
+    <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"} ${mobileOpen ? "menu-open" : ""}`}>
       <div className="mg-header-main">
+        <button className="mg-header-menu-toggle" type="button" aria-label={mobileOpen ? "Đóng menu" : "Mở menu"} aria-expanded={mobileOpen} aria-controls="mg-primary-left mg-primary-right" onClick={() => setMobileOpen(value => !value)}>{mobileOpen ? <X size={22} /> : <Menu size={22} />}<span>MENU</span></button>
         <span className="mg-header-hotline">1900 0000</span>
 
-        <div className="mg-header-side">
+        <div className="mg-header-side" id="mg-primary-left">
           <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
           <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
           <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
         </div>
 
-        <div
+        <button type="button"
           className="mg-header-logo cursor-pointer"
-          role="button"
           aria-label="MY GARAGE"
           onClick={() => handleNavigate("/home")}
         >
-          <span>MY</span>
-          <small>GARAGE</small>
-        </div>
+          <img className="mg-header-brandmark" src={mediaUrl("/assets/mygarage-logo-original.svg")} alt="" aria-hidden="true" />
+        </button>
 
-        <div className="mg-header-side right">
+        <div className="mg-header-side right" id="mg-primary-right">
           <a href="/storage" onClick={(event) => { event.preventDefault(); handleNavigate("/storage"); }}>STORAGE</a>
+          <a href="/events" onClick={(event) => { event.preventDefault(); handleNavigate("/events"); }}>SỰ KIỆN</a>
+          <a href="/partners" onClick={(event) => { event.preventDefault(); handleNavigate("/partners"); }}>ĐỐI TÁC</a>
           <a href="/news" onClick={(event) => { event.preventDefault(); handleNavigate("/news"); }}>TIN TỨC</a>
           <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
         </div>
