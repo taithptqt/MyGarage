@@ -1,5 +1,19 @@
 ﻿import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  MdEventNote,
+  MdAccessTime,
+  MdCheckCircle,
+  MdCancel,
+  MdStore,
+  MdDirectionsCar,
+  MdBuild,
+  MdSearch,
+  MdAdd,
+  MdOutlineNotes,
+  MdCalendarToday,
+  MdRefresh,
+} from "react-icons/md";
 import { useAuth } from "@shared/core/context/AuthContext";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -27,43 +41,88 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false })
     <article className={`my-appt-card ${inGroup ? "my-appt-card-in-group" : ""}`}>
       <div className="my-appt-card-main">
         <div className="my-appt-card-head">
-          <h3>{item.branchName || "Chi nhánh chưa xác định"}</h3>
-          <span className={`my-appt-status ${status.tone}`}>{status.label}</span>
+          <div className="my-appt-branch-info">
+            <div className="my-appt-branch-eyebrow">
+              <MdStore className="my-appt-branch-icon" />
+              <span>CHI NHÁNH TIẾP NHẬN</span>
+            </div>
+            <h3 className="my-appt-branch-name">{item.branchName || "Chi nhánh chưa xác định"}</h3>
+          </div>
+          <span className={`my-appt-status my-appt-status--${status.tone}`}>{status.label}</span>
         </div>
+
         <div className="my-appt-card-grid">
-          <div>
-            <label>Ngày tiếp nhận</label>
-            <p>{formatDate(item.startTime)}</p>
+          <div className="my-appt-grid-tile">
+            <span className="my-appt-tile-label">
+              <MdCalendarToday className="my-appt-tile-icon" /> NGÀY TIẾP NHẬN
+            </span>
+            <p className="my-appt-tile-val">{formatDate(item.startTime)}</p>
           </div>
-          <div>
-            <label>Khung giờ</label>
-            <p>{`${formatTime(item.startTime)} - ${formatTime(item.endTime)}`}</p>
+
+          <div className="my-appt-grid-tile">
+            <span className="my-appt-tile-label">
+              <MdAccessTime className="my-appt-tile-icon" /> KHUNG GIỜ
+            </span>
+            <p className="my-appt-tile-val">{`${formatTime(item.startTime)} - ${formatTime(item.endTime)}`}</p>
           </div>
-          <div>
-            <label>Biển số</label>
-            <p>{item.vehicleLicensePlate || "--"}</p>
+
+          <div className="my-appt-grid-tile">
+            <span className="my-appt-tile-label">
+              <MdDirectionsCar className="my-appt-tile-icon" /> BIỂN SỐ XE
+            </span>
+            {item.vehicleLicensePlate ? (
+              <div className="my-appt-plate-badge">
+                <span className="my-appt-plate-screw" />
+                <span className="my-appt-plate-number">{item.vehicleLicensePlate}</span>
+                <span className="my-appt-plate-screw" />
+              </div>
+            ) : (
+              <p className="my-appt-tile-val">—</p>
+            )}
           </div>
-          <div>
-            <label>Dòng xe</label>
-            <p>{item.vehicleModelName || "--"}</p>
+
+          <div className="my-appt-grid-tile">
+            <span className="my-appt-tile-label">
+              <MdDirectionsCar className="my-appt-tile-icon" /> DÒNG XE
+            </span>
+            <p className="my-appt-tile-val">{item.vehicleModelName || "—"}</p>
           </div>
         </div>
+
         {Array.isArray(item.serviceNames) && item.serviceNames.length > 0 && (
-          <div className="my-appt-service-list">
-            {item.serviceNames.map((serviceName) => (
-              <span key={`${item.id}-${serviceName}`}>{serviceName}</span>
-            ))}
+          <div className="my-appt-services-block">
+            <span className="my-appt-services-label">
+              <MdBuild className="my-appt-services-icon" /> Dịch vụ đăng ký:
+            </span>
+            <div className="my-appt-service-tags">
+              {item.serviceNames.map((serviceName) => (
+                <span key={`${item.id}-${serviceName}`} className="my-appt-service-tag">
+                  {serviceName}
+                </span>
+              ))}
+            </div>
           </div>
         )}
-        <p className="my-appt-note">
-          <strong>Ghi chú:</strong> {item.customerNotes || ""}
-        </p>
+
+        {item.customerNotes && (
+          <div className="my-appt-callout my-appt-callout-note">
+            <MdOutlineNotes className="my-appt-callout-icon" />
+            <div className="my-appt-callout-content">
+              <strong>Ghi chú:</strong> <span>{item.customerNotes}</span>
+            </div>
+          </div>
+        )}
+
         {displayCancelReason && (
-          <p className="my-appt-note cancel">
-            <strong>Lý do hủy:</strong> {displayCancelReason}
-          </p>
+          <div className="my-appt-callout my-appt-callout-cancel">
+            <MdCancel className="my-appt-callout-icon" />
+            <div className="my-appt-callout-content">
+              <strong>Lý do hủy:</strong> <span>{displayCancelReason}</span>
+            </div>
+          </div>
         )}
       </div>
+
       <div className="my-appt-card-actions">
         {canCancel && (
           <button
@@ -72,7 +131,8 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false })
             onClick={() => openCancelPopup(item)}
             disabled={cancelling === item.id}
           >
-            {cancelling === item.id ? "Đang hủy..." : "Hủy lịch"}
+            <MdCancel className="my-appt-btn-icon" />
+            {cancelling === item.id ? "Đang hủy..." : "Hủy lịch hẹn"}
           </button>
         )}
       </div>
@@ -147,40 +207,58 @@ export default function MyAppointmentsPage() {
 
   return (
     <div className="my-appt-page">
+      <Header />
       <div className="my-appt-shell">
-        <Header />
-
-        <section className="my-appt-content">
-          <header className="my-appt-head">
-            <div>
-              <p className="my-appt-eyebrow">Trung tâm lịch hẹn</p>
-              <h1>Lịch hẹn của tôi</h1>
-              <p className="my-appt-description">
-                Theo dõi trạng thái lịch hẹn, thông tin xe và khung giờ xử lý trong một màn hình.
-              </p>
+        <main className="my-appt-content">
+          <section className="my-appt-hero-card">
+            <div className="my-appt-head">
+              <div className="my-appt-head-copy">
+                <div className="my-appt-eyebrow-badge">
+                  <span className="my-appt-eyebrow-dot" />
+                  <span>TRUNG TÂM LỊCH HẸN</span>
+                </div>
+                <h1>Lịch hẹn của tôi</h1>
+                <p className="my-appt-description">
+                  Theo dõi trạng thái lịch hẹn, thông tin xe và khung giờ xử lý trong một màn hình.
+                </p>
+              </div>
+              <div className="my-appt-head-actions">
+                <Link to="/booking/form" className="my-appt-primary-btn">
+                  <MdAdd className="my-appt-btn-icon" /> Đặt lịch mới
+                </Link>
+              </div>
             </div>
-            <Link to="/booking/form" className="my-appt-primary-btn">
-              Đặt lịch mới
-            </Link>
-          </header>
 
-          <section className="my-appt-stats">
-            <article className="my-appt-stat-card">
-              <span>Tổng lịch hẹn</span>
-              <strong>{stats.total}</strong>
-            </article>
-            <article className="my-appt-stat-card">
-              <span>Sắp tới</span>
-              <strong>{stats.upcoming}</strong>
-            </article>
-            <article className="my-appt-stat-card">
-              <span>Đã xác nhận</span>
-              <strong>{stats.confirmed}</strong>
-            </article>
-            <article className="my-appt-stat-card">
-              <span>Đã hủy</span>
-              <strong>{stats.canceled}</strong>
-            </article>
+            <section className="my-appt-stats" aria-label="Thống kê lịch hẹn">
+              <article className="my-appt-stat-card">
+                <div className="my-appt-stat-head">
+                  <span>Tổng lịch hẹn</span>
+                  <MdEventNote className="my-appt-stat-icon" />
+                </div>
+                <strong>{stats.total}</strong>
+              </article>
+              <article className="my-appt-stat-card">
+                <div className="my-appt-stat-head">
+                  <span>Sắp tới</span>
+                  <MdAccessTime className="my-appt-stat-icon my-appt-stat-icon--gold" />
+                </div>
+                <strong>{stats.upcoming}</strong>
+              </article>
+              <article className="my-appt-stat-card">
+                <div className="my-appt-stat-head">
+                  <span>Đã xác nhận</span>
+                  <MdCheckCircle className="my-appt-stat-icon my-appt-stat-icon--success" />
+                </div>
+                <strong>{stats.confirmed}</strong>
+              </article>
+              <article className="my-appt-stat-card">
+                <div className="my-appt-stat-head">
+                  <span>Đã hủy</span>
+                  <MdCancel className="my-appt-stat-icon my-appt-stat-icon--danger" />
+                </div>
+                <strong>{stats.canceled}</strong>
+              </article>
+            </section>
           </section>
 
           <section className="my-appt-view-tabs" aria-label="Loại lịch hẹn">
@@ -189,14 +267,14 @@ export default function MyAppointmentsPage() {
               className={activeTab === APPOINTMENTS_VIEW_TABS.SINGLE ? "active" : ""}
               onClick={() => handleChangeTab(APPOINTMENTS_VIEW_TABS.SINGLE)}
             >
-              Lịch hẹn thường ({filteredAppointments.length})
+              <MdCalendarToday className="my-appt-tab-icon" /> Lịch hẹn thường ({filteredAppointments.length})
             </button>
             <button
               type="button"
               className={activeTab === APPOINTMENTS_VIEW_TABS.GROUP ? "active" : ""}
               onClick={() => handleChangeTab(APPOINTMENTS_VIEW_TABS.GROUP)}
             >
-              Lịch hẹn nhóm ({GroupSessions.length})
+              <MdDirectionsCar className="my-appt-tab-icon" /> Lịch hẹn nhóm ({GroupSessions.length})
             </button>
           </section>
 
@@ -213,27 +291,34 @@ export default function MyAppointmentsPage() {
                 </button>
               ))}
             </div>
-            <input
-              type="text"
-              className="my-appt-search"
-              placeholder={
-                isGroupTab
-                  ? "Tìm theo mã nhóm, chi nhánh, biển số, dịch vụ..."
-                  : "Tìm theo chi nhánh, biển số, dịch vụ..."
-              }
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
+            <div className="my-appt-search-wrap">
+              <MdSearch className="my-appt-search-icon" />
+              <input
+                type="text"
+                className="my-appt-search"
+                placeholder={
+                  isGroupTab
+                    ? "Tìm theo mã nhóm, chi nhánh, biển số, dịch vụ..."
+                    : "Tìm theo chi nhánh, biển số, dịch vụ..."
+                }
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </div>
           </section>
 
           {error && <div className="my-appt-alert my-appt-alert-error">{error}</div>}
 
           {loading ? (
-            <div className="spinner-container">
-              <div className="spinner" />
+            <div className="my-appt-spinner-wrap">
+              <div className="my-appt-spinner" />
+              <p>Đang tải thông tin lịch hẹn...</p>
             </div>
           ) : !hasResults ? (
             <section className="my-appt-empty">
+              <div className="my-appt-empty-icon-wrap">
+                <MdCalendarToday className="my-appt-empty-icon" />
+              </div>
               <h3>Chưa có lịch hẹn phù hợp</h3>
               <p>
                 {filter || searchTerm
@@ -242,12 +327,12 @@ export default function MyAppointmentsPage() {
                     ? "Bạn chưa có lịch hẹn nhóm nào."
                     : "Bạn chưa có lịch hẹn thường nào. Hãy đặt lịch để gara chuẩn bị tiếp nhận xe."}
               </p>
-              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                <Link to="/booking/form" className="my-appt-secondary-btn">
-                  Đặt lịch ngay
+              <div className="my-appt-empty-actions">
+                <Link to="/booking/form" className="my-appt-primary-btn">
+                  <MdAdd className="my-appt-btn-icon" /> Đặt lịch ngay
                 </Link>
-                <button type="button" className="my-appt-secondary-btn" onClick={loadAppointments}>
-                  Tải lại
+                <button type="button" className="my-appt-ghost-btn" onClick={loadAppointments}>
+                  <MdRefresh className="my-appt-btn-icon" /> Tải lại
                 </button>
               </div>
             </section>
@@ -263,13 +348,14 @@ export default function MyAppointmentsPage() {
                   <article key={group.id} className="my-appt-group-block">
                     <header className="my-appt-group-block-head">
                       <div>
+                        <div className="my-appt-group-eyebrow">MÃ NHÓM LỊCH HẸN</div>
                         <h3>{group.groupCode || "Nhóm lịch hẹn"}</h3>
-                        <p>
+                        <p className="my-appt-group-meta">
                           {visibleCount}
                           {totalCount > 0 ? `/${totalCount}` : ""} lịch hẹn đang hiển thị
                         </p>
                       </div>
-                      <span className={`my-appt-status ${groupStatus.tone}`}>{groupStatus.label}</span>
+                      <span className={`my-appt-status my-appt-status--${groupStatus.tone}`}>{groupStatus.label}</span>
                     </header>
 
                     <div className="my-appt-group-appointments">
@@ -299,37 +385,47 @@ export default function MyAppointmentsPage() {
               ))}
             </section>
           )}
-        </section>
+        </main>
 
         <Footer />
       </div>
 
       {cancelTarget && (
-        <div className="cancel-overlay" onClick={closeCancelPopup}>
-          <div className="cancel-popup" onClick={(event) => event.stopPropagation()}>
-            <h3>Xác nhận hủy lịch hẹn</h3>
-            <p className="my-appt-cancel-desc">
-              Bạn có chắc muốn hủy lịch tại <strong>{cancelTarget.branchName}</strong> vào{" "}
-              <strong>{formatDate(cancelTarget.startTime)}</strong>,{" "}
-              <strong>{formatTime(cancelTarget.startTime)} - {formatTime(cancelTarget.endTime)}</strong>?
-            </p>
+        <div className="my-appt-cancel-overlay" onClick={closeCancelPopup}>
+          <div className="my-appt-cancel-popup" onClick={(event) => event.stopPropagation()}>
+            <div className="my-appt-cancel-popup-head">
+              <div className="my-appt-cancel-icon-wrap">
+                <MdCancel className="my-appt-cancel-icon" />
+              </div>
+              <div>
+                <h3>Xác nhận hủy lịch hẹn</h3>
+                <p className="my-appt-cancel-desc">
+                  Bạn có chắc muốn hủy lịch tại <strong>{cancelTarget.branchName}</strong> vào{" "}
+                  <strong>{formatDate(cancelTarget.startTime)}</strong> (
+                  <strong>{formatTime(cancelTarget.startTime)} - {formatTime(cancelTarget.endTime)}</strong>)?
+                </p>
+              </div>
+            </div>
+
             <div className="my-appt-cancel-form">
               <label htmlFor="cancel-reason">Lý do hủy (tùy chọn)</label>
               <textarea
                 id="cancel-reason"
-                className="cancel-reason-input"
-                placeholder="Ví dụ: thay đổi kế hoạch cá nhân"
+                className="my-appt-cancel-reason-input"
+                placeholder="Ví dụ: thay đổi kế hoạch cá nhân..."
                 value={cancelReason}
                 onChange={(event) => setCancelReason(event.target.value)}
                 rows={3}
               />
             </div>
+
             {error && <div className="my-appt-alert my-appt-alert-error">{error}</div>}
+
             <div className="my-appt-popup-actions">
-              <button type="button" className="btn-popup-secondary" onClick={closeCancelPopup} disabled={cancelling}>
+              <button type="button" className="my-appt-btn-popup-secondary" onClick={closeCancelPopup} disabled={cancelling}>
                 Quay lại
               </button>
-              <button type="button" className="btn-popup-danger" onClick={handleConfirmCancel} disabled={cancelling}>
+              <button type="button" className="my-appt-btn-popup-danger" onClick={handleConfirmCancel} disabled={cancelling}>
                 {cancelling ? "Đang hủy..." : "Xác nhận hủy"}
               </button>
             </div>
@@ -339,4 +435,3 @@ export default function MyAppointmentsPage() {
     </div>
   );
 }
-

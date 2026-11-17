@@ -120,8 +120,32 @@ public sealed partial class EfInventoryStore
 
     public Task<MaterialRequest?> GetMaterialRequestByIdAsync(long requestId, CancellationToken ct = default)
     {
-        return _db.MaterialRequests
+        var requests = _db.Database.IsSqlServer() && _db.Database.CurrentTransaction != null
+            ? _db.MaterialRequests.FromSqlInterpolated($"SELECT * FROM dbo.MaterialRequests WITH (UPDLOCK, ROWLOCK) WHERE Id = {requestId}")
+            : _db.MaterialRequests.AsQueryable();
+        return requests
             .FirstOrDefaultAsync(m => m.Id == requestId, ct);
+    }
+
+    public async Task<IReadOnlyList<ServiceOrderDetail>> GetQuotationOrderDetailsAsync(long quotationId, CancellationToken ct = default)
+    {
+        return await _db.ServiceOrderDetails
+            .Where(d => d.SourceQuotationId == quotationId && d.QuotationDetailId != null)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestDetail>> GetRequestsForOrderDetailsAsync(IReadOnlyCollection<long> orderDetailIds, CancellationToken ct = default)
+    {
+        return await _db.MaterialRequestDetails.Include(d => d.Request)
+            .Where(d => d.ServiceOrderDetailId.HasValue && orderDetailIds.Contains(d.ServiceOrderDetailId.Value))
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestDetail>> GetUnlinkedRequestsForOrderAsync(long serviceOrderId, CancellationToken ct = default)
+    {
+        return await _db.MaterialRequestDetails.Include(d => d.Request)
+            .Where(d => d.ServiceOrderDetailId == null && d.Request.ServiceOrderId == serviceOrderId)
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<MaterialRequestDetail>> GetMaterialRequestDetailsAsync(long requestId, CancellationToken ct = default)
@@ -133,7 +157,10 @@ public sealed partial class EfInventoryStore
 
     public Task<MyGarage.Models.Inventory?> GetTrackedInventoryAsync(long productId, long warehouseId, CancellationToken ct = default)
     {
-        return _db.Inventories
+        var inventories = _db.Database.IsSqlServer() && _db.Database.CurrentTransaction != null
+            ? _db.Inventories.FromSqlInterpolated($"SELECT * FROM dbo.Inventories WITH (UPDLOCK, ROWLOCK) WHERE ProductId = {productId} AND WarehouseId = {warehouseId}")
+            : _db.Inventories.AsQueryable();
+        return inventories
             .FirstOrDefaultAsync(i => i.ProductId == productId && i.WarehouseId == warehouseId, ct);
     }
 }

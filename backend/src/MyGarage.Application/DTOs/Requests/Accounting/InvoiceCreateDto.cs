@@ -20,5 +20,6 @@ namespace MyGarage.DTOs.Requests
         public long? PayerId { get; set; }
         public string? CreditNote { get; set; }
         public DateTime? IssuedAt { get; set; }
+        public DateTime? DueDate { get; set; }
     }
 }

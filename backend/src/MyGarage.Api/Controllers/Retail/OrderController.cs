@@ -8,16 +8,20 @@ namespace MyGarage.Controllers;
 [ApiController]
 [Route("api/v1/orders")]
 public partial class OrderController(
-    IOrderCommandFacade orderCommandFacade) : ControllerBase
+    IOrderCommandFacade orderCommandFacade,
+    ILogger<OrderController> logger) : ControllerBase
 {
     private readonly IOrderCommandFacade _orderCommandFacade = orderCommandFacade;
+    private readonly ILogger<OrderController> _logger = logger;
 
     private ActionResult MapOrderCommandStatusError(int statusCode, object? errorPayload) => statusCode switch
     {
         401 => Unauthorized(),
         403 => Forbid(),
         404 => errorPayload == null ? NotFound() : NotFound(errorPayload),
-        _ => BadRequest(errorPayload)
+        400 => BadRequest(errorPayload),
+        >= 400 and < 500 => StatusCode(statusCode, errorPayload),
+        _ => this.ProblemMessage(StatusCodes.Status500InternalServerError, "Failed to process order")
     };
 
     private ActionResult<T> MapOrderCommandError<T>(OrderCommandResult<T> result) =>
@@ -50,12 +54,14 @@ public partial class OrderController(
 
             return CreatedAtAction(nameof(Get), new { id = result.Data.Id }, result.Data);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            return this.ProblemMessage(
-                StatusCodes.Status500InternalServerError,
-                "Failed to create order",
-                extensions: new Dictionary<string, object?> { ["error"] = ex.Message });
+            _logger.LogError(ex, "Failed to create order");
+            return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Failed to create order");
         }
     }
 }

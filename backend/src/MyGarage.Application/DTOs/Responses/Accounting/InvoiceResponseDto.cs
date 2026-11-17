@@ -24,6 +24,7 @@ namespace MyGarage.DTOs.Responses
         public long? CreditApprovedByStaffId { get; set; }
         public string? CreditNote { get; set; }
         public DateTime? IssuedAt { get; set; }
+        public DateTime? DueDate { get; set; }
         public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }

@@ -1,52 +1,29 @@
-using System.Text.Json;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Models;
 
 namespace MyGarage.Application.Bays;
 
 internal static class BayAdminSettingsHelper
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
+    private const string SettingsFileName = "bay-admin-settings.json";
 
-    public static string GetSettingsPath(string contentRootPath)
+    public static async Task<BayAdminSettings> ReadSettingsAsync(
+        IAppConfigFileStore configStore,
+        CancellationToken ct = default)
     {
-        var folder = Path.Combine(contentRootPath, "Configurations");
-        Directory.CreateDirectory(folder);
-        return Path.Combine(folder, "bay-admin-settings.json");
+        var settings = await configStore.ReadStrictOrDefaultAsync(SettingsFileName, BayAdminSettings.CreateDefault, ct);
+        settings.Normalize();
+        return settings;
     }
 
-    public static async Task<BayAdminSettings> ReadSettingsAsync(string contentRootPath)
+    public static Task WriteSettingsAsync(
+        IAppConfigFileStore configStore,
+        BayAdminSettings settings,
+        CancellationToken ct = default)
     {
-        var settingsPath = GetSettingsPath(contentRootPath);
-        if (!File.Exists(settingsPath))
-        {
-            return BayAdminSettings.CreateDefault();
-        }
-
-        try
-        {
-            await using var stream = File.OpenRead(settingsPath);
-            var settings = await JsonSerializer.DeserializeAsync<BayAdminSettings>(stream, JsonOptions)
-                           ?? BayAdminSettings.CreateDefault();
-            settings.Normalize();
-            return settings;
-        }
-        catch
-        {
-            return BayAdminSettings.CreateDefault();
-        }
-    }
-
-    public static async Task WriteSettingsAsync(string contentRootPath, BayAdminSettings settings)
-    {
-        var settingsPath = GetSettingsPath(contentRootPath);
         settings.Normalize();
         settings.UpdatedAt = VietnamTime.Now;
-
-        await using var stream = File.Create(settingsPath);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
+        return configStore.WriteAsync(SettingsFileName, settings, ct);
     }
 
     public static BayMetadata ResolveMetadata(BayAdminSettings settings, long bayId)
@@ -64,8 +41,10 @@ internal static class BayAdminSettingsHelper
     {
         if (bay.IsDeleted == true) return "Khoang đã bị ẩn.";
         if (bay.IsActive == false) return "Khoang đang bị khóa.";
-        if (normalizedStatus == BayAdminConstants.StatusUnderMaintenance) return "Khoang đang bảo trì.";
-        if (normalizedStatus == BayAdminConstants.StatusBroken) return "Khoang đang tạm ngưng.";
+        if (normalizedStatus == BayAdminConstants.StatusMaintenance) return "Khoang đang bảo trì hoặc gặp sự cố.";
+        if (normalizedStatus == BayAdminConstants.StatusSuspended) return "Khoang đang tạm ngưng.";
+        if (normalizedStatus != BayAdminConstants.StatusEmpty && normalizedStatus != BayAdminConstants.StatusInUse)
+            return "Trạng thái khoang không hợp lệ để gán xe.";
         return string.Empty;
     }
 

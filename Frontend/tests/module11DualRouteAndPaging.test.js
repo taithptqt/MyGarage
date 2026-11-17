@@ -34,7 +34,7 @@ function createMockRequester(behavior = {}) {
   const calls = [];
   const requester = async (config) => {
     calls.push(config);
-    if (behavior.shouldFail404 && behavior.shouldFail404(config.url)) {
+    if (behavior.shouldFail404 && behavior.shouldFail404(config.url, calls.length)) {
       const err = new Error(`Not Found: ${config.url}`);
       err.status = 404;
       err.response = { status: 404 };
@@ -81,7 +81,7 @@ test("buildBoundedPaginationParams in chatbotApi and aiAdminApi enforces boundar
 
 test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to /api/chatbot/... on 404", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ ok: true, url: config.url }),
   });
 
@@ -89,7 +89,7 @@ test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to 
   await createChatbotSession({ channel: "WEB" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/chatbot/sessions");
-  assert.equal(calls[1].url, "/api/chatbot/sessions");
+  assert.equal(calls[1].url, "/api/v1/chatbot/sessions");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].data.channel, "WEB");
 
@@ -97,8 +97,8 @@ test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to 
   calls.length = 0;
   await orchestrateChatbot({ sessionId: 12, userMessage: "Bảo dưỡng định kỳ" }, requester);
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, "/api/v1/chatbot/orchestrate");
-  assert.equal(calls[1].url, "/api/chatbot/orchestrate");
+  assert.equal(calls[0].url, "/api/v1/chatbot/orchestrations");
+  assert.equal(calls[1].url, "/api/v1/chatbot/orchestrations");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].data.sessionId, 12);
 
@@ -107,7 +107,7 @@ test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to 
   await getChatbotSession(12, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/chatbot/sessions/12");
-  assert.equal(calls[1].url, "/api/chatbot/sessions/12");
+  assert.equal(calls[1].url, "/api/v1/chatbot/sessions/12");
   assert.equal(calls[0].method, "GET");
 
   // 4. saveChatbotMessages
@@ -115,7 +115,7 @@ test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to 
   await saveChatbotMessages({ sessionId: 12, content: "Xin chào" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/chatbot/messages");
-  assert.equal(calls[1].url, "/api/chatbot/messages");
+  assert.equal(calls[1].url, "/api/v1/chatbot/messages");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].data.content, "Xin chào");
 
@@ -123,15 +123,15 @@ test("chatbotApi dual routes endpoints to /api/v1/chatbot/... and falls back to 
   calls.length = 0;
   await uploadChatbotImage({ sessionId: 12, prompt: "Kiểm tra vết xước" }, requester);
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, "/api/v1/chatbot/upload-image");
-  assert.equal(calls[1].url, "/api/chatbot/upload-image");
+  assert.equal(calls[0].url, "/api/v1/chatbot/images");
+  assert.equal(calls[1].url, "/api/v1/chatbot/images");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].headers["Content-Type"], "multipart/form-data");
 });
 
 test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with bounded pagination", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ ok: true, url: config.url }),
   });
 
@@ -139,7 +139,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await getAiForecasts({ branchId: 1, page: -2, pageSize: 500 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-forecasts");
-  assert.equal(calls[1].url, "/api/ai-forecasts");
+  assert.equal(calls[1].url, "/api/v1/ai-forecasts");
   assert.equal(calls[0].method, "GET");
   assert.equal(calls[0].params.branchId, 1);
   assert.equal(calls[0].params.page, 1);
@@ -150,7 +150,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await getAiKnowledgePage({ search: "phanh", page: 2, pageSize: 25 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-knowledge-bases/page");
-  assert.equal(calls[1].url, "/api/ai-knowledge-bases/page");
+  assert.equal(calls[1].url, "/api/v1/ai-knowledge-bases/page");
   assert.equal(calls[0].method, "GET");
   assert.equal(calls[0].params.search, "phanh");
   assert.equal(calls[0].params.page, 2);
@@ -161,7 +161,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await createAiKnowledgeEntry({ title: "Quy trình thay dầu", category: "MAINTENANCE" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-knowledge-bases");
-  assert.equal(calls[1].url, "/api/ai-knowledge-bases");
+  assert.equal(calls[1].url, "/api/v1/ai-knowledge-bases");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].data.title, "Quy trình thay dầu");
 
@@ -170,7 +170,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await updateAiKnowledgeEntry(33, { title: "Quy trình thay dầu máy" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-knowledge-bases/33");
-  assert.equal(calls[1].url, "/api/ai-knowledge-bases/33");
+  assert.equal(calls[1].url, "/api/v1/ai-knowledge-bases/33");
   assert.equal(calls[0].method, "PUT");
 
   // 5. deleteAiKnowledgeEntry
@@ -178,7 +178,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await deleteAiKnowledgeEntry(33, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-knowledge-bases/33");
-  assert.equal(calls[1].url, "/api/ai-knowledge-bases/33");
+  assert.equal(calls[1].url, "/api/v1/ai-knowledge-bases/33");
   assert.equal(calls[0].method, "DELETE");
 
   // 6. getAiModelConfigPage
@@ -186,7 +186,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await getAiModelConfigPage({}, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-model-configs/page");
-  assert.equal(calls[1].url, "/api/ai-model-configs/page");
+  assert.equal(calls[1].url, "/api/v1/ai-model-configs/page");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 20);
 
@@ -195,7 +195,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await createAiModelConfig({ modelName: "gemini-2.5-flash", temperature: 0.2 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-model-configs");
-  assert.equal(calls[1].url, "/api/ai-model-configs");
+  assert.equal(calls[1].url, "/api/v1/ai-model-configs");
   assert.equal(calls[0].method, "POST");
 
   // 8. updateAiModelConfig
@@ -203,7 +203,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await updateAiModelConfig(9, { temperature: 0.1 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-model-configs/9");
-  assert.equal(calls[1].url, "/api/ai-model-configs/9");
+  assert.equal(calls[1].url, "/api/v1/ai-model-configs/9");
   assert.equal(calls[0].method, "PUT");
 
   // 9. getAiSmartDispatchings
@@ -211,7 +211,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await getAiSmartDispatchings({ branchId: 2, pageSize: 300 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-smart-dispatchings");
-  assert.equal(calls[1].url, "/api/ai-smart-dispatchings");
+  assert.equal(calls[1].url, "/api/v1/ai-smart-dispatchings");
   assert.equal(calls[0].params.branchId, 2);
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 100);
@@ -221,7 +221,7 @@ test("aiAdminApi dual routes all AI admin endpoints and falls back on 404 with b
   await recommendBayForOrder(501, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/ai-smart-dispatchings/recommend-bay/501");
-  assert.equal(calls[1].url, "/api/ai-smart-dispatchings/recommend-bay/501");
+  assert.equal(calls[1].url, "/api/v1/ai-smart-dispatchings/recommend-bay/501");
   assert.equal(calls[0].method, "GET");
 });
 

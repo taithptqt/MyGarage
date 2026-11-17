@@ -146,7 +146,8 @@ function pickCategoryPreset(name, index) {
 
 export default function BookingIntroPage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const showBookingButtons = !isAuthenticated || String(user?.roleCode || user?.RoleCode || "").toUpperCase() === "CUSTOMER";
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -320,17 +321,39 @@ export default function BookingIntroPage() {
           alt="Không gian kỹ thuật gara chuyên nghiệp"
         />
         <div className="booking-intro-hero-content">
-          <p className="booking-intro-eyebrow">MY GARAGE PREMIUM CARE</p>
-          <h1>Dịch vụ gara chuyên nghiệp cho mọi hành trình của bạn</h1>
-          <p>
-            Từ bảo dưỡng định kỳ đến xử lý lỗi chuyên sâu, đội ngũ kỹ thuật viên của
-            MyGarage mang lại quy trình rõ ràng, chất lượng ổn định và trải nghiệm
-            dịch vụ đẳng cấp.
-          </p>
+          <h1 className="mg-scene-fade-up mg-scene-delay-1">Dịch vụ gara chuyên nghiệp cho mọi hành trình của bạn</h1>
+          <div className="booking-intro-hero-row mg-scene-fade-up mg-scene-delay-2">
+            <p>
+              Từ bảo dưỡng định kỳ đến xử lý lỗi chuyên sâu, đội ngũ kỹ thuật viên của
+              MyGarage mang lại quy trình rõ ràng, chất lượng ổn định và trải nghiệm
+              dịch vụ đẳng cấp.
+            </p>
+            {showBookingButtons && <button
+              type="button"
+              className="booking-intro-primary booking-intro-hero-cta"
+              onClick={handleStartBooking}
+            >
+              <span>Đặt lịch ngay</span>
+              <svg
+                className="booking-intro-hero-cta-icon"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4.5 10h11m0 0-4.25-4.25M15.5 10l-4.25 4.25"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>}
+          </div>
         </div>
       </section>
 
-      <section className="booking-intro-highlights">
+      <section className="booking-intro-highlights mg-scene-fade-up mg-scene-delay-3">
         {highlights.map((item) => (
           <article key={item.label} className="booking-intro-highlight-card">
             <h3>{item.number}</h3>
@@ -347,7 +370,7 @@ export default function BookingIntroPage() {
         <div className="booking-intro-service-grid">
           {showcaseServices.map((service) => (
             <article key={service.title} className="booking-intro-service-card">
-              <img src={service.image} alt={service.title} />
+              <img src={service.image} alt={service.title} loading="lazy" />
               <div className="booking-intro-service-body">
                 <h3>{service.title}</h3>
                 <p>{service.desc}</p>
@@ -433,13 +456,13 @@ export default function BookingIntroPage() {
           Đặt lịch ngay để chọn khung giờ phù hợp, tránh chờ đợi và nhận tư vấn
           chính xác theo tình trạng xe.
         </p>
-        <button
+        {showBookingButtons && <button
           type="button"
           className="booking-intro-primary booking-intro-primary-large"
           onClick={handleStartBooking}
         >
           Đặt lịch ngay
-        </button>
+        </button>}
       </section>
 
       <Footer />

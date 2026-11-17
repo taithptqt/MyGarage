@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 
 namespace MyGarage.Application.Bays;
 
@@ -6,20 +7,22 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
 {
     private readonly IBayAdminWriteDataService _writeDataService;
     private readonly IBayVehicleLookupDataService _vehicleLookupDataService;
+    private readonly IAppConfigFileStore _configStore;
 
     public BayAdminVehicleAssignmentService(
         IBayAdminWriteDataService writeDataService,
-        IBayVehicleLookupDataService vehicleLookupDataService)
+        IBayVehicleLookupDataService vehicleLookupDataService,
+        IAppConfigFileStore configStore)
     {
         _writeDataService = writeDataService;
         _vehicleLookupDataService = vehicleLookupDataService;
+        _configStore = configStore;
     }
 
     public async Task<BayAdminCommandResult> AssignVehicleAsync(
         long id,
         AssignVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         if (request.VehicleId <= 0) return BayAdminCommandResult.BadRequest("VehicleId is required.");
@@ -30,7 +33,7 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         var vehicle = await _vehicleLookupDataService.LoadVehicleDescriptorAsync(request.VehicleId, ct);
         if (vehicle == null) return BayAdminCommandResult.BadRequest("Không tìm thấy xe cần gán.");
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var metadata = BayAdminSettingsHelper.ResolveMetadata(settings, bay.Id);
         var now = VietnamTime.Now;
 
@@ -51,6 +54,11 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         if (bay.CurrentOccupiedVehicleId.HasValue)
         {
             activeVehicleSet.Add(bay.CurrentOccupiedVehicleId.Value);
+        }
+
+        if (activeVehicleSet.Contains(request.VehicleId))
+        {
+            return BayAdminCommandResult.BadRequest("Xe đã được gán vào khoang này.");
         }
 
         if (activeVehicleSet.Count >= metadata.Capacity)
@@ -98,7 +106,7 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         bay.UpdatedBy = currentUserId;
 
         await _writeDataService.SaveChangesInTransactionAsync(ct);
-        await BayAdminSettingsHelper.WriteSettingsAsync(contentRootPath, settings);
+        await BayAdminSettingsHelper.WriteSettingsAsync(_configStore, settings, ct);
 
         return BayAdminCommandResult.Ok(new { message = "Vehicle assigned to bay successfully." });
     }
@@ -107,13 +115,12 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         long id,
         RemoveVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         var bay = await _writeDataService.GetBayByIdAsync(id, ct);
         if (bay == null) return BayAdminCommandResult.NotFound("Khoang không tồn tại.");
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var now = VietnamTime.Now;
 
         var activeSessions = settings.Sessions
@@ -123,6 +130,9 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         var targetSessions = request.VehicleId.HasValue
             ? activeSessions.Where(s => s.VehicleId == request.VehicleId.Value).ToList()
             : activeSessions;
+
+        if (request.VehicleId.HasValue && targetSessions.Count == 0 && bay.CurrentOccupiedVehicleId != request.VehicleId.Value)
+            return BayAdminCommandResult.BadRequest("Xe không nằm trong khoang này.");
 
         foreach (var session in targetSessions)
         {
@@ -145,6 +155,8 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
             .Select(s => s.VehicleId)
             .Distinct()
             .ToList();
+        if (bay.CurrentOccupiedVehicleId.HasValue && !remainingVehicleIds.Contains(bay.CurrentOccupiedVehicleId.Value))
+            remainingVehicleIds.Add(bay.CurrentOccupiedVehicleId.Value);
 
         if (remainingVehicleIds.Count > 0)
         {
@@ -166,7 +178,7 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         bay.UpdatedBy = currentUserId;
 
         await _writeDataService.SaveChangesInTransactionAsync(ct);
-        await BayAdminSettingsHelper.WriteSettingsAsync(contentRootPath, settings);
+        await BayAdminSettingsHelper.WriteSettingsAsync(_configStore, settings, ct);
 
         return BayAdminCommandResult.Ok(new { message = "Vehicle removed from bay successfully." });
     }
@@ -174,7 +186,6 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
     public async Task<BayAdminCommandResult> MoveVehicleAsync(
         MoveVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         if (request.VehicleId <= 0) return BayAdminCommandResult.BadRequest("VehicleId is required.");
@@ -186,11 +197,13 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         var fromBay = bays.FirstOrDefault(b => b.Id == request.FromBayId);
         var toBay = bays.FirstOrDefault(b => b.Id == request.ToBayId);
         if (fromBay == null || toBay == null) return BayAdminCommandResult.BadRequest("Khoang nguồn hoặc đích không tồn tại.");
+        if (fromBay.BranchId != toBay.BranchId)
+            return BayAdminCommandResult.BadRequest("Không thể chuyển xe trực tiếp giữa các chi nhánh; cần xử lý bàn giao chi nhánh trước.");
 
         var vehicle = await _vehicleLookupDataService.LoadVehicleDescriptorAsync(request.VehicleId, ct);
         if (vehicle == null) return BayAdminCommandResult.BadRequest("Không tìm thấy xe cần điều phối.");
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var metadata = BayAdminSettingsHelper.ResolveMetadata(settings, toBay.Id);
         var now = VietnamTime.Now;
 
@@ -219,6 +232,9 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         {
             targetActiveVehicleSet.Add(toBay.CurrentOccupiedVehicleId.Value);
         }
+
+        if (targetActiveVehicleSet.Contains(request.VehicleId))
+            return BayAdminCommandResult.BadRequest("Xe đã được gán vào khoang đích; cần đối soát trước khi điều chuyển.");
 
         if (targetActiveVehicleSet.Count >= metadata.Capacity)
         {
@@ -271,10 +287,13 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
             .Select(s => s.VehicleId)
             .Distinct()
             .ToList();
+        if (fromBay.CurrentOccupiedVehicleId.HasValue && fromBay.CurrentOccupiedVehicleId != request.VehicleId &&
+            !remainingInSource.Contains(fromBay.CurrentOccupiedVehicleId.Value))
+            remainingInSource.Add(fromBay.CurrentOccupiedVehicleId.Value);
 
         fromBay.CurrentOccupiedVehicleId = remainingInSource.FirstOrDefault();
         if (fromBay.CurrentOccupiedVehicleId == 0) fromBay.CurrentOccupiedVehicleId = null;
-        if (fromBay.CurrentOccupiedVehicleId == null && BayAdminSettingsHelper.NormalizeOperationalStatus(fromBay.OperationalStatus) == BayAdminConstants.StatusActive)
+        if (fromBay.CurrentOccupiedVehicleId == null && BayAdminSettingsHelper.NormalizeOperationalStatus(fromBay.OperationalStatus) == BayAdminConstants.StatusInUse)
         {
             fromBay.OperationalStatus = BayAdminConstants.StatusActive;
         }
@@ -286,9 +305,9 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         {
             toBay.CurrentOccupiedVehicleId = request.VehicleId;
         }
-        if (targetStatus == BayAdminConstants.StatusActive)
+        if (targetStatus == BayAdminConstants.StatusEmpty)
         {
-            toBay.OperationalStatus = BayAdminConstants.StatusActive;
+            toBay.OperationalStatus = BayAdminConstants.StatusInUse;
         }
         toBay.ReservationStatus = BayAdminConstants.ReservationStatusOccupied;
 
@@ -300,7 +319,7 @@ public sealed class BayAdminVehicleAssignmentService : IBayAdminVehicleAssignmen
         toBay.UpdatedBy = currentUserId;
 
         await _writeDataService.SaveChangesInTransactionAsync(ct);
-        await BayAdminSettingsHelper.WriteSettingsAsync(contentRootPath, settings);
+        await BayAdminSettingsHelper.WriteSettingsAsync(_configStore, settings, ct);
 
         return BayAdminCommandResult.Ok(new { message = "Vehicle moved successfully." });
     }

@@ -24,13 +24,13 @@ namespace MyGarage.Services
 
         private readonly IAppointmentReadService _appointmentReadService;
         private readonly IAppointmentLifecycleCommandService _appointmentLifecycleService;
-        private readonly IAuditLogService _auditLogService;
+        private readonly IAuditLogWriter _auditLogService;
         private readonly IAppointmentDataService _dataService;
 
         public AppointmentEditRequestService(
             IAppointmentReadService appointmentReadService,
             IAppointmentLifecycleCommandService appointmentLifecycleService,
-            IAuditLogService auditLogService,
+            IAuditLogWriter auditLogService,
             IAppointmentDataService dataService)
         {
             _appointmentReadService = appointmentReadService;
@@ -50,7 +50,7 @@ namespace MyGarage.Services
                 return AppointmentsCommandResult<AppointmentEditCapabilityResponseDto>.NotFound();
             }
 
-            if (!CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
+            if (!AppointmentAccessPolicy.CanAccess(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
             {
                 return AppointmentsCommandResult<AppointmentEditCapabilityResponseDto>.Forbid();
             }
@@ -272,16 +272,6 @@ namespace MyGarage.Services
                     ? "Đã duyệt yêu cầu sửa lịch hẹn."
                     : "Đã từ chối yêu cầu sửa lịch hẹn."
             });
-        }
-
-        internal static bool CanAccessAppointment(long customerId, long branchId, AppointmentActorContext actor)
-        {
-            if (actor.IsStaffUser)
-            {
-                return actor.IsAdminStaff || branchId == actor.CurrentBranchId;
-            }
-
-            return actor.CurrentUserId.HasValue && customerId == actor.CurrentUserId.Value;
         }
 
         internal static string NormalizeSearchToken(string? value)

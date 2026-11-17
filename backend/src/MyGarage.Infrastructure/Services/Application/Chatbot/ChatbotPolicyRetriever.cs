@@ -153,6 +153,7 @@ internal sealed class ChatbotPolicyRetriever
 
         var records = await _context.AiKnowledgeBases
             .AsNoTracking()
+            .Where(x => x.Topic.StartsWith("PUBLIC:") || x.Topic.StartsWith("CUSTOMER:"))
             .Select(x => new
             {
                 Entity = x,

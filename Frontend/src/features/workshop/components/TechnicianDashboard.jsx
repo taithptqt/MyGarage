@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import TechnicianRepairWorkspace from "./TechnicianRepairWorkspace";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllStaff } from "@features/admin/api/staffApi";
@@ -305,8 +306,8 @@ export default function TechnicianDashboard() {
       const [ordersRes, staffRes, assignmentsRes, detailsRes, boardRes, vehiclesRes, vehicleModelsRes, vehicleBrandsRes, teamsRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllStaff(),
-        request({ url: "/api/service-staff-assignments", method: "GET" }),
-        request({ url: "/api/service-order-details", method: "GET" }),
+        request({ url: "/api/v1/service-staff-assignments", method: "GET" }),
+        request({ url: "/api/v1/service-order-details", method: "GET" }),
         serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
         getAllVehicles(),
         getAllVehicleModels(),
@@ -675,6 +676,7 @@ export default function TechnicianDashboard() {
   return (
     <Box p={{ base: 4, md: 6 }} minH="100vh" bg="linear-gradient(180deg, #f4f7ff 0%, #eef4ff 100%)">
       <VStack align="stretch" spacing={5}>
+        <TechnicianRepairWorkspace />
         <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={3} flexWrap="wrap">
           <Box>
             <Heading size="lg" color="#1b2559">Bảng điều khiển Kỹ thuật viên</Heading>

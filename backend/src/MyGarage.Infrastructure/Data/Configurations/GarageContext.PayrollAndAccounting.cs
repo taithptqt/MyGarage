@@ -147,6 +147,8 @@ public partial class GarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Invoices__3214EC077603BEDB");
 
+            entity.Property(e => e.DueDate).HasColumnType("date");
+
             entity.Property(e => e.Address).HasMaxLength(500);
             entity.Property(e => e.CompanyAddress).HasMaxLength(500);
             entity.Property(e => e.CompanyName).HasMaxLength(255);

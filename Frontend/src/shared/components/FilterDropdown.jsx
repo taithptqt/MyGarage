@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import "./FilterDropdown.css";
 
 const labelStyle = {
@@ -37,13 +37,30 @@ export default function FilterDropdown({
   fullWidth = false,
 }) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [hoveredValue, setHoveredValue] = useState(null);
+  const containerRef = useRef(null);
 
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options]);
   const selected = useMemo(
     () => normalizedOptions.find((option) => String(option.value) === String(value)) || normalizedOptions[0],
     [normalizedOptions, value]
   );
+
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+    setOpen((prev) => !prev);
+  };
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, width: fullWidth ? "100%" : undefined }}>
@@ -52,13 +69,19 @@ export default function FilterDropdown({
       ) : null}
 
       <div
+        ref={containerRef}
         tabIndex={-1}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) {
             setOpen(false);
           }
         }}
-        style={{ position: "relative", minWidth, width: fullWidth ? "100%" : undefined }}
+        style={{
+          position: "relative",
+          minWidth,
+          width: fullWidth ? "100%" : undefined,
+          zIndex: open ? 50 : 1,
+        }}
       >
         <button
           id={id}
@@ -67,10 +90,7 @@ export default function FilterDropdown({
           aria-label={ariaLabel || label || "dropdown"}
           aria-haspopup="listbox"
           aria-expanded={open}
-          onClick={() => {
-            if (disabled) return;
-            setOpen((prev) => !prev);
-          }}
+          onClick={handleToggle}
           style={{
             width: "100%",
             height: 36,
@@ -97,7 +117,7 @@ export default function FilterDropdown({
               height: 8,
               borderRight: "2px solid #6b7e9c",
               borderBottom: "2px solid #6b7e9c",
-              transform: open ? "rotate(-135deg)" : "rotate(45deg)",
+              transform: open ? (openUpward ? "rotate(45deg)" : "rotate(-135deg)") : (openUpward ? "rotate(-135deg)" : "rotate(45deg)"),
               marginBottom: open ? -3 : 3,
               transition: "all .15s ease",
             }}
@@ -110,19 +130,22 @@ export default function FilterDropdown({
             className="filter-dropdown-menu"
             style={{
               position: "absolute",
-              top: "calc(100% + 6px)",
+              top: openUpward ? "auto" : "calc(100% + 6px)",
+              bottom: openUpward ? "calc(100% + 6px)" : "auto",
               left: 0,
               width: menuMinWidth ? Math.max(minWidth || 0, menuMinWidth) : "100%",
               minWidth: menuMinWidth || "100%",
               maxWidth: "min(92vw, 760px)",
-              zIndex: 40,
+              zIndex: 1000,
               background: "#ffffff",
               border: "1px solid #dbe4f2",
               borderRadius: 12,
               padding: 6,
               maxHeight: 280,
               overflowY: "auto",
-              boxShadow: "0 10px 24px rgba(58, 99, 168, 0.18)",
+              boxShadow: openUpward
+                ? "0 -10px 24px rgba(58, 99, 168, 0.18)"
+                : "0 10px 24px rgba(58, 99, 168, 0.18)",
             }}
           >
             {normalizedOptions.map((option) => {

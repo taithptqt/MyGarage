@@ -84,6 +84,29 @@ function resolveVehiclePlateDisplay(order, vehicleById) {
   return firstNonEmptyText(vehicle?.licensePlate, vehicle?.LicensePlate, vehicle?.plateNumber, vehicle?.PlateNumber, "-");
 }
 
+function resolveVehicleModelDisplay(order, vehicleById) {
+  const directText = firstNonEmptyText(
+    readField(
+      order,
+      "vehicleModel",
+      "VehicleModel",
+      "carModel",
+      "CarModel",
+      "modelName",
+      "ModelName",
+    ),
+    order?.vehicle?.model,
+    order?.vehicle?.Model,
+    order?.customerVehicle?.model,
+    order?.customerVehicle?.Model,
+  );
+  if (directText) return directText;
+
+  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+  return firstNonEmptyText(vehicle?.model, vehicle?.Model, vehicle?.modelName, vehicle?.ModelName, "");
+}
+
 function recommendationDisplayName(row, serviceLookup, productLookup) {
   const type = normalizeRecommendationItemType(readField(row, "itemType", "ItemType"));
   if (type === "SERVICE") {
@@ -294,7 +317,7 @@ export default function ForemanDiagnosisApprovalPage() {
       setShowRejectBox(false);
       setRejectNote("");
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu duyệt chuẩn đoán.");
+      setError(err?.message || "Không thể tải dữ liệu duyệt chẩn đoán.");
     } finally {
       setLoading(false);
     }
@@ -396,6 +419,8 @@ export default function ForemanDiagnosisApprovalPage() {
 
   const customerDisplay = resolveCustomerDisplay(order, customerById);
   const plateDisplay = resolveVehiclePlateDisplay(order, vehicleById);
+  const vehicleModelDisplay = resolveVehicleModelDisplay(order, vehicleById);
+  const hasPlate = plateDisplay && plateDisplay !== "-" && plateDisplay !== "Chưa có";
   const totalSuggestions = useMemo(
     () =>
       activeRecommendationList.filter((item) => {
@@ -573,7 +598,7 @@ export default function ForemanDiagnosisApprovalPage() {
       setShowRejectBox(false);
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể từ chối phiếu chuẩn đoán.");
+      setError(err?.message || "Không thể từ chối phiếu chẩn đoán.");
     } finally {
       setSaving(false);
     }
@@ -582,12 +607,42 @@ export default function ForemanDiagnosisApprovalPage() {
   return (
     <div className="foreman-approval-page">
       <div className="foreman-approval-container">
-        <header className="foreman-approval-header">
-          <div>
-            <h1>Duyệt chuẩn đoán - Quản đốc</h1>
-            <p>
-              Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
-            </p>
+        <header className="foreman-approval-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", paddingBottom: "14px", borderBottom: "1px solid #e2e8f0", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#0f172a" }}>Duyệt chẩn đoán - Quản đốc</h1>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#f8fafc",
+                padding: "3px 10px 3px 4px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "2px 8px",
+                  background: "#fff",
+                  color: "#0f172a",
+                  border: "2px solid #0f172a",
+                  borderRadius: "5px",
+                  fontWeight: 800,
+                  fontSize: "13px",
+                  letterSpacing: "0.05em",
+                  lineHeight: 1.2,
+                }}
+              >
+                {hasPlate ? plateDisplay : "CHƯA BIỂN"}
+              </span>
+              {vehicleModelDisplay ? (
+                <span style={{ fontWeight: 700, fontSize: "14px", color: "#1e293b" }}>
+                  {vehicleModelDisplay}
+                </span>
+              ) : null}
+            </div>
           </div>
           <button type="button" className="fa-back-btn" onClick={() => navigate(backPath)}>
             <ArrowLeft size={16} />
@@ -597,19 +652,11 @@ export default function ForemanDiagnosisApprovalPage() {
 
         {loading ? (
           <section className="fa-card">
-            <p className="fa-loading">Đang tải dữ liệu duyệt chuẩn đoán...</p>
+            <p className="fa-loading">Đang tải dữ liệu duyệt chẩn đoán...</p>
           </section>
         ) : (
           <>
             <section className="fa-card fa-summary-grid">
-              <article className="fa-summary-item">
-                <span>Khách hàng</span>
-                <strong>{customerDisplay}</strong>
-              </article>
-              <article className="fa-summary-item">
-                <span>Biển số</span>
-                <strong>{plateDisplay}</strong>
-              </article>
               <article className="fa-summary-item">
                 <span>SLA chờ duyệt</span>
                 <strong className={`fa-sla-chip ${slaSeverity === "RED" ? "red" : slaSeverity === "YELLOW" ? "yellow" : "green"}`}>{slaLabel}</strong>
@@ -629,7 +676,7 @@ export default function ForemanDiagnosisApprovalPage() {
             </section>
 
             <section className="fa-card">
-              <h2>Thông tin chuẩn đoán kỹ thuật</h2>
+              <h2>Thông tin chẩn đoán kỹ thuật</h2>
               <div className={`fa-info-grid ${assignmentNote ? "with-assignment" : "without-assignment"}`}>
                 <div className="fa-readonly-box">
                   <label>Triệu chứng</label>

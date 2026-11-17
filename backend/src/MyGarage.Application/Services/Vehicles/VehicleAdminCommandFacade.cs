@@ -18,23 +18,23 @@ public sealed class VehicleAdminCommandFacade : IVehicleAdminCommandFacade
         _assignmentService = assignmentService;
     }
 
-    public Task<object> GetLookupsAsync(string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetLookupsAsync(contentRootPath, ct);
+    public Task<object> GetLookupsAsync(CancellationToken ct = default)
+        => _queryService.GetLookupsAsync(ct);
 
-    public Task<object> GetListAsync(VehicleAdminListQuery query, string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetListAsync(query, contentRootPath, ct);
+    public Task<object> GetListAsync(VehicleAdminListQuery query, CancellationToken ct = default)
+        => _queryService.GetListAsync(query, ct);
 
-    public Task<object> GetSummaryAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetSummaryAsync(branchId, contentRootPath, ct);
+    public Task<object> GetSummaryAsync(long? branchId, CancellationToken ct = default)
+        => _queryService.GetSummaryAsync(branchId, ct);
 
-    public Task<object> GetAlertsAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetAlertsAsync(branchId, contentRootPath, ct);
+    public Task<object> GetAlertsAsync(long? branchId, CancellationToken ct = default)
+        => _queryService.GetAlertsAsync(branchId, ct);
 
-    public Task<VehicleAdminCommandResult> GetVehicleDetailAsync(long id, int takeHistory, string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetVehicleDetailAsync(id, takeHistory, contentRootPath, ct);
+    public Task<VehicleAdminCommandResult> GetVehicleDetailAsync(long id, int takeHistory, CancellationToken ct = default)
+        => _queryService.GetVehicleDetailAsync(id, takeHistory, ct);
 
-    public Task<object> GetHistoryAsync(long? vehicleId, long? branchId, int take, string contentRootPath, CancellationToken ct = default)
-        => _queryService.GetHistoryAsync(vehicleId, branchId, take, contentRootPath, ct);
+    public Task<object> GetHistoryAsync(long? vehicleId, long? branchId, int take, CancellationToken ct = default)
+        => _queryService.GetHistoryAsync(vehicleId, branchId, take, ct);
 
     public Task<VehicleAdminCommandResult> CreateVehicleAsync(VehicleUpsertRequest? request, VehicleAdminActorContext actor, CancellationToken ct = default)
         => _lifecycleService.CreateVehicleAsync(request, actor, ct);

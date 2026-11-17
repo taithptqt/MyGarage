@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Application.Bays;
+using MyGarage.Exceptions;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -83,20 +84,28 @@ public sealed class EfBayStore : IBayStore
         return await _context.Vehicles.FindAsync(new object[] { id }, ct);
     }
 
-    public Task<BayAllocation?> GetActiveAllocationForBayAsync(long bayId, CancellationToken ct = default)
+    public async Task<BayAllocation?> GetActiveAllocationForBayAsync(long bayId, CancellationToken ct = default)
     {
-        return _context.BayAllocations
+        var allocations = await _context.BayAllocations
             .Where(a => a.BayId == bayId && a.ReleasedAt == null)
             .OrderByDescending(a => a.AllocatedAt)
-            .FirstOrDefaultAsync(ct);
+            .Take(2)
+            .ToListAsync(ct);
+        if (allocations.Count > 1)
+            throw new BadRequestException("Khoang có nhiều xe đang được phân bổ; cần đối soát trước khi giải phóng.");
+        return allocations.SingleOrDefault();
     }
 
-    public Task<BayAllocation?> GetActiveAllocationForBayAndVehicleAsync(long bayId, long vehicleId, CancellationToken ct = default)
+    public async Task<BayAllocation?> GetActiveAllocationForBayAndVehicleAsync(long bayId, long vehicleId, CancellationToken ct = default)
     {
-        return _context.BayAllocations
+        var allocations = await _context.BayAllocations
             .Where(a => a.BayId == bayId && a.VehicleId == vehicleId && a.ReleasedAt == null)
             .OrderByDescending(a => a.AllocatedAt)
-            .FirstOrDefaultAsync(ct);
+            .Take(2)
+            .ToListAsync(ct);
+        if (allocations.Count > 1)
+            throw new BadRequestException("Xe có nhiều phân bổ đang hoạt động tại khoang; cần đối soát trước khi điều chuyển.");
+        return allocations.SingleOrDefault();
     }
 
     public async Task<IReadOnlyList<BayAllocation>> GetTimelineAllocationsAsync(

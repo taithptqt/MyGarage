@@ -31,7 +31,7 @@ export async function requestSafeWithDualRoute(v1Url, legacyUrl, options = {}) {
 export async function getInvoiceListPage(params) {
   const data = await requestWithDualRoute(
     "/api/v1/invoices/list-page",
-    "/api/invoices/list-page",
+    "/api/v1/invoices/list-page",
     { method: "GET", params }
   );
   const summary = data?.summary;
@@ -46,7 +46,7 @@ export async function getInvoiceListPage(params) {
 export async function getInvoiceViewDetail(id, params) {
   const data = await requestWithDualRoute(
     `/api/v1/invoices/${id}/view-detail`,
-    `/api/invoices/${id}/view-detail`,
+    `/api/v1/invoices/${id}/view-detail`,
     { method: "GET", params }
   );
   if (!data?.invoice || !Array.isArray(data.details) || !Array.isArray(data.payments) ||

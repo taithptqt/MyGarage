@@ -10,6 +10,7 @@ export default function CustomerLayout({ children }) {
     location.pathname.startsWith("/booking") ||
     location.pathname.startsWith("/my-appointments") ||
     location.pathname.startsWith("/my-garage-dashboard") ||
+    location.pathname.startsWith("/my-garage-3d") ||
     location.pathname.startsWith("/my-vehicles") ||
     location.pathname.startsWith("/my-notifications") ||
     location.pathname.startsWith("/parts-cart") ||

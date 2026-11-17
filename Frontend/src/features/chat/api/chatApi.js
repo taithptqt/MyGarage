@@ -37,8 +37,8 @@ export function getCustomerConversations(paramsOrRequester = {}, maybeRequester)
   const requester = isRequester ? paramsOrRequester : maybeRequester;
   const query = toQuery(params);
   return requestWithDualRoute(
+    `/api/v1/chat/conversations${query}`,
     `/api/v1/chat/my-conversations${query}`,
-    `/api/chat/my-conversations${query}`,
     { method: "GET" },
     requester
   );
@@ -47,7 +47,7 @@ export function getCustomerConversations(paramsOrRequester = {}, maybeRequester)
 export function getCustomerConversation(conversationId, requester) {
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}`,
-    `/api/chat/conversations/${conversationId}`,
+    `/api/v1/chat/conversations/${conversationId}`,
     { method: "GET" },
     requester
   );
@@ -56,7 +56,7 @@ export function getCustomerConversation(conversationId, requester) {
 export function getCustomerMessengerConversation(requester) {
   return requestWithDualRoute(
     "/api/v1/chat/messenger/conversation",
-    "/api/chat/messenger/conversation",
+    "/api/v1/chat/messenger/conversation",
     { method: "GET" },
     requester
   );
@@ -69,7 +69,7 @@ export function getCustomerMessages(conversationId, paramsOrRequester = {}, mayb
   const query = toQuery(params);
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}/messages${query}`,
-    `/api/chat/conversations/${conversationId}/messages${query}`,
+    `/api/v1/chat/conversations/${conversationId}/messages${query}`,
     { method: "GET" },
     requester
   );
@@ -78,7 +78,7 @@ export function getCustomerMessages(conversationId, paramsOrRequester = {}, mayb
 export function getCustomerConversationOrders(conversationId, requester) {
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}/orders`,
-    `/api/chat/conversations/${conversationId}/orders`,
+    `/api/v1/chat/conversations/${conversationId}/orders`,
     { method: "GET" },
     requester
   );
@@ -87,7 +87,7 @@ export function getCustomerConversationOrders(conversationId, requester) {
 export function createCustomerConversation(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/chat/conversations",
-    "/api/chat/conversations",
+    "/api/v1/chat/conversations",
     { method: "POST", data: payload },
     requester
   );
@@ -96,7 +96,7 @@ export function createCustomerConversation(payload, requester) {
 export function sendCustomerMessage(conversationId, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}/messages`,
-    `/api/chat/conversations/${conversationId}/messages`,
+    `/api/v1/chat/conversations/${conversationId}/messages`,
     { method: "POST", data: payload },
     requester
   );
@@ -108,7 +108,7 @@ export function uploadCustomerChatAttachments(conversationId, files, requester) 
 
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}/attachments`,
-    `/api/chat/conversations/${conversationId}/attachments`,
+    `/api/v1/chat/conversations/${conversationId}/attachments`,
     {
       method: "POST",
       data: formData,
@@ -123,8 +123,8 @@ export function uploadCustomerChatAttachments(conversationId, files, requester) 
 export function markCustomerRead(conversationId, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/chat/conversations/${conversationId}/read-state`,
-    `/api/chat/conversations/${conversationId}/read-state`,
-    { method: "PUT", data: payload },
+    `/api/v1/chat/conversations/${conversationId}/read-state`,
+    { method: "PATCH", data: payload },
     requester
   );
 }
@@ -136,7 +136,7 @@ export function getReceptionConversations(paramsOrRequester = {}, maybeRequester
   const query = toQuery(params);
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations${query}`,
-    `/api/reception/chat/conversations${query}`,
+    `/api/v1/reception/chat/conversations${query}`,
     { method: "GET" },
     requester
   );
@@ -145,7 +145,7 @@ export function getReceptionConversations(paramsOrRequester = {}, maybeRequester
 export function getReceptionConversation(conversationId, requester) {
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}`,
-    `/api/reception/chat/conversations/${conversationId}`,
+    `/api/v1/reception/chat/conversations/${conversationId}`,
     { method: "GET" },
     requester
   );
@@ -158,7 +158,7 @@ export function getReceptionMessages(conversationId, paramsOrRequester = {}, may
   const query = toQuery(params);
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/messages${query}`,
-    `/api/reception/chat/conversations/${conversationId}/messages${query}`,
+    `/api/v1/reception/chat/conversations/${conversationId}/messages${query}`,
     { method: "GET" },
     requester
   );
@@ -167,7 +167,7 @@ export function getReceptionMessages(conversationId, paramsOrRequester = {}, may
 export function getReceptionConversationOrders(conversationId, requester) {
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/orders`,
-    `/api/reception/chat/conversations/${conversationId}/orders`,
+    `/api/v1/reception/chat/conversations/${conversationId}/orders`,
     { method: "GET" },
     requester
   );
@@ -176,7 +176,7 @@ export function getReceptionConversationOrders(conversationId, requester) {
 export function sendReceptionMessage(conversationId, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/messages`,
-    `/api/reception/chat/conversations/${conversationId}/messages`,
+    `/api/v1/reception/chat/conversations/${conversationId}/messages`,
     { method: "POST", data: payload },
     requester
   );
@@ -188,7 +188,7 @@ export function uploadReceptionChatAttachments(conversationId, files, requester)
 
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/attachments`,
-    `/api/reception/chat/conversations/${conversationId}/attachments`,
+    `/api/v1/reception/chat/conversations/${conversationId}/attachments`,
     {
       method: "POST",
       data: formData,
@@ -203,17 +203,17 @@ export function uploadReceptionChatAttachments(conversationId, files, requester)
 export function updateReceptionConversationStatus(conversationId, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/status`,
-    `/api/reception/chat/conversations/${conversationId}/status`,
-    { method: "PUT", data: payload },
+    `/api/v1/reception/chat/conversations/${conversationId}/status`,
+    { method: "PATCH", data: payload },
     requester
   );
 }
 
 export function assignReceptionConversation(conversationId, payload, requester) {
   return requestWithDualRoute(
-    `/api/v1/reception/chat/conversations/${conversationId}/assign`,
-    `/api/reception/chat/conversations/${conversationId}/assign`,
-    { method: "PUT", data: payload },
+    `/api/v1/reception/chat/conversations/${conversationId}/assignments`,
+    `/api/v1/reception/chat/conversations/${conversationId}/assignments`,
+    { method: "POST", data: payload },
     requester
   );
 }
@@ -221,8 +221,8 @@ export function assignReceptionConversation(conversationId, payload, requester) 
 export function markReceptionRead(conversationId, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/reception/chat/conversations/${conversationId}/read-state`,
-    `/api/reception/chat/conversations/${conversationId}/read-state`,
-    { method: "PUT", data: payload },
+    `/api/v1/reception/chat/conversations/${conversationId}/read-state`,
+    { method: "PATCH", data: payload },
     requester
   );
 }

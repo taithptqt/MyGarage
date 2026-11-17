@@ -17,18 +17,18 @@ async function requestWithDualRoute(v1Url, legacyUrl, options = {}) {
 
 export const goodsReceiptApi = {
   getGoodsReceipts: (params = {}) =>
-    requestWithDualRoute("/api/v1/goods-receipts", "/api/goods-receipts", {
+    requestWithDualRoute("/api/v1/goods-receipts", "/api/v1/goods-receipts", {
       method: "GET",
       params,
     }),
 
   getGoodsReceiptById: (id) =>
-    requestWithDualRoute(`/api/v1/goods-receipts/${id}`, `/api/goods-receipts/${id}`, {
+    requestWithDualRoute(`/api/v1/goods-receipts/${id}`, `/api/v1/goods-receipts/${id}`, {
       method: "GET",
     }),
 
   createGoodsReceipt: (data) =>
-    requestWithDualRoute("/api/v1/goods-receipts", "/api/goods-receipts", {
+    requestWithDualRoute("/api/v1/goods-receipts", "/api/v1/goods-receipts", {
       method: "POST",
       data,
     }),

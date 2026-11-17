@@ -1,13 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using MyGarage.Application.Authorization;
+using MyGarage.DTOs.Requests;
+using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers;
@@ -17,32 +14,18 @@ namespace MyGarage.Controllers;
 [Authorize]
 public class InventoryAdminController : ControllerBase
 {
-    public sealed record DecisionPatchDto
-    {
-        public string? Decision { get; init; }
-        public long? ApproverId { get; init; }
-        public string? Note { get; init; }
-    }
-
     private readonly IInventoryAdminService _inventoryAdminService;
     private readonly IInventoryAuthorizationService _inventoryAuthService;
-    private readonly IWebHostEnvironment _environment;
-    private readonly ILogger<InventoryAdminController> _logger;
-    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
+    private readonly IInventoryAdminSettingsService _settingsService;
 
     public InventoryAdminController(
         IInventoryAdminService inventoryAdminService,
         IInventoryAuthorizationService inventoryAuthService,
-        IWebHostEnvironment environment,
-        ILogger<InventoryAdminController> logger)
+        IInventoryAdminSettingsService settingsService)
     {
         _inventoryAdminService = inventoryAdminService;
         _inventoryAuthService = inventoryAuthService;
-        _environment = environment;
-        _logger = logger;
+        _settingsService = settingsService;
     }
 
     [HttpGet("dashboards/overview")]
@@ -245,112 +228,15 @@ public class InventoryAdminController : ControllerBase
         => Ok(await _inventoryAdminService.GetInventoryAuditLogAsync(take));
 
     [HttpGet("configuration")]
-    public async Task<IActionResult> GetSettings() => Ok(await ReadSettingsAsync());
+    public async Task<IActionResult> GetSettings()
+        => Ok(await _settingsService.GetSettingsAsync(HttpContext.RequestAborted));
 
     [HttpPut("configuration")]
     public async Task<IActionResult> SaveSettings([FromBody] InventoryAdminSettings settings)
-    {
-        settings ??= InventoryAdminSettings.CreateDefault();
-        await WriteSettingsAsync(settings);
-        return Ok(settings);
-    }
+        => Ok(await _settingsService.SaveSettingsAsync(settings, HttpContext.RequestAborted));
 
     private long? ResolveCurrentUserId()
     {
         return this.GetCurrentUserId();
-    }
-
-    private string SettingsPath
-    {
-        get
-        {
-            var folder = Path.Combine(_environment.ContentRootPath, "Configurations");
-            Directory.CreateDirectory(folder);
-            return Path.Combine(folder, "inventory-admin-settings.json");
-        }
-    }
-
-    private async Task<InventoryAdminSettings> ReadSettingsAsync()
-    {
-        if (!System.IO.File.Exists(SettingsPath)) return InventoryAdminSettings.CreateDefault();
-
-        try
-        {
-            await using var stream = System.IO.File.OpenRead(SettingsPath);
-            return await JsonSerializer.DeserializeAsync<InventoryAdminSettings>(stream, _jsonOptions)
-                ?? InventoryAdminSettings.CreateDefault();
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            _logger.LogWarning(ex, "Failed to read inventory admin settings from {SettingsPath}; falling back to defaults.", SettingsPath);
-            return InventoryAdminSettings.CreateDefault();
-        }
-    }
-
-    private async Task WriteSettingsAsync(InventoryAdminSettings settings)
-    {
-        var sanitized = settings with { UpdatedAt = VietnamTime.Now };
-        await using var stream = System.IO.File.Create(SettingsPath);
-        await JsonSerializer.SerializeAsync(stream, sanitized, _jsonOptions);
-    }
-
-    public sealed record InventoryAdminSettings
-    {
-        public Dictionary<string, long> DefaultWarehouseByItemType { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, long> DefaultWarehouseByOperation { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<long, string> ProductClassifications { get; init; } = new();
-        public List<string> UnitOptions { get; init; } = [];
-        public InventoryPolicyRules PolicyRules { get; init; } = new();
-        public DateTime? UpdatedAt { get; init; }
-
-        public static InventoryAdminSettings CreateDefault() => new()
-        {
-            DefaultWarehouseByItemType = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["SELLABLE"] = 0,
-                ["DEFECTIVE"] = 0,
-                ["CONSUMABLE"] = 0,
-                ["TRANSIT"] = 0
-            },
-            DefaultWarehouseByOperation = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["PURCHASE_RECEIVE"] = 0,
-                ["SERVICE_ISSUE"] = 0,
-                ["RETAIL_ISSUE"] = 0,
-                ["MATERIAL_RETURN"] = 0,
-                ["TRANSFER"] = 0
-            },
-            UnitOptions = ["Cai", "Bo", "Hop", "Lit", "Kg"],
-            PolicyRules = new InventoryPolicyRules
-            {
-                AllowNegativeStock = false,
-                LowStockThresholdPercent = 15,
-                ReserveRule = "STRICT",
-                AllowOverIssue = false,
-                MaterialReturnRule = "ALLOW_WITH_REASON",
-                TransferRule = "REQUIRE_APPROVAL"
-            },
-            UpdatedAt = VietnamTime.Now
-        };
-    }
-
-    public sealed record InventoryPolicyRules
-    {
-        public bool AllowNegativeStock { get; init; }
-        public decimal LowStockThresholdPercent { get; init; }
-        public string ReserveRule { get; init; } = "STRICT";
-        public bool AllowOverIssue { get; init; }
-        public string MaterialReturnRule { get; init; } = "ALLOW_WITH_REASON";
-        public string TransferRule { get; init; } = "REQUIRE_APPROVAL";
-        public Dictionary<long, decimal> SafeStockByBranch { get; init; } = new();
-    }
-
-    public sealed record ResolveStockAlertRequestDto
-    {
-        public long PurchaseOrderId { get; init; }
     }
 }

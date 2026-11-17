@@ -53,7 +53,7 @@ function createMockRequester(behavior = {}) {
   const calls = [];
   const requester = async (config) => {
     calls.push(config);
-    if (behavior.shouldFail404 && behavior.shouldFail404(config.url)) {
+    if (behavior.shouldFail404 && behavior.shouldFail404(config.url, calls.length)) {
       const err = new Error(`Not Found: ${config.url}`);
       err.status = 404;
       err.response = { status: 404 };
@@ -107,14 +107,14 @@ test("parseVehicleListPage handles structured, array, and null payloads safely",
 
 test("customerApi routes to v1 first and falls back to legacy on 404", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ items: [], total: 0 }),
   });
 
   await getAllCustomers(2, {}, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/customers");
-  assert.equal(calls[1].url, "/api/customers");
+  assert.equal(calls[1].url, "/api/v1/customers");
   assert.equal(calls[0].params.branchId, 2);
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 100);
@@ -123,7 +123,7 @@ test("customerApi routes to v1 first and falls back to legacy on 404", async () 
   await getCustomerPage({ search: "Nguyen" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/customers/admin-list");
-  assert.equal(calls[1].url, "/api/customers/admin-list");
+  assert.equal(calls[1].url, "/api/v1/customers/admin-list");
   assert.equal(calls[0].params.search, "Nguyen");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 20);
@@ -131,44 +131,44 @@ test("customerApi routes to v1 first and falls back to legacy on 404", async () 
 
 test("vehicleCatalogApi dual routes brand and model management", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
   });
 
   await getAllVehicleBrands({}, requester);
   assert.equal(calls[0].url, "/api/v1/vehicle-brands");
-  assert.equal(calls[1].url, "/api/vehicle-brands");
+  assert.equal(calls[1].url, "/api/v1/vehicle-brands");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 200);
 
   calls.length = 0;
   await getVehicleModelPage({ brandId: 3 }, requester);
   assert.equal(calls[0].url, "/api/v1/vehicle-models/admin-list");
-  assert.equal(calls[1].url, "/api/vehicle-models/admin-list");
+  assert.equal(calls[1].url, "/api/v1/vehicle-models/admin-list");
   assert.equal(calls[0].params.brandId, 3);
   assert.equal(calls[0].params.pageSize, 20);
 });
 
 test("servicesApi and serviceCategoryPagingApi dual routes catalog endpoints", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
   });
 
   await servicesApi.getServiceCategories({}, requester);
   assert.equal(calls[0].url, "/api/v1/service-categories");
-  assert.equal(calls[1].url, "/api/service-categories");
+  assert.equal(calls[1].url, "/api/v1/service-categories");
   assert.equal(calls[0].params.pageSize, 100);
 
   calls.length = 0;
   await servicesApi.getStandardServicePage({ search: "Bao duong" }, requester);
   assert.equal(calls[0].url, "/api/v1/standard-services/admin-list");
-  assert.equal(calls[1].url, "/api/standard-services/admin-list");
+  assert.equal(calls[1].url, "/api/v1/standard-services/admin-list");
   assert.equal(calls[0].params.search, "Bao duong");
   assert.equal(calls[0].params.pageSize, 20);
 
   calls.length = 0;
   await getServiceCategoryPage({ page: 2 }, requester);
   assert.equal(calls[0].url, "/api/v1/service-categories/admin-list");
-  assert.equal(calls[1].url, "/api/service-categories/admin-list");
+  assert.equal(calls[1].url, "/api/v1/service-categories/admin-list");
   assert.equal(calls[0].params.page, 2);
 });
 
@@ -189,18 +189,18 @@ test("vehicleAdminApi bounds pagination and takeHistory parameters", async () =>
   const { calls, requester } = createMockRequester();
 
   await vehicleAdminApi.getList({ page: 3, pageSize: 50 }, requester);
-  assert.equal(calls[0].url, "/api/v1/vehicle-admin/list");
+  assert.equal(calls[0].url, "/api/v1/admin/vehicles");
   assert.equal(calls[0].params.page, 3);
   assert.equal(calls[0].params.pageSize, 50);
 
   calls.length = 0;
   await vehicleAdminApi.getVehicleDetail(12, {}, requester);
-  assert.equal(calls[0].url, "/api/v1/vehicle-admin/vehicles/12");
+  assert.equal(calls[0].url, "/api/v1/admin/vehicles/12");
   assert.equal(calls[0].params.takeHistory, 20);
 
   calls.length = 0;
   await vehicleAdminApi.getAlerts({}, requester);
-  assert.equal(calls[0].url, "/api/v1/vehicle-admin/alerts");
+  assert.equal(calls[0].url, "/api/v1/admin/vehicles/alerts");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 50);
 });

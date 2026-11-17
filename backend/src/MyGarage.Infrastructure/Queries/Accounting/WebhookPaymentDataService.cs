@@ -61,30 +61,38 @@ public sealed class EfWebhookPaymentDataService(
             payment = await db.Payments.FirstOrDefaultAsync(p => p.Id == paymentRecordId.Value, ct);
         }
 
-        return payment ?? await db.Payments
-            .Where(p => p.TransactionCode == paymentLinkId || p.TransactionCode == reference)
-            .OrderByDescending(p => p.Id)
-            .FirstOrDefaultAsync(ct);
+        if (payment is not null) return payment;
+
+        var linkId = string.IsNullOrWhiteSpace(paymentLinkId) ? null : paymentLinkId.Trim();
+        var transactionReference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
+        if (linkId is null && transactionReference is null) return null;
+
+        var matches = await db.Payments
+            .Where(p => (linkId != null && p.TransactionCode == linkId) ||
+                        (transactionReference != null && p.TransactionCode == transactionReference))
+            .Take(2)
+            .ToListAsync(ct);
+        if (matches.Count > 1)
+            throw new InvalidOperationException("Mã giao dịch không xác định duy nhất khoản thanh toán.");
+        return matches.SingleOrDefault();
     }
 
     public Task EnsureRetailOrderStockDeductedAsync(long retailOrderId, CancellationToken ct = default)
         => RetailOrderStockCommitter.EnsureStockDeductedAsync(db, retailOrderId);
 
-    public async Task<Payment?> FindPendingPaymentByLinkOrReferenceAsync(
+    public async Task<Payment?> FindRecoverablePaymentByLinkAsync(
         string? linkId,
-        string? reference,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(linkId) && string.IsNullOrWhiteSpace(reference))
-        {
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(linkId)) return null;
 
-        return await db.Payments
-            .Where(p => p.Status == nameof(PaymentStatusCode.PENDING) &&
-                        ((!string.IsNullOrWhiteSpace(linkId) && p.TransactionCode == linkId) ||
-                         (!string.IsNullOrWhiteSpace(reference) && p.TransactionCode == reference)))
-            .OrderByDescending(p => p.Id)
-            .FirstOrDefaultAsync(ct);
+        var matches = await db.Payments
+            .Where(p => (p.Status == nameof(PaymentStatusCode.PENDING) || p.Status == nameof(PaymentStatusCode.COMPLETED)) &&
+                        p.TransactionCode == linkId)
+            .Take(2)
+            .ToListAsync(ct);
+        if (matches.Count > 1)
+            throw new InvalidOperationException("Mã liên kết thanh toán không xác định duy nhất giao dịch.");
+        return matches.SingleOrDefault();
     }
 }

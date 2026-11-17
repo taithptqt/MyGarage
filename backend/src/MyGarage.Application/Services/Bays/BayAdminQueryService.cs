@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 
 namespace MyGarage.Application.Bays;
 
@@ -6,21 +7,20 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
 {
     private readonly IBayAdminReadDataService _dataService;
     private readonly IBayAdminAnalyticsService _analyticsService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public BayAdminQueryService(IBayAdminReadDataService dataService, IBayAdminAnalyticsService analyticsService)
+    public BayAdminQueryService(
+        IBayAdminReadDataService dataService,
+        IBayAdminAnalyticsService analyticsService,
+        IAppConfigFileStore configStore)
     {
         _dataService = dataService;
         _analyticsService = analyticsService;
-    }
-
-    internal BayAdminQueryService(IBayAdminReadDataService dataService)
-        : this(dataService, new BayAdminAnalyticsService(dataService))
-    {
+        _configStore = configStore;
     }
 
     public async Task<BayAdminCommandResult> GetLookupsAsync(
         int takeVehicles,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         takeVehicles = Math.Clamp(takeVehicles, 50, 5000);
@@ -43,7 +43,7 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
             segment = v.Segment
         }).ToList();
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var areaOptions = settings.BayMetadata.Values
             .Select(m => BayAdminSettingsHelper.NormalizeArea(m.Area))
             .Where(a => !string.IsNullOrWhiteSpace(a))
@@ -73,10 +73,9 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
         string? sortBy,
         string? sortDirection,
         bool includeHidden,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: true, contentRootPath: contentRootPath, ct: ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: true, ct: ct);
         var query = rows.AsEnumerable();
 
         if (branchId.HasValue)
@@ -133,9 +132,9 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
         });
     }
 
-    public async Task<BayAdminCommandResult> GetByIdAsync(long id, string contentRootPath, CancellationToken ct = default)
+    public async Task<BayAdminCommandResult> GetByIdAsync(long id, CancellationToken ct = default)
     {
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: true, contentRootPath: contentRootPath, ct: ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: true, ct: ct);
         var bay = rows.FirstOrDefault(x => x.Id == id);
         if (bay == null)
         {
@@ -147,10 +146,9 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
 
     public async Task<BayAdminCommandResult> GetSummaryAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: true, contentRootPath: contentRootPath, ct: ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: true, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -247,11 +245,10 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
 
     public async Task<BayAdminCommandResult> GetBayVehiclesAsync(
         long id,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: true, contentRootPath: contentRootPath, settings: settings, ct: ct);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: true, settings: settings, ct: ct);
         var bay = rows.FirstOrDefault(x => x.Id == id);
         if (bay == null) return BayAdminCommandResult.NotFound("Khoang không tồn tại.");
 
@@ -277,7 +274,6 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
     public async Task<BayAdminCommandResult> GetBayHistoryAsync(
         long id,
         int take,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         take = Math.Clamp(take, 20, 2000);
@@ -285,7 +281,7 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
         var bayExists = await _dataService.BayExistsAsync(id, ct);
         if (!bayExists) return BayAdminCommandResult.NotFound("Khoang không tồn tại.");
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var sessions = settings.Sessions
             .Where(s => s.BayId == id)
             .OrderByDescending(s => s.AssignedAt)
@@ -325,14 +321,14 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
         });
     }
 
-    public Task<BayAdminCommandResult> GetUsageAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
-        => _analyticsService.GetUsageAsync(branchId, contentRootPath, ct);
+    public Task<BayAdminCommandResult> GetUsageAsync(long? branchId, CancellationToken ct = default)
+        => _analyticsService.GetUsageAsync(branchId, ct);
 
-    public Task<BayAdminCommandResult> GetLayoutAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
-        => _analyticsService.GetLayoutAsync(branchId, contentRootPath, ct);
+    public Task<BayAdminCommandResult> GetLayoutAsync(long? branchId, CancellationToken ct = default)
+        => _analyticsService.GetLayoutAsync(branchId, ct);
 
-    public Task<BayAdminCommandResult> GetAlertsAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
-        => _analyticsService.GetAlertsAsync(branchId, contentRootPath, ct);
+    public Task<BayAdminCommandResult> GetAlertsAsync(long? branchId, CancellationToken ct = default)
+        => _analyticsService.GetAlertsAsync(branchId, ct);
 
     public Task<BayAdminCommandResult> GetSuggestionsAsync(
         long? vehicleId,
@@ -340,7 +336,6 @@ public sealed class BayAdminQueryService : IBayAdminQueryService
         string? preferredArea,
         long? sourceBayId,
         string? serviceStatus,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _analyticsService.GetSuggestionsAsync(vehicleId, branchId, preferredArea, sourceBayId, serviceStatus, contentRootPath, ct);
+        => _analyticsService.GetSuggestionsAsync(vehicleId, branchId, preferredArea, sourceBayId, serviceStatus, ct);
 }

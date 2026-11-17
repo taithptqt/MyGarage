@@ -252,8 +252,8 @@ export default function ReceptionOrdersSection() {
         serviceOrderApi.getAll(),
         getAllCustomers(),
         getAllVehicles(),
-        getAllStaff(),
-        getAllRoles(),
+        getAllStaff().catch(() => []),
+        getAllRoles().catch(() => []),
         serviceOrderApi.getDiagnoses().catch(() => []),
         serviceOrderApi.getPendingSupplementaryProposals(
           effectiveBranchId ? { branchId: effectiveBranchId } : undefined
@@ -282,7 +282,8 @@ export default function ReceptionOrdersSection() {
         diagnosisByOrderId.get(serviceOrderId).push(item);
       });
 
-      const baseOrders = (Array.isArray(oRes) ? oRes : []).map((order) => {
+      const rawOrders = Array.isArray(oRes) ? oRes : Array.isArray(oRes?.items) ? oRes.items : [];
+      const baseOrders = rawOrders.map((order) => {
         const orderId = Number(order?.id ?? order?.Id ?? 0);
         const orderStatus = String(order?.status ?? order?.Status ?? "").trim().toUpperCase();
         const relatedDiagnoses = diagnosisByOrderId.get(orderId) || [];
@@ -338,12 +339,17 @@ export default function ReceptionOrdersSection() {
         );
       }
 
-      setOrders(enrichedOrders);
-      setCustomers(Array.isArray(cRes) ? cRes : []);
-      setVehicles(Array.isArray(vRes) ? vRes : []);
+      const customerList = Array.isArray(cRes) ? cRes : Array.isArray(cRes?.items) ? cRes.items : [];
+      const vehicleList = Array.isArray(vRes) ? vRes : Array.isArray(vRes?.items) ? vRes.items : [];
+      const staffList = Array.isArray(sRes) ? sRes : Array.isArray(sRes?.items) ? sRes.items : [];
+      const roleList = Array.isArray(rRes) ? rRes : Array.isArray(rRes?.items) ? rRes.items : [];
 
-      const filteredStaff = (Array.isArray(sRes) ? sRes : []).filter((item) => {
-        const role = (Array.isArray(rRes) ? rRes : []).find((r) => r.id === item.roleId);
+      setOrders(enrichedOrders);
+      setCustomers(customerList);
+      setVehicles(vehicleList);
+
+      const filteredStaff = staffList.filter((item) => {
+        const role = roleList.find((r) => r.id === item.roleId);
         const isReceptionist = role && role.roleCode === "RECEPTIONIST";
         const staffBranchId = Number(item.branchId ?? item.BranchId ?? 0);
         const branchMatched = !effectiveBranchId || staffBranchId === effectiveBranchId;
@@ -407,20 +413,22 @@ export default function ReceptionOrdersSection() {
 
   const getOrderCustomerName = useCallback((order) => {
     if (order.customerName) return order.customerName;
+    if (order.guestName) return order.guestName;
     const customer = customers.find((c) => Number(c.id) === Number(order.customerId));
-    return customer?.fullName || "-";
+    return customer?.fullName || customer?.name || "-";
   }, [customers]);
 
   const getOrderCustomerPhone = useCallback((order) => {
     if (order.customerPhone) return order.customerPhone;
+    if (order.guestPhone) return order.guestPhone;
     const customer = customers.find((c) => Number(c.id) === Number(order.customerId));
-    return customer?.phone || "--";
+    return customer?.phone || customer?.phoneNumber || "--";
   }, [customers]);
 
   const getOrderVehiclePlate = useCallback((order) => {
     if (order.vehicleLicensePlate) return order.vehicleLicensePlate;
     const vehicle = vehicles.find((v) => Number(v.id) === Number(order.vehicleId));
-    return vehicle?.licensePlate || "N/A";
+    return vehicle?.licensePlate || order.guestVehicleInfo || "N/A";
   }, [vehicles]);
 
   const orderStatusOptions = useMemo(() => {
@@ -723,7 +731,7 @@ export default function ReceptionOrdersSection() {
               <button
                 type="button"
                 className="toolbar-action-btn toolbar-action-outline"
-                onClick={() => navigate(`/workshop/reception/orders/${supplementaryToast.orderId}/quote?intent=supplementary`)}
+                onClick={() => navigate(location.pathname.startsWith("/admin") ? `/admin/service-orders/${supplementaryToast.orderId}/quote?intent=supplementary` : `/workshop/reception/orders/${supplementaryToast.orderId}/quote?intent=supplementary`)}
               >
                 Mở báo giá PS
               </button>
@@ -867,7 +875,7 @@ function OrdersTableContent({
           title={"Mở báo giá bổ sung"}
           onClick={(event) => {
             event.stopPropagation();
-            navigate(`/workshop/reception/orders/${order.id}/quote?intent=supplementary`);
+            navigate(location.pathname.startsWith("/admin") ? `/admin/service-orders/${order.id}/quote?intent=supplementary` : `/workshop/reception/orders/${order.id}/quote?intent=supplementary`);
           }}
         >
           Báo giá PS
@@ -919,7 +927,7 @@ function OrdersTableContent({
       </div>
 
       <div className="table-toolbar">
-        <button className="btn-primary" onClick={() => navigate("/workshop/reception/create")}>+ Tiếp nhận xe mới</button>
+        <button className="btn-primary" onClick={() => navigate(location.pathname.startsWith("/admin") ? "/admin/service-orders/create" : "/workshop/reception/create")}>+ Tiếp nhận xe mới</button>
         <div className="toolbar-controls">
           <FilterDropdown
             id="order-status-filter"
@@ -1081,19 +1089,17 @@ function OrdersTableContent({
                     >
                       <table className="admin-table reception-group-orders-table">
                         <colgroup>
+                          <col className="col-alert" />
                           <col className="col-order-code" />
                           <col className="col-plate" />
-                          <col className="col-checkin" />
-                          <col className="col-handover" />
                           <col className="col-status" />
                           <col className="col-actions" />
                         </colgroup>
                         <thead>
                           <tr>
+                            <th className="th-alert"></th>
                             <th>Mã lệnh</th>
                             <th>Biển số</th>
-                            <th>Thời điểm vào</th>
-                            <th>Hẹn trả</th>
                             <th className="th-center col-status-fixed">
                               <span className="status-col-label">Trạng thái</span>
                             </th>
@@ -1105,25 +1111,17 @@ function OrdersTableContent({
                             const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
                             return (
                               <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
+                                <td className="td-alert">
+                                  <OrderIssueIndicator order={order} />
+                                </td>
                                 <td className="td-id">{order.code}</td>
                                 <td>{getOrderVehiclePlate(order)}</td>
-                                <td>
-                                  {order.checkInTime
-                                    ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
-                                    : "-"}
-                                </td>
-                                <td>
-                                  {order.estimatedHandover
-                                    ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
-                                    : "Chưa hẹn"}
-                                </td>
                                 <td className="th-center col-status-fixed">
                                   <div className="appointment-status-cell">
                                     <span className="appointment-status-main">
                                       <span className={`badge ${getStatusBadge(order.status)}`}>
                                         {getStatusLabelVi(order.status, order.status)}
                                       </span>
-                                      <OrderIssueIndicator order={order} />
                                     </span>
                                   </div>
                                 </td>
@@ -1142,66 +1140,70 @@ function OrdersTableContent({
             </div>
           )
         ) : (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Mã lệnh</th>
-                <th>Khách hàng</th>
-                <th>SĐT</th>
-                <th>Biển số</th>
-                <th className="th-center col-status-fixed">
-                  <span className="status-col-label">Trạng thái</span>
-                </th>
-                <th>Thời điểm vào</th>
-                <th>Hẹn trả</th>
-                <th className="col-actions col-actions-compact th-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {singleOrders.length === 0 ? (
+          <div className="table-responsive-wrapper" style={{ overflowX: "auto", width: "100%" }}>
+            <table className="admin-table reception-single-orders-table">
+              <colgroup>
+                <col className="col-alert" />
+                <col className="col-order-code" />
+                <col className="col-customer-name" />
+                <col className="col-customer-phone" />
+                <col className="col-plate" />
+                <col className="col-status" />
+                <col className="col-actions" />
+              </colgroup>
+              <thead>
                 <tr>
-                  <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
-                    Không có lệnh thường nào.
-                  </td>
+                  <th className="th-alert"></th>
+                  <th className="th-order-code">Mã lệnh</th>
+                  <th className="th-customer-name">Khách hàng</th>
+                  <th className="th-customer-phone">SĐT</th>
+                  <th className="th-plate">Biển số</th>
+                  <th className="th-center col-status-fixed">
+                    <span className="status-col-label">Trạng thái</span>
+                  </th>
+                  <th className="col-actions col-actions-compact th-center">Thao tác</th>
                 </tr>
-              ) : (
-                pagedSingleOrders.map((order) => {
-                  const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
-                  return (
-                    <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
-                      <td className="td-id">{order.code}</td>
-                      <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
-                      <td>{getOrderCustomerPhone(order)}</td>
-                      <td>{getOrderVehiclePlate(order)}</td>
-                      <td className="th-center col-status-fixed">
-                        <div className="appointment-status-cell">
-                          <span className="appointment-status-main">
-                            <span className={`badge ${getStatusBadge(order.status)}`}>
-                              {getStatusLabelVi(order.status, order.status)}
+              </thead>
+              <tbody>
+                {singleOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
+                      Không có lệnh thường nào.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedSingleOrders.map((order) => {
+                    const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
+                    return (
+                      <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
+                        <td className="td-alert">
+                          <OrderIssueIndicator order={order} />
+                        </td>
+                        <td className="td-id" title={order.code}>{order.code}</td>
+                        <td className="td-customer-name" title={getOrderCustomerName(order)}>
+                          {getOrderCustomerName(order)}
+                        </td>
+                        <td className="td-customer-phone">{getOrderCustomerPhone(order)}</td>
+                        <td className="td-plate">{getOrderVehiclePlate(order)}</td>
+                        <td className="th-center col-status-fixed">
+                          <div className="appointment-status-cell">
+                            <span className="appointment-status-main">
+                              <span className={`badge ${getStatusBadge(order.status)}`}>
+                                {getStatusLabelVi(order.status, order.status)}
+                              </span>
                             </span>
-                            <OrderIssueIndicator order={order} />
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        {order.checkInTime
-                          ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
-                          : "-"}
-                      </td>
-                      <td>
-                        {order.estimatedHandover
-                          ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
-                          : "Chưa hẹn"}
-                      </td>
-                      <td className="col-actions col-actions-compact th-center" onClick={(event) => event.stopPropagation()}>
-                        {renderOrderActionButtons(order)}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                          </div>
+                        </td>
+                        <td className="col-actions col-actions-compact th-center" onClick={(event) => event.stopPropagation()}>
+                          {renderOrderActionButtons(order)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
       <TablePagination

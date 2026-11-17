@@ -55,10 +55,52 @@ namespace MyGarage.Services
             if (quotation == null) return null;
 
             var partItems = quotation.QuotationDetails
-                .Where(d => d.ItemType == "PART" && d.ItemId.HasValue && d.Status != "CANCELED")
+                .Where(d => string.Equals(d.ItemType?.Trim(), "PART", StringComparison.OrdinalIgnoreCase) &&
+                    d.ItemId.HasValue && d.ItemId.Value > 0 && d.Quantity > 0 &&
+                    !string.Equals(d.Status, "CANCELED", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            if (!partItems.Any()) return null;
+            var orderDetails = await _store.GetQuotationOrderDetailsAsync(quotationId);
+            var detailsByQuotationId = orderDetails
+                .Where(d => d.QuotationDetailId.HasValue)
+                .GroupBy(d => d.QuotationDetailId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            if (partItems.Any(item => !detailsByQuotationId.TryGetValue(item.Id, out var rows) || rows.Count != 1))
+                throw new InvalidOperationException("Không xác định được hạng mục lệnh sửa chữa tương ứng với phụ tùng báo giá.");
+
+            var existingDetails = await _store.GetRequestsForOrderDetailsAsync(orderDetails.Select(d => d.Id).ToArray());
+            var unlinkedDetails = await _store.GetUnlinkedRequestsForOrderAsync(quotation.ServiceOrderId);
+            static bool IsActiveRequest(MaterialRequestDetail detail) =>
+                !string.Equals(detail.Request.Status, "REJECTED", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(detail.Request.Status, "CANCELED", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(detail.Request.Status, "CANCELLED", StringComparison.OrdinalIgnoreCase);
+            var canceledOrderIds = orderDetails.Where(d =>
+                quotation.QuotationDetails.Any(q => q.Id == d.QuotationDetailId &&
+                    string.Equals(q.Status, "CANCELED", StringComparison.OrdinalIgnoreCase)))
+                .Select(d => d.Id).ToHashSet();
+            if (existingDetails.Any(d => d.ServiceOrderDetailId.HasValue && canceledOrderIds.Contains(d.ServiceOrderDetailId.Value) && IsActiveRequest(d)))
+                throw new InvalidOperationException("Hạng mục đã hủy còn yêu cầu kho; cần đối soát phiếu kho trước khi duyệt.");
+            if (quotation.QuotationDetails.Any(q => q.SourceQuotationDetailId.HasValue && q.ItemId.HasValue &&
+                string.Equals(q.ItemType?.Trim(), "PART", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(q.Status, "CANCELED", StringComparison.OrdinalIgnoreCase) &&
+                unlinkedDetails.Any(d => d.ProductId == q.ItemId && IsActiveRequest(d))))
+                throw new InvalidOperationException("Hạng mục đã hủy có phiếu kho lịch sử chưa liên kết; cần đối soát trước khi duyệt.");
+            var quantitiesToRequest = new Dictionary<long, decimal>();
+            foreach (var item in partItems)
+            {
+                if (item.SourceQuotationDetailId.HasValue && unlinkedDetails.Any(d => d.ProductId == item.ItemId && IsActiveRequest(d)))
+                    throw new InvalidOperationException("Phiếu kho lịch sử chưa liên kết hạng mục; cần đối soát trước khi duyệt báo giá điều chỉnh.");
+                var orderDetailId = detailsByQuotationId[item.Id][0].Id;
+                var active = existingDetails.Where(d => d.ServiceOrderDetailId == orderDetailId && IsActiveRequest(d)).ToList();
+                if (active.Any(d => d.ProductId != item.ItemId))
+                    throw new InvalidOperationException("Phụ tùng đã yêu cầu kho thay đổi sản phẩm; cần đối soát phiếu kho trước khi duyệt.");
+                var alreadyRequested = active.Sum(d => d.RequestedQuantity);
+                if (alreadyRequested > item.Quantity)
+                    throw new InvalidOperationException("Số lượng báo giá nhỏ hơn số lượng đã yêu cầu kho; cần đối soát phiếu kho trước khi duyệt.");
+                quantitiesToRequest[item.Id] = item.Quantity - alreadyRequested;
+            }
+            partItems = partItems.Where(item => quantitiesToRequest[item.Id] > 0).ToList();
+            if (partItems.Count == 0) return null;
 
             var warehouse = (await _warehouseRepository.GetAllAsync())
                 .FirstOrDefault(w => w.BranchId == quotation.ServiceOrder.ExecuteBranchId && (w.IsActive ?? true));
@@ -75,32 +117,34 @@ namespace MyGarage.Services
                     ServiceOrderId = quotation.ServiceOrderId,
                     RequestDate = VietnamTime.Now,
                     Status = "PENDING",
-                    TechnicianId = actorId,
+                    TechnicianId = actorId > 0 ? actorId : null,
                     Note = $"Tự động tạo từ báo giá {quotation.Code}",
                     CreatedAt = VietnamTime.Now
                 };
 
                 await _repository.AddAsync(request);
 
-                foreach (var item in partItems)
+                foreach (var item in partItems.OrderBy(x => x.ItemId).ThenBy(x => x.Id))
                 {
                     var productId = item.ItemId!.Value;
-                    var requestedQty = item.Quantity;
+                    var requestedQty = quantitiesToRequest[item.Id];
                     string? statusNote = null;
 
-                    var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(productId, warehouse.Id);
+                    var inventory = await _store.GetTrackedInventoryAsync(productId, warehouse.Id);
+                    var reservedForLine = 0m;
 
                     if (inventory != null)
                     {
                         decimal currentReserved = inventory.ReservedQuantity ?? 0m;
-                        decimal available = inventory.Quantity - currentReserved;
+                        decimal available = Math.Max(0m, inventory.Quantity - currentReserved);
 
                         if (available < requestedQty)
                         {
                             statusNote = $"Thiếu hàng (Hiện có: {available:N0}, Yêu cầu: {requestedQty:N0})";
                         }
 
-                        inventory.ReservedQuantity = currentReserved + requestedQty;
+                        reservedForLine = Math.Min(available, requestedQty);
+                        inventory.ReservedQuantity = currentReserved + reservedForLine;
                         await _inventoryRepository.UpdateAsync(inventory.Id, inventory);
                     }
                     else
@@ -114,10 +158,12 @@ namespace MyGarage.Services
                         ProductId = productId,
                         WarehouseId = warehouse.Id,
                         RequestedQuantity = requestedQty,
+                        ReservedQuantity = reservedForLine,
+                        ServiceOrderDetailId = detailsByQuotationId[item.Id][0].Id,
                         Status = "PENDING",
                         Note = statusNote,
                         CreatedAt = VietnamTime.Now,
-                        CreatedBy = actorId
+                        CreatedBy = actorId > 0 ? actorId : null
                     };
                     await _detailRepository.AddAsync(detail);
                 }
@@ -135,30 +181,48 @@ namespace MyGarage.Services
                 if (materialRequest == null)
                     throw new KeyNotFoundException($"Không tìm thấy phiếu yêu cầu materialRequestId: {request.RequestId}");
 
-                if (materialRequest.Status == "ISSUED")
-                    throw new InvalidOperationException("Phiếu yêu cầu này đã được xuất kho hoàn tất.");
+                var requestStatus = (materialRequest.Status ?? string.Empty).Trim().ToUpperInvariant();
+                if (requestStatus is not ("PENDING" or "PARTIALLY_ISSUED" or "PARTIAL" or "APPROVED"))
+                    throw new InvalidOperationException("Phiếu yêu cầu không ở trạng thái cho phép xuất kho.");
 
                 var materialRequestDetails = await _store.GetMaterialRequestDetailsAsync(request.RequestId, ct);
+
+                if (request.Items == null || request.Items.Count == 0 || request.Items.Any(x => x == null) ||
+                    request.Items.GroupBy(x => x.DetailId).Any(g => g.Count() > 1))
+                    throw new InvalidOperationException("Danh sách vật tư xuất không hợp lệ hoặc có dòng trùng lặp.");
 
                 foreach (var item in request.Items)
                 {
                     var detail = materialRequestDetails.FirstOrDefault(d => d.Id == item.DetailId);
-                    if (detail == null) continue;
+                    if (detail == null || item.QuantityToIssue <= 0 ||
+                        item.QuantityToIssue > detail.RequestedQuantity - (detail.IssuedQuantity ?? 0m))
+                        throw new InvalidOperationException("Số lượng xuất không hợp lệ hoặc vượt số lượng còn yêu cầu.");
+                }
 
-                    if (item.QuantityToIssue <= 0) continue;
+                foreach (var item in request.Items.OrderBy(x => materialRequestDetails.First(d => d.Id == x.DetailId).WarehouseId)
+                    .ThenBy(x => materialRequestDetails.First(d => d.Id == x.DetailId).ProductId).ThenBy(x => x.DetailId))
+                {
+                    var detail = materialRequestDetails.FirstOrDefault(d => d.Id == item.DetailId);
+                    if (detail == null) throw new InvalidOperationException("Không tìm thấy vật tư trong phiếu yêu cầu.");
 
                     // 1. Cập nhật tồn kho
-                    var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(detail.ProductId, detail.WarehouseId);
+                    var inventory = await _store.GetTrackedInventoryAsync(detail.ProductId, detail.WarehouseId, ct);
                     if (inventory == null)
                         throw new InvalidOperationException($"Không tìm thấy tồn kho cho sản phẩm {detail.ProductId} tại kho {detail.WarehouseId}");
 
-                    if (inventory.Quantity < item.QuantityToIssue)
-                        throw new InvalidOperationException($"Tồn kho không đủ để xuất (Hiện có: {inventory.Quantity:N2}, Yêu cầu xuất: {item.QuantityToIssue:N2})");
+                    var reservedForLine = ResolveLineReservation(detail, inventory.ReservedQuantity ?? 0m);
+                    var totalReserved = inventory.ReservedQuantity ?? 0m;
+                    if (reservedForLine > totalReserved)
+                        throw new InvalidOperationException("Số giữ chỗ của phiếu không khớp tồn kho; cần đối soát.");
+                    var availableToIssue = Math.Max(0m, inventory.Quantity - totalReserved + reservedForLine);
+                    if (availableToIssue < item.QuantityToIssue)
+                        throw new InvalidOperationException($"Tồn kho khả dụng không đủ để xuất (Hiện có: {availableToIssue:N2}, Yêu cầu xuất: {item.QuantityToIssue:N2})");
 
                     inventory.Quantity -= item.QuantityToIssue;
                     // Giải phóng reservation (nếu có)
-                    decimal reservationToRemove = Math.Min(inventory.ReservedQuantity ?? 0, item.QuantityToIssue);
-                    inventory.ReservedQuantity -= reservationToRemove;
+                    decimal reservationToRemove = Math.Min(reservedForLine, item.QuantityToIssue);
+                    inventory.ReservedQuantity = totalReserved - reservationToRemove;
+                    detail.ReservedQuantity = reservedForLine - reservationToRemove;
 
                     await _inventoryRepository.UpdateAsync(inventory.Id, inventory);
 
@@ -215,18 +279,22 @@ namespace MyGarage.Services
 
                 var details = await _store.GetMaterialRequestDetailsAsync(requestId, ct);
 
-                foreach (var detail in details)
+                foreach (var detail in details.OrderBy(d => d.WarehouseId).ThenBy(d => d.ProductId).ThenBy(d => d.Id))
                 {
                     var remaining = Math.Max(0m, detail.RequestedQuantity - (detail.IssuedQuantity ?? 0m));
                     if (remaining > 0m)
                     {
-                        var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(detail.ProductId, detail.WarehouseId);
-                        if (inventory != null && (inventory.ReservedQuantity ?? 0m) > 0m)
+                        var inventory = await _store.GetTrackedInventoryAsync(detail.ProductId, detail.WarehouseId, ct);
+                        var reservedForLine = ResolveLineReservation(detail, inventory?.ReservedQuantity ?? 0m);
+                        if (reservedForLine > (inventory?.ReservedQuantity ?? 0m))
+                            throw new InvalidOperationException("Số giữ chỗ của phiếu không khớp tồn kho; cần đối soát.");
+                        if (inventory != null && reservedForLine > 0m)
                         {
                             decimal currentReserved = inventory.ReservedQuantity ?? 0m;
-                            inventory.ReservedQuantity = Math.Max(0m, currentReserved - Math.Min(currentReserved, remaining));
+                            inventory.ReservedQuantity = currentReserved - reservedForLine;
                             await _inventoryRepository.UpdateAsync(inventory.Id, inventory);
                         }
+                        detail.ReservedQuantity = 0m;
                     }
 
                     detail.Status = "REJECTED";
@@ -529,13 +597,12 @@ namespace MyGarage.Services
             IEnumerable<MaterialRequestDetail>? details,
             IReadOnlyList<MaterialRequestIssuanceItemDto>? requestedItems)
         {
-            var items = requestedItems?
-                .Where(x => x != null && x.DetailId > 0 && x.QuantityToIssue > 0m)
-                .ToList();
-
-            if (items == null || items.Count == 0)
+            if (requestedItems != null)
             {
-                items = (details ?? Enumerable.Empty<MaterialRequestDetail>())
+                return requestedItems.ToList();
+            }
+
+            return (details ?? Enumerable.Empty<MaterialRequestDetail>())
                     .Select(d => new MaterialRequestIssuanceItemDto
                     {
                         DetailId = d.Id,
@@ -543,9 +610,16 @@ namespace MyGarage.Services
                     })
                     .Where(x => x.QuantityToIssue > 0m)
                     .ToList();
-            }
+        }
 
-            return items;
+        internal static decimal ResolveLineReservation(MaterialRequestDetail detail, decimal totalReserved)
+        {
+            if (!detail.ReservedQuantity.HasValue && totalReserved > 0m)
+                throw new InvalidOperationException("Phiếu lịch sử chưa xác định số giữ chỗ; cần đối soát trước khi xuất hoặc từ chối.");
+            var reserved = detail.ReservedQuantity ?? 0m;
+            if (reserved < 0m || reserved > Math.Max(0m, detail.RequestedQuantity - (detail.IssuedQuantity ?? 0m)))
+                throw new InvalidOperationException("Số giữ chỗ của phiếu không hợp lệ; cần đối soát.");
+            return reserved;
         }
 
         internal static decimal ResolveUnitCost(MyGarage.Models.Inventory? inventory, Product? product)

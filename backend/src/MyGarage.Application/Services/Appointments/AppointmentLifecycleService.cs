@@ -128,6 +128,10 @@ namespace MyGarage.Services
             {
                 await _checkInService.ApplyArrivalStatusAsync(appointment, arriveTime);
                 var updated = await _statusPersistenceService.PersistStatusChangeAsync(id, appointment, actorStaffId);
+                if (updated != null && string.Equals(updated.Status, nameof(AppointmentStatus.NO_SHOW), StringComparison.OrdinalIgnoreCase))
+                {
+                    await _noShowService.ReleaseBookingReservationArtifactsAsync(updated.Id, updated.BranchId, actorStaffId, arriveTime);
+                }
                 if (updated != null)
                 {
                     await _checkInService.EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);

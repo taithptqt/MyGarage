@@ -1,218 +1,40 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal } from "@features/admin/components/AdminModals";
 import { voucherApi } from "@features/voucher/api/voucherApi";
 import { getVoucherPage, getRedemptionPage, getApprovalPage, getVoucherReportPage, getCampaignPage } from "@features/voucher/api/voucherPagingApi";
-import TablePagination from "@shared/components/TablePagination";
 import "../../admin/pages/AdminPage.css";
 import "./VoucherManagementPage.css";
 
-const TITLES = {
-  dashboard: ["Bảng điều khiển voucher", "Tổng quan hiệu quả voucher"],
-  list: ["Danh sách voucher", "Tạo, sửa và quản lý vòng đời voucher"],
-  campaigns: ["Chiến dịch", "Tổng hợp voucher theo chiến dịch"],
-  conflicts: ["Kiểm tra xung đột", "Kiểm tra xung đột điều kiện áp dụng"],
-  redemptions: ["Lịch sử sử dụng", "Theo dõi áp dụng và hoàn voucher"],
-  approvals: ["Hàng chờ phê duyệt", "Xử lý yêu cầu ngoại lệ"],
-  reports: ["Báo cáo hiệu quả", "Báo cáo hiệu quả và rủi ro"],
-  settings: ["Thiết lập chính sách", "Chính sách vận hành voucher"]
-};
-
-const STATUS_BADGE = {
-  DRAFT: "badge-info",
-  PENDING_APPROVAL: "badge-suspended",
-  SCHEDULED: "badge-info",
-  ACTIVE: "badge-active",
-  PAUSED: "badge-suspended",
-  ENDED: "badge-inactive",
-  EXHAUSTED: "badge-warning",
-  EXPIRED: "badge-inactive",
-  REVOKED: "badge-inactive",
-  ARCHIVED: "badge-inactive",
-  PENDING: "badge-suspended",
-  APPROVED: "badge-active",
-  REJECTED: "badge-inactive",
-  REDEEMED: "badge-active",
-  REVERSED: "badge-warning"
-};
-
-const STATUS_LABEL = {
-  DRAFT: "Nháp",
-  PENDING_APPROVAL: "Chờ duyệt",
-  SCHEDULED: "Đã lên lịch",
-  ACTIVE: "Đang hoạt động",
-  PAUSED: "Tạm dừng",
-  ENDED: "Đã kết thúc",
-  EXHAUSTED: "Hết lượt",
-  EXPIRED: "Hết hạn",
-  REVOKED: "Đã thu hồi",
-  ARCHIVED: "Lưu trữ",
-  PENDING: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  REJECTED: "Từ chối",
-  REDEEMED: "Đã sử dụng",
-  REVERSED: "Đã hoàn"
-};
-
-const SECTION_NEEDS = {
-  vouchers: new Set([]),
-  campaigns: new Set([]),
-  redemptions: new Set([]),
-  approvals: new Set([])
-};
-
-const up = (v) => String(v || "").trim().toUpperCase();
-const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
-const tnull = (v) => {
-  const s = String(v ?? "").trim();
-  return s || null;
-};
-const nnull = (v) => {
-  const s = String(v ?? "").trim();
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
-const arr = (v) => (Array.isArray(v) ? v : Array.isArray(v?.items) ? v.items : []);
-const rows = (v) => arr(v).filter((x) => x && typeof x === "object");
-const statusText = (s) => STATUS_LABEL[up(s)] || up(s) || "-";
-const pct = (a, b) => (!b || b <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((a / b) * 100))));
-const dt = (v) => {
-  if (!v) return "-";
-  const d = new Date(v);
-  return Number.isNaN(d.getTime())
-    ? "-"
-    : d.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
-};
-const money = (v) =>
-  Number.isFinite(Number(v))
-    ? Number(v).toLocaleString("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 })
-    : "-";
-const budgetAlertText = (campaign) => {
-  if (campaign?.isBudgetExceeded) return "Vượt ngân sách";
-  if (campaign?.isNearBudgetLimit) return "Sắp chạm ngân sách";
-  if (num(campaign?.budgetLimit, 0) <= 0) return "Không giới hạn";
-  return "Bình thường";
-};
-const budgetAlertClass = (campaign) => {
-  if (campaign?.isBudgetExceeded) return "badge-inactive";
-  if (campaign?.isNearBudgetLimit) return "badge-warning";
-  if (num(campaign?.budgetLimit, 0) <= 0) return "badge-info";
-  return "badge-active";
-};
-const toIso = (v) => {
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-};
-const toInput = (v) => {
-  const d = new Date(v || Date.now());
-  const o = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - o).toISOString().slice(0, 16);
-};
-const withTimeout = (promise, timeoutMs, message) =>
-  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs))]);
-const uid = () => {
-  try {
-    const u = JSON.parse(localStorage.getItem("mygarage_user") || "{}");
-    return Number(u?.id || u?.staffId || u?.staff?.id) || null;
-  } catch {
-    return null;
-  }
-};
-
-function EmptyState({ message }) {
-  return (
-    <div className="empty-state">
-      <span className="empty-icon">*</span>
-      <span>{message}</span>
-    </div>
-  );
-}
-
-function formDefault() {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + 30);
-  return {
-    id: null,
-    code: "",
-    voucherName: "",
-    type: "FIXED",
-    value: "",
-    minOrderValue: "",
-    maxDiscountAmount: "",
-    usageLimit: "",
-    budgetLimit: "",
-    campaignId: "",
-    startDate: toInput(now),
-    endDate: toInput(end),
-    allowedChannels: "",
-    allowedPaymentMethods: "",
-    isStackable: false,
-    approvalRequired: false,
-    isActive: true,
-    description: ""
-  };
-}
-
-const mapForm = (v) => ({
-  id: v.id,
-  code: v.code || "",
-  voucherName: v.voucherName || "",
-  type: v.type || "FIXED",
-  value: v.value ?? "",
-  minOrderValue: v.minOrderValue ?? "",
-  maxDiscountAmount: v.maxDiscountAmount ?? "",
-  usageLimit: v.usageLimit ?? "",
-  budgetLimit: v.budgetLimit ?? "",
-  campaignId: v.campaignId ?? "",
-  startDate: toInput(v.startDate),
-  endDate: toInput(v.endDate),
-  allowedChannels: v.allowedChannels || "",
-  allowedPaymentMethods: v.allowedPaymentMethods || "",
-  isStackable: !!v.isStackable,
-  approvalRequired: !!v.approvalRequired,
-  isActive: v.isActive ?? true,
-  description: v.description || ""
-});
-
-function campaignDefault() {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + 30);
-  return {
-    id: null,
-    campaignCode: "",
-    name: "",
-    objective: "",
-    description: "",
-    startDate: toInput(now),
-    endDate: toInput(end),
-    budgetLimit: "",
-    status: "",
-    isActive: true,
-    ownerStaffId: "",
-    voucherIds: [],
-    replaceVoucherScope: true
-  };
-}
-
-const mapCampaignForm = (item) => ({
-  id: item.id ?? null,
-  campaignCode: item.campaignCode || "",
-  name: item.name || "",
-  objective: item.objective || "",
-  description: item.description || "",
-  startDate: toInput(item.startDate),
-  endDate: toInput(item.endDate),
-  budgetLimit: item.budgetLimit ?? "",
-  status: item.status || "",
-  isActive: item.isActive ?? true,
-  ownerStaffId: item.ownerStaffId ?? "",
-  voucherIds: Array.isArray(item.voucherIds)
-    ? item.voucherIds.map((x) => Number(x)).filter((x) => Number.isFinite(x))
-    : [],
-  replaceVoucherScope: true
-});
+import {
+  SECTION_NEEDS,
+  campaignDefault,
+  formDefault,
+  mapCampaignForm,
+  mapForm,
+  nnull,
+  num,
+  rows,
+  tnull,
+  toIso,
+  uid,
+  up,
+  withTimeout
+} from "./voucherManagementHelpers";
+import {
+  VoucherApprovalsSection,
+  VoucherCampaignsSection,
+  VoucherConflictsSection,
+  VoucherDashboardSection,
+  VoucherListSection,
+  VoucherRedemptionsSection,
+  VoucherReportsSection,
+  VoucherSettingsSection
+} from "./VoucherManagementSections";
+import {
+  CampaignDetailModal,
+  CampaignFormModal,
+  VoucherDetailModal,
+  VoucherFormModal
+} from "./VoucherModals";
 
 export default function VoucherManagementPage({ section = "dashboard" }) {
   const [loading, setLoading] = useState(true);
@@ -847,490 +669,201 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {(error || (isList && voucherError) || (isRedemptions && redemptionError) || (isApprovals && approvalError) || (isReports && reportError) || (isCampaigns && campaignError)) ? <div className="alert alert-error">{error || (isList ? voucherError : isRedemptions ? redemptionError : isApprovals ? approvalError : isReports ? reportError : campaignError)}</div> : null}
 
       {isDashboard ? (
-        <>
-          <div className="stats-bar">
-            <div className="stat-card"><div className="stat-value">{activeCount}</div><div className="stat-label">Voucher hoạt động</div></div>
-            <div className="stat-card"><div className="stat-value">{issued}</div><div className="stat-label">Đã phát hành</div></div>
-            <div className="stat-card"><div className="stat-value">{redeemed}</div><div className="stat-label">Đã sử dụng</div></div>
-            <div className="stat-card"><div className="stat-value">{pct(redeemed, issued)}%</div><div className="stat-label">Tỷ lệ sử dụng</div></div>
-            <div className="stat-card"><div className="stat-value">{money(discount)}</div><div className="stat-label">Tổng giảm giá</div></div>
-            <div className="stat-card"><div className="stat-value">{pendingApprovals}</div><div className="stat-label">Chờ phê duyệt</div></div>
-          </div>
-
-          <div className="table-toolbar voucher-toolbar">
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới bảng điều khiển"}</button>
-          </div>
-
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>Top voucher</th><th>Mã</th><th>Đã sử dụng</th><th>Đã phát hành</th><th>Tỷ lệ</th></tr></thead>
-              <tbody>
-                {topVouchers.length === 0 ? <tr><td colSpan={5}><EmptyState message="Chưa có dữ liệu top voucher" /></td></tr> : topVouchers.map((v) => (
-                  <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.redeemed}</td><td>{v.issued}</td><td>{pct(v.redeemed, v.issued)}%</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="voucher-card-grid">
-            <div className="voucher-panel-card">
-              <h3>Ngân sách voucher</h3>
-              <p>Đã dùng: <strong>{money(budgetUsed)}</strong></p>
-              <p>Giới hạn: <strong>{money(budgetLimit)}</strong></p>
-              <div className="voucher-progress"><div className="voucher-progress-fill" style={{ width: `${pct(budgetUsed, budgetLimit)}%` }} /></div>
-            </div>
-            <div className="voucher-panel-card">
-              <h3>Voucher sắp hết quota</h3>
-              {nearQuotaVouchers.length === 0 ? <p className="voucher-subtext">Không có voucher cảnh báo</p> : nearQuotaVouchers.map((v) => (
-                <div key={v.id} className="voucher-subtext">{v.code || v.voucherName}: {Math.round(v.ratio * 100)}%</div>
-              ))}
-            </div>
-            <div className="voucher-panel-card">
-              <h3>Phê duyệt cần xử lý</h3>
-              {dashboardApprovals.map((x) => (
-                <div key={x.id} className="voucher-subtext">#{x.id} - {x.requestType || "N/A"} - {x.riskLevel || "-"}</div>
-              ))}
-              {pendingApprovals === 0 ? <p className="voucher-subtext">Không có yêu cầu chờ duyệt</p> : null}
-            </div>
-          </div>
-        </>
+        <VoucherDashboardSection
+          activeCount={activeCount}
+          issued={issued}
+          redeemed={redeemed}
+          discount={discount}
+          pendingApprovals={pendingApprovals}
+          refresh={refresh}
+          busy={busy}
+          topVouchers={topVouchers}
+          budgetUsed={budgetUsed}
+          budgetLimit={budgetLimit}
+          nearQuotaVouchers={nearQuotaVouchers}
+          dashboardApprovals={dashboardApprovals}
+        />
       ) : null}
 
       {isList ? (
-        <>
-          <div className="table-toolbar voucher-toolbar">
-            <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm voucher..." />
-            <select className="voucher-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-              {statusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "Tất cả" : statusText(x)}</option>)}
-            </select>
-            <button className="btn-primary" onClick={openCreate}>+ Tạo voucher</button>
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới danh sách"}</button>
-          </div>
-
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>ID</th><th>Mã</th><th>Tên voucher</th><th>Loại</th><th>Giá trị</th><th>Thời gian hiệu lực</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-              <tbody>
-                {voucherLoading ? <tr><td colSpan={9}>Đang tải dữ liệu voucher...</td></tr> : voucherError ? null : voucherRows.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : voucherRows.map((v) => (
-                  <tr key={v.id}>
-                    <td className="td-id">#{v.id}</td><td>{v.code}</td><td>{v.voucherName}</td><td>{v.type}</td>
-                    <td>{v.type === "PERCENT" ? `${v.value || 0}%` : money(v.value)}</td>
-                    <td>{dt(v.startDate)} - {dt(v.endDate)}</td>
-                    <td>{num(v.redeemedCount, num(v.usedCount, 0))}/{num(v.issuedCount, num(v.usageLimit, 0))}</td>
-                    <td><span className={`badge ${STATUS_BADGE[up(v.status)] || "badge-inactive"}`}>{statusText(v.status)}</span></td>
-                    <td><div className="row-actions voucher-actions-col">
-                      <button className="btn-icon" onClick={() => setSelected(v)}>Chi tiết</button>
-                      <button className="btn-icon" onClick={() => openEdit(v)}>Sửa</button>
-                      {up(v.status) === "ACTIVE" ? <button className="btn-icon" onClick={() => changeStatus(v.id, "pause")}>Tạm dừng</button> : <button className="btn-icon" onClick={() => changeStatus(v.id, "activate")}>Kích hoạt</button>}
-                      <button className="btn-icon" onClick={() => changeStatus(v.id, "revoke")}>Thu hôi</button>
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            {!voucherError && <TablePagination
-              totalItems={voucherTotal}
-              currentPage={voucherPage}
-              pageSize={voucherPageSize}
-              onPageChange={setVoucherPage}
-              onPageSizeChange={(size) => {
-                setVoucherPageSize(size);
-                setVoucherPage(1);
-              }}
-            />}
-          </div>
-        </>
+        <VoucherListSection
+          q={q}
+          setQ={setQ}
+          status={status}
+          setStatus={setStatus}
+          statusOptions={statusOptions}
+          openCreate={openCreate}
+          refresh={refresh}
+          busy={busy}
+          voucherLoading={voucherLoading}
+          voucherError={voucherError}
+          voucherRows={voucherRows}
+          setSelected={setSelected}
+          openEdit={openEdit}
+          changeStatus={changeStatus}
+          voucherTotal={voucherTotal}
+          voucherPage={voucherPage}
+          voucherPageSize={voucherPageSize}
+          setVoucherPage={setVoucherPage}
+          setVoucherPageSize={setVoucherPageSize}
+        />
       ) : null}
 
       {isCampaigns ? (
-        <>
-          <div className="voucher-card-grid">
-            <div className="voucher-panel-card"><h3>Tổng chiến dịch</h3><p><strong>{campaignStats.totalCampaigns}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Chiến dịch đang hoạt động</h3><p><strong>{campaignStats.activeCampaigns}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tổng lượt sử dụng</h3><p><strong>{campaignStats.totalRedeemed}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Cảnh báo ngân sách</h3><p><strong>{campaignStats.budgetWarningCount}</strong></p></div>
-          </div>
-          <div className="table-toolbar voucher-toolbar">
-            <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm chiến dịch..." />
-            <select className="voucher-select" value={campaignFilterStatus} onChange={(e) => setCampaignFilterStatus(e.target.value)}>
-              {campaignStatusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "Tất cả trạng thái" : statusText(x)}</option>)}
-            </select>
-            <button className="btn-primary" onClick={openCreateCampaign}>+ Tạo chiến dịch</button>
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới chiến dịch"}</button>
-          </div>
-          {campaignStats.budgetWarningCount > 0 ? (
-            <div className="voucher-budget-warning-box">
-              <strong>{campaignStats.budgetWarningCount} chiến dịch đang sắp hết hoặc vượt ngân sách:</strong>
-              <div className="voucher-budget-warning-list">
-                {campaignWarnings.map((c) => (
-                  <span key={c.id} className="voucher-budget-warning-chip">
-                    {c.name || c.campaignCode || `#${c.id}`}: {num(c.budgetUsagePercent, 0)}%
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>ID</th><th>Mã chiến dịch</th><th>Tên chiến dịch</th><th>Thời gian</th><th>Voucher áp dụng</th><th>Đã sử dụng</th><th>Ngân sách đã dùng</th><th>Tỷ lệ ngân sách</th><th>Cảnh báo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-              <tbody>
-                {campaignLoading ? <tr><td colSpan={11}>Đang tải dữ liệu voucher...</td></tr> : campaignPageRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : campaignPageRows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="td-id">#{r.id}</td>
-                    <td>{r.campaignCode || "-"}</td>
-                    <td>
-                      <div className="voucher-cell-title">{r.name || "-"}</div>
-                      <div className="voucher-subtext">{r.description || r.objective || "Chưa có mô tả"}</div>
-                    </td>
-                    <td>{dt(r.startDate)} - {dt(r.endDate)}</td>
-                    <td>{r.voucherCount}</td>
-                    <td>{r.redeemed}</td>
-                    <td>{money(r.budgetUsed)} / {money(r.budgetLimit)}</td>
-                    <td>{num(r.budgetUsagePercent, 0)}%</td>
-                    <td><span className={`badge ${budgetAlertClass(r)}`}>{budgetAlertText(r)}</span></td>
-                    <td><span className={`badge ${STATUS_BADGE[up(r.status)] || "badge-inactive"}`}>{statusText(r.status)}</span></td>
-                    <td>
-                      <div className="row-actions voucher-actions-col">
-                        <button className="btn-icon" onClick={() => openCampaignDetail(r)} disabled={campaignDetailLoading}>Chi tiết</button>
-                        <button className="btn-icon" onClick={() => openEditCampaign(r)} disabled={campaignDetailLoading}>Sửa</button>
-                        <button className="btn-icon" onClick={() => removeCampaign(r)}>Xóa</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={campaignTotal}
-              currentPage={campaignPage}
-              pageSize={campaignPageSize}
-              onPageChange={setCampaignPage}
-              onPageSizeChange={(size) => {
-                setCampaignPageSize(size);
-                setCampaignPage(1);
-              }}
-            />
-          </div>
-        </>
+        <VoucherCampaignsSection
+          campaignStats={campaignStats}
+          q={q}
+          setQ={setQ}
+          campaignFilterStatus={campaignFilterStatus}
+          setCampaignFilterStatus={setCampaignFilterStatus}
+          campaignStatusOptions={campaignStatusOptions}
+          openCreateCampaign={openCreateCampaign}
+          refresh={refresh}
+          busy={busy}
+          campaignWarnings={campaignWarnings}
+          campaignLoading={campaignLoading}
+          campaignPageRows={campaignPageRows}
+          openCampaignDetail={openCampaignDetail}
+          campaignDetailLoading={campaignDetailLoading}
+          openEditCampaign={openEditCampaign}
+          removeCampaign={removeCampaign}
+          campaignTotal={campaignTotal}
+          campaignPage={campaignPage}
+          campaignPageSize={campaignPageSize}
+          setCampaignPage={setCampaignPage}
+          setCampaignPageSize={setCampaignPageSize}
+        />
       ) : null}
+
       {isConflicts ? (
-        <div className="voucher-card-grid">
-          <div className="voucher-panel-card">
-            <h3>So sánh voucher</h3>
-            <p className="voucher-subtext">Chọn 2 voucher để kiểm tra xung đột cơ bản về mã, cộng dồn và thời gian.</p>
-            <input className="search-input" value={confQuery} onChange={(e) => setConfQuery(e.target.value)} placeholder="Tìm voucher..." />
-            <div className="voucher-form-grid voucher-form-grid--2">
-              <select value={confA} onChange={(e) => selectConflict(e.target.value, setConfA)} disabled={confLoading}><option value="">Voucher A</option>{conflictOptions.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
-              <select value={confB} onChange={(e) => selectConflict(e.target.value, setConfB)} disabled={confLoading}><option value="">Voucher B</option>{conflictOptions.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
-            </div>
-            <TablePagination totalItems={confTotal} currentPage={confPage} pageSize={confPageSize} onPageChange={setConfPage} onPageSizeChange={(size) => { setConfPageSize(size); setConfPage(1); }} />
-            <div className="voucher-finding-list">
-              {confResult.length === 0 ? <div className="voucher-finding">Chưa có kết quả. Vui lòng chọn 2 voucher.</div> : confResult.map((x, i) => <div key={`${x}-${i}`} className="voucher-finding voucher-finding-warning">{x}</div>)}
-            </div>
-          </div>
-          <div className="voucher-panel-card">
-            <h3>Hương dẫn xử lý</h3>
-            <p className="voucher-subtext">1. Nếu trùng mã hoặc không cộng dồn được thì chặn ngay.</p>
-            <p className="voucher-subtext">2. Nếu trùng thời gian thì cần thêm rule xung đột ở backend.</p>
-            <p className="voucher-subtext">3. Nếu voucher % cộng với voucher % thì cần giới hạn trần tổng.</p>
-          </div>
-        </div>
+        <VoucherConflictsSection
+          confQuery={confQuery}
+          setConfQuery={setConfQuery}
+          confA={confA}
+          setConfA={setConfA}
+          confB={confB}
+          setConfB={setConfB}
+          selectConflict={selectConflict}
+          confLoading={confLoading}
+          conflictOptions={conflictOptions}
+          confTotal={confTotal}
+          confPage={confPage}
+          confPageSize={confPageSize}
+          setConfPage={setConfPage}
+          setConfPageSize={setConfPageSize}
+          confResult={confResult}
+        />
       ) : null}
 
       {isRedemptions ? (
-        <>
-          <div className="table-toolbar voucher-toolbar">
-            <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm lịch sử sử dụng..." />
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới lịch sử"}</button>
-          </div>
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>ID</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
-              <tbody>
-                {redemptionLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : redemptionRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : redemptionRows.map((r) => (
-                  <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td><span className={`badge ${STATUS_BADGE[up(r.redemptionStatus)] || "badge-inactive"}`}>{statusText(r.redemptionStatus)}</span></td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={redemptionTotal}
-              currentPage={redemptionPage}
-              pageSize={redemptionPageSize}
-              onPageChange={setRedemptionPage}
-              onPageSizeChange={(size) => {
-                setRedemptionPageSize(size);
-                setRedemptionPage(1);
-              }}
-            />
-          </div>
-        </>
+        <VoucherRedemptionsSection
+          q={q}
+          setQ={setQ}
+          refresh={refresh}
+          busy={busy}
+          redemptionLoading={redemptionLoading}
+          redemptionRows={redemptionRows}
+          redemptionTotal={redemptionTotal}
+          redemptionPage={redemptionPage}
+          redemptionPageSize={redemptionPageSize}
+          setRedemptionPage={setRedemptionPage}
+          setRedemptionPageSize={setRedemptionPageSize}
+        />
       ) : null}
 
       {isApprovals ? (
-        <>
-          <div className="voucher-inline-form">
-            <input value={approvalBy} onChange={(e) => setApprovalBy(e.target.value)} placeholder="ID người duyệt" />
-            <input value={approvalNote} onChange={(e) => setApprovalNote(e.target.value)} placeholder="Ghi chú/Lý do" />
-          </div>
-          <div className="table-toolbar voucher-toolbar">
-            <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm yêu cầu phê duyệt..." />
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới phê duyệt"}</button>
-          </div>
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>ID</th><th>Loại yêu cầu</th><th>Voucher</th><th>Mức rủi ro</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-              <tbody>
-                {approvalLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : approvalRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : approvalRows.map((a) => (
-                  <tr key={a.id}><td>#{a.id}</td><td>{a.requestType}</td><td>{a.voucherId ? `#${a.voucherId}` : "-"}</td><td>{a.riskLevel || "-"}</td><td><span className={`badge ${STATUS_BADGE[up(a.status)] || "badge-inactive"}`}>{statusText(a.status)}</span></td><td>{up(a.status) === "PENDING" ? <div className="row-actions"><button className="btn-icon" onClick={() => decide(a, "approve")}>Duyệt</button><button className="btn-icon" onClick={() => decide(a, "reject")}>Từ chối</button></div> : "Đã xử lý"}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={approvalTotal}
-              currentPage={approvalPage}
-              pageSize={approvalPageSize}
-              onPageChange={setApprovalPage}
-              onPageSizeChange={(size) => {
-                setApprovalPageSize(size);
-                setApprovalPage(1);
-              }}
-            />
-          </div>
-        </>
+        <VoucherApprovalsSection
+          approvalBy={approvalBy}
+          setApprovalBy={setApprovalBy}
+          approvalNote={approvalNote}
+          setApprovalNote={setApprovalNote}
+          q={q}
+          setQ={setQ}
+          refresh={refresh}
+          busy={busy}
+          approvalLoading={approvalLoading}
+          approvalRows={approvalRows}
+          decide={decide}
+          approvalTotal={approvalTotal}
+          approvalPage={approvalPage}
+          approvalPageSize={approvalPageSize}
+          setApprovalPage={setApprovalPage}
+          setApprovalPageSize={setApprovalPageSize}
+        />
       ) : null}
 
       {isReports ? (
-        <>
-          <div className="voucher-card-grid">
-            <div className="voucher-panel-card"><h3>Tỷ lệ sử dụng</h3><p><strong>{pct(reportStats.redeemed, reportStats.issued)}%</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tổng giá trị giảm</h3><p><strong>{money(reportStats.discount)}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tỷ lệ dùng ngân sách</h3><p><strong>{pct(reportStats.budgetUsed, reportStats.budgetLimit)}%</strong></p></div>
-          </div>
-          <div className="table-toolbar voucher-toolbar">
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới báo cáo"}</button>
-          </div>
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>Voucher</th><th>Mã</th><th>Đã phát hành</th><th>Đã sử dụng</th><th>Tỷ lệ</th><th>Ngân sách đã dùng</th></tr></thead>
-              <tbody>
-                {reportLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : reportVouchers.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : reportVouchers.map((v) => (
-                  <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.issued}</td><td>{v.redeemed}</td><td>{pct(v.redeemed, v.issued)}%</td><td>{money(v.budgetUsed)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={reportVoucherTotal}
-              currentPage={reportVoucherPage}
-              pageSize={reportVoucherPageSize}
-              onPageChange={setReportVoucherPage}
-              onPageSizeChange={(size) => {
-                setReportVoucherPageSize(size);
-                setReportVoucherPage(1);
-              }}
-            />
-          </div>
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead><tr><th>ID sử dụng</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
-              <tbody>
-                {reportLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : reportRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : reportRedemptions.map((r) => (
-                  <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td>{statusText(r.redemptionStatus)}</td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={reportRedemptionTotal}
-              currentPage={reportRedemptionPage}
-              pageSize={reportRedemptionPageSize}
-              onPageChange={setReportRedemptionPage}
-              onPageSizeChange={(size) => {
-                setReportRedemptionPageSize(size);
-                setReportRedemptionPage(1);
-              }}
-            />
-          </div>
-        </>
+        <VoucherReportsSection
+          reportStats={reportStats}
+          refresh={refresh}
+          busy={busy}
+          reportLoading={reportLoading}
+          reportVouchers={reportVouchers}
+          reportVoucherTotal={reportVoucherTotal}
+          reportVoucherPage={reportVoucherPage}
+          reportVoucherPageSize={reportVoucherPageSize}
+          setReportVoucherPage={setReportVoucherPage}
+          setReportVoucherPageSize={setReportVoucherPageSize}
+          reportRedemptions={reportRedemptions}
+          reportRedemptionTotal={reportRedemptionTotal}
+          reportRedemptionPage={reportRedemptionPage}
+          reportRedemptionPageSize={reportRedemptionPageSize}
+          setReportRedemptionPage={setReportRedemptionPage}
+          setReportRedemptionPageSize={setReportRedemptionPageSize}
+        />
       ) : null}
 
-      {isSettings ? (
-        <div className="voucher-card-grid">
-          <div className="voucher-panel-card">
-            <h3>Chính sách</h3>
-            <div className="voucher-settings-policy-grid">
-              <label className="voucher-toggle-item voucher-settings-policy-item">
-                <span>Bắt buộc trần giảm cho voucher phần trểm</span>
-                <input
-                  type="checkbox"
-                  checked={policy.requireCapPercent}
-                  onChange={(e) => setPolicy((p) => ({ ...p, requireCapPercent: e.target.checked }))}
-                />
-              </label>
-              <label className="voucher-toggle-item voucher-settings-policy-item">
-                <span>Chặn cộng dồn theo mặc định</span>
-                <input
-                  type="checkbox"
-                  checked={policy.blockStacking}
-                  onChange={(e) => setPolicy((p) => ({ ...p, blockStacking: e.target.checked }))}
-                />
-              </label>
-            </div>
-            <div className="form-actions voucher-form-actions-left">
-              <button className="btn-primary" onClick={() => localStorage.setItem("voucher_admin_policy", JSON.stringify(policy))}>
-                Lưu chính sách
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {isSettings ? <VoucherSettingsSection policy={policy} setPolicy={setPolicy} /> : null}
 
       {modalOpen ? (
-        <Modal title={mode === "create" ? "Tạo voucher" : `Sửa voucher #${form.id}`} onClose={() => setModalOpen(false)}>
-          <form className="admin-form" onSubmit={submit}>
-            <div className="voucher-form-grid voucher-form-grid--2">
-              <input value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} placeholder="Mã voucher *" required />
-              <input value={form.voucherName} onChange={(e) => setForm((p) => ({ ...p, voucherName: e.target.value }))} placeholder="Tên voucher *" required />
-              <input value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))} placeholder="Loại voucher" />
-              <input value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} placeholder="Giá trị" />
-              <input value={form.minOrderValue} onChange={(e) => setForm((p) => ({ ...p, minOrderValue: e.target.value }))} placeholder="Hóa đơn tđi thiểu" />
-              <input value={form.maxDiscountAmount} onChange={(e) => setForm((p) => ({ ...p, maxDiscountAmount: e.target.value }))} placeholder="Giảm tđi đa" />
-              <input type="datetime-local" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} />
-              <input type="datetime-local" value={form.endDate} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} />
-              <input value={form.usageLimit} onChange={(e) => setForm((p) => ({ ...p, usageLimit: e.target.value }))} placeholder="Giới hạn lượt dùng" />
-              <input value={form.budgetLimit} onChange={(e) => setForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ngân sách tối đa" />
-            </div>
-            <textarea rows={3} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Mô tả" />
-            <div className="voucher-toggle-grid">
-              <label className="voucher-check-item"><input type="checkbox" checked={form.isStackable} onChange={(e) => setForm((p) => ({ ...p, isStackable: e.target.checked }))} /><span>Cho phép cộng dồn</span></label>
-              <label className="voucher-check-item"><input type="checkbox" checked={form.approvalRequired} onChange={(e) => setForm((p) => ({ ...p, approvalRequired: e.target.checked }))} /><span>Yêu cầu phê duyệt</span></label>
-              <label className="voucher-check-item"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} /><span>Kích hoạt</span></label>
-            </div>
-            <div className="form-actions"><button type="button" className="btn-ghost" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</button></div>
-          </form>
-        </Modal>
+        <VoucherFormModal
+          mode={mode}
+          form={form}
+          setForm={setForm}
+          submit={submit}
+          saving={saving}
+          onClose={() => setModalOpen(false)}
+        />
       ) : null}
 
       {campaignModalOpen ? (
-        <Modal title={campaignMode === "create" ? "Tạo chiến dịch" : `Sửa chiến dịch #${campaignForm.id}`} onClose={() => setCampaignModalOpen(false)}>
-          <form className="admin-form" onSubmit={submitCampaign}>
-            <div className="voucher-form-grid voucher-form-grid--2">
-              <input value={campaignForm.campaignCode} onChange={(e) => setCampaignForm((p) => ({ ...p, campaignCode: e.target.value }))} placeholder="Mã chiến dịch (không bắt buộc)" />
-              <input value={campaignForm.name} onChange={(e) => setCampaignForm((p) => ({ ...p, name: e.target.value }))} placeholder="Tên chiến dịch *" required />
-              <input value={campaignForm.objective} onChange={(e) => setCampaignForm((p) => ({ ...p, objective: e.target.value }))} placeholder="Mục tiêu chiến dịch" />
-              <input value={campaignForm.ownerStaffId} onChange={(e) => setCampaignForm((p) => ({ ...p, ownerStaffId: e.target.value }))} placeholder="ID quản lý chiến dịch" />
-              <input type="datetime-local" value={campaignForm.startDate} onChange={(e) => setCampaignForm((p) => ({ ...p, startDate: e.target.value }))} />
-              <input type="datetime-local" value={campaignForm.endDate} onChange={(e) => setCampaignForm((p) => ({ ...p, endDate: e.target.value }))} />
-              <input value={campaignForm.budgetLimit} onChange={(e) => setCampaignForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ngân sách giới hạn (VND)" />
-              <select value={campaignForm.status} onChange={(e) => setCampaignForm((p) => ({ ...p, status: e.target.value }))}>
-                <option value="">Tự động theo thời gian</option>
-                <option value="DRAFT">Nháp</option>
-                <option value="PENDING_APPROVAL">Chờ duyệt</option>
-                <option value="SCHEDULED">Đã lên lịch</option>
-                <option value="ACTIVE">Đang hoạt động</option>
-                <option value="PAUSED">Tạm dừng</option>
-                <option value="ENDED">Đã kết thúc</option>
-                <option value="ARCHIVED">Lưu trữ</option>
-              </select>
-            </div>
-
-            <textarea rows={3} value={campaignForm.description} onChange={(e) => setCampaignForm((p) => ({ ...p, description: e.target.value }))} placeholder="Mô tả chiến dịch" />
-
-            <div className="voucher-toggle-grid">
-              <label className="voucher-check-item"><input type="checkbox" checked={campaignForm.isActive} onChange={(e) => setCampaignForm((p) => ({ ...p, isActive: e.target.checked }))} /><span>Chiến dịch đang hoạt động</span></label>
-              <label className="voucher-check-item"><input type="checkbox" checked={campaignForm.replaceVoucherScope} onChange={(e) => setCampaignForm((p) => ({ ...p, replaceVoucherScope: e.target.checked }))} /><span>Thay toàn bộ danh sách voucher áp dụng</span></label>
-            </div>
-
-            <div className="voucher-campaign-voucher-box">
-              <div className="voucher-campaign-voucher-head">
-                <h3>Voucher được phép áp dụng trong chiến dịch</h3>
-                <span>{campaignForm.voucherIds.length} voucher đã chọn</span>
-              </div>
-              <input className="search-input" value={campaignVoucherQuery} onChange={(e) => { setCampaignVoucherQuery(e.target.value); setCampaignVoucherPage(1); }} placeholder="Tìm voucher..." />
-              {campaignVoucherError ? <div className="alert alert-error">{campaignVoucherError}</div> : null}
-              <div className="voucher-campaign-voucher-list">
-                {campaignVoucherLoading ? (
-                  <div className="voucher-subtext">Đang tải dữ liệu voucher...</div>
-                ) : campaignVoucherRows.length === 0 ? (
-                  <div className="voucher-subtext">Chưa có voucher để gán.</div>
-                ) : campaignVoucherRows.map((voucher) => (
-                  <label key={voucher.id} className="voucher-campaign-voucher-item">
-                    <input
-                      type="checkbox"
-                      checked={(campaignForm.voucherIds || []).includes(Number(voucher.id))}
-                      onChange={() => toggleCampaignVoucher(voucher.id)}
-                    />
-                    <span className="voucher-campaign-voucher-code">{voucher.code || `#${voucher.id}`}</span>
-                    <span>{voucher.voucherName || "Chưa đặt tên"}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <TablePagination totalItems={campaignVoucherTotal} currentPage={campaignVoucherPage} pageSize={campaignVoucherPageSize} onPageChange={setCampaignVoucherPage} onPageSizeChange={(size) => { setCampaignVoucherPageSize(size); setCampaignVoucherPage(1); }} />
-            <div className="form-actions">
-              <button type="button" className="btn-ghost" onClick={() => setCampaignModalOpen(false)}>Hủy</button>
-              <button type="submit" className="btn-primary" disabled={campaignSaving || campaignVoucherLoading || Boolean(campaignVoucherError)}>{campaignSaving ? "Đang lưu..." : "Lưu chiến dịch"}</button>
-            </div>
-          </form>
-        </Modal>
+        <CampaignFormModal
+          campaignMode={campaignMode}
+          campaignForm={campaignForm}
+          setCampaignForm={setCampaignForm}
+          submitCampaign={submitCampaign}
+          campaignVoucherQuery={campaignVoucherQuery}
+          setCampaignVoucherQuery={setCampaignVoucherQuery}
+          setCampaignVoucherPage={setCampaignVoucherPage}
+          campaignVoucherError={campaignVoucherError}
+          campaignVoucherLoading={campaignVoucherLoading}
+          campaignVoucherRows={campaignVoucherRows}
+          toggleCampaignVoucher={toggleCampaignVoucher}
+          campaignVoucherTotal={campaignVoucherTotal}
+          campaignVoucherPage={campaignVoucherPage}
+          campaignVoucherPageSize={campaignVoucherPageSize}
+          setCampaignVoucherPageSize={setCampaignVoucherPageSize}
+          campaignSaving={campaignSaving}
+          onClose={() => setCampaignModalOpen(false)}
+        />
       ) : null}
 
       {selectedCampaign ? (
-        <Modal title={`Chi tiết chiến dịch #${selectedCampaign.id}`} onClose={() => setSelectedCampaign(null)}>
-          <div className="voucher-detail-grid">
-            <div><strong>Mã chiến dịch:</strong> {selectedCampaign.campaignCode || "-"}</div>
-            <div><strong>Tên:</strong> {selectedCampaign.name || "-"}</div>
-            <div><strong>Mục tiêu:</strong> {selectedCampaign.objective || "-"}</div>
-            <div><strong>Mô tả:</strong> {selectedCampaign.description || "-"}</div>
-            <div><strong>Thời gian:</strong> {dt(selectedCampaign.startDate)} - {dt(selectedCampaign.endDate)}</div>
-            <div><strong>Trạng thái:</strong> {statusText(selectedCampaign.status)}</div>
-            <div><strong>Voucher áp dụng:</strong> {selectedCampaign.voucherCount || 0}</div>
-            <div><strong>Ngân sách đã dùng:</strong> {money(selectedCampaign.budgetUsed)} / {money(selectedCampaign.budgetLimit)}</div>
-            <div><strong>Tỷ lệ ngân sách:</strong> {num(selectedCampaign.budgetUsagePercent, 0)}%</div>
-            <div><strong>Cảnh báo:</strong> {budgetAlertText(selectedCampaign)}</div>
-          </div>
-          <div className="voucher-campaign-detail-vouchers">
-            <strong>Danh sách voucher:</strong>
-            {campaignDetailPageError ? <div className="alert alert-error">{campaignDetailPageError}</div> : null}
-            {campaignDetailPageLoading ? <p className="voucher-subtext">Đang tải dữ liệu voucher...</p> : campaignDetailPageError ? null : campaignDetailVouchers.length > 0 ? (
-              <div className="voucher-campaign-tags">
-                {campaignDetailVouchers.map((v) => (
-                  <span className="voucher-campaign-tag" key={v.id}>{v.code || `#${v.id}`} - {v.voucherName || "Chưa đặt tên"}</span>
-                ))}
-              </div>
-            ) : (
-              <p className="voucher-subtext">Chưa có voucher nào gắn vào chiến dịch này.</p>
-            )}
-            <TablePagination totalItems={campaignDetailTotal} currentPage={campaignDetailPage} pageSize={campaignDetailPageSize} onPageChange={setCampaignDetailPage} onPageSizeChange={(size) => { setCampaignDetailPageSize(size); setCampaignDetailPage(1); }} />
-          </div>
-        </Modal>
+        <CampaignDetailModal
+          selectedCampaign={selectedCampaign}
+          onClose={() => setSelectedCampaign(null)}
+          campaignDetailPageError={campaignDetailPageError}
+          campaignDetailPageLoading={campaignDetailPageLoading}
+          campaignDetailVouchers={campaignDetailVouchers}
+          campaignDetailTotal={campaignDetailTotal}
+          campaignDetailPage={campaignDetailPage}
+          campaignDetailPageSize={campaignDetailPageSize}
+          setCampaignDetailPage={setCampaignDetailPage}
+          setCampaignDetailPageSize={setCampaignDetailPageSize}
+        />
       ) : null}
 
-      {selected ? (
-        <Modal title={`Chi tiết voucher #${selected.id}`} onClose={() => setSelected(null)}>
-          <div className="voucher-detail-grid">
-            <div><strong>M?:</strong> {selected.code || "-"}</div>
-            <div><strong>Tên:</strong> {selected.voucherName || "-"}</div>
-            <div><strong>Loại:</strong> {selected.type || "-"}</div>
-            <div><strong>Giá trị:</strong> {selected.type === "PERCENT" ? `${selected.value || 0}%` : money(selected.value)}</div>
-            <div><strong>Trạng thái:</strong> {statusText(selected.status)}</div>
-            <div><strong>Thời gian:</strong> {dt(selected.startDate)} - {dt(selected.endDate)}</div>
-            <div><strong>Hạn mức:</strong> {num(selected.redeemedCount, num(selected.usedCount, 0))}/{num(selected.issuedCount, num(selected.usageLimit, 0))}</div>
-            <div><strong>Ngân sách:</strong> {money(selected.budgetUsed)} / {money(selected.budgetLimit)}</div>
-          </div>
-        </Modal>
-      ) : null}
+      {selected ? <VoucherDetailModal selected={selected} onClose={() => setSelected(null)} /> : null}
     </div>
   );
 }

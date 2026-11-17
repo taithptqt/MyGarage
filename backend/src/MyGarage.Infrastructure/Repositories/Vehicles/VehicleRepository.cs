@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;
@@ -11,14 +11,16 @@ namespace MyGarage.Repositories
         {
         }
 
+        private IQueryable<Vehicle> VisibleVehicles() => _context.Vehicles
+            .Include(v => v.Model)
+            .ThenInclude(m => m.Brand)
+            .Where(v => v.IsDeleted != true);
+
         public override async Task<IEnumerable<Vehicle>> GetAllAsync()
-        {
-            return await _context.Vehicles
-                .Include(v => v.Model)
-                .ThenInclude(m => m.Brand)
-                .Where(v => v.IsDeleted != true)
-                .ToListAsync();
-        }
+            => await VisibleVehicles().ToListAsync();
+
+        public override Task<(IReadOnlyList<Vehicle> Items, int Total)> GetPageByIdAsync(int page, int pageSize)
+            => GetOrderedPageAsync(VisibleVehicles().AsNoTracking().OrderBy(v => v.Id), page, pageSize);
     }
 }
 

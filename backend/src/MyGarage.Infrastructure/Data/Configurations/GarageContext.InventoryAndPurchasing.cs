@@ -162,6 +162,7 @@ public partial class GarageContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.RequestedQuantity).HasColumnType("decimal(18, 3)");
+            entity.Property(e => e.ReservedQuantity).HasColumnType("decimal(18, 3)");
             entity.Property(e => e.ReturnedQuantity)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 3)");

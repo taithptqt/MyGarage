@@ -26,7 +26,7 @@ public sealed partial class EfQuotationWorkflowStore
     public Task<List<QuotationDiscount>> GetQuotationDiscountsAsNoTrackingAsync(long quotationId)
     {
         return _context.QuotationDiscounts.AsNoTracking()
-            .Where(x => x.QuotationId == quotationId)
+            .Where(x => x.QuotationId == quotationId && x.QuotationDetailId == null)
             .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
             .ThenByDescending(x => x.Id)
             .ToListAsync();
@@ -165,7 +165,7 @@ public sealed partial class EfQuotationWorkflowStore
     {
         return _context.ServiceOrderDetails.AsNoTracking()
             .Where(x => x.ServiceOrderId == serviceOrderId)
-            .Where(x => !string.Equals(x.Status, canceledStatus, StringComparison.OrdinalIgnoreCase))
+            .Where(x => x.Status == null || x.Status.ToUpper() != canceledStatus.ToUpper())
             .GroupBy(_ => 1)
             .Select(group => new QuotationServiceOrderDetailTotals(
                 group.Sum(x => x.SubTotal),

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   getReceptionAppointmentPage,
   getAppointmentDetail,
@@ -178,6 +178,7 @@ function getAppointmentCreatedTimestamp(appt) {
 
 export default function ReceptionAppointmentsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { searchQuery } = useSearch();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
@@ -462,7 +463,7 @@ export default function ReceptionAppointmentsPage() {
 
     setError("");
     setModal(null);
-    navigate(`/workshop/reception/appointments/${base.id}/edit`);
+    navigate(location.pathname.startsWith("/admin") ? `/admin/appointments/${base.id}/edit` : `/workshop/reception/appointments/${base.id}/edit`);
   }, [navigate, selectedApptForView]);
 
   const openDateRangePicker = useCallback(() => {
@@ -509,7 +510,7 @@ export default function ReceptionAppointmentsPage() {
       </div>
 
       <ReceptionAppointmentsSection
-        onCreateAppointment={() => navigate("/workshop/reception/appointments/new")}
+        onCreateAppointment={() => navigate(location.pathname.startsWith("/admin") ? "/admin/appointments/new" : "/workshop/reception/appointments/new")}
         apptStatusFilter={apptStatusFilter}
         setApptStatusFilter={setApptStatusFilter}
         apptStatusOptions={apptStatusOptions}

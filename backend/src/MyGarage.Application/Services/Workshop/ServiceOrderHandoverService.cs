@@ -15,15 +15,18 @@ namespace MyGarage.Services
         private readonly IServiceOrderHandoverQueryStore _queryStore;
         private readonly IServiceOrderTransactionCommandStore _commandStore;
         private readonly IServiceOrderCustomerLifecycleNotifier _customerLifecycleNotifier;
+        private readonly IServiceOrderClosureService _closureService;
 
         public ServiceOrderHandoverService(
             IServiceOrderHandoverQueryStore queryStore,
             IServiceOrderTransactionCommandStore commandStore,
-            IServiceOrderCustomerLifecycleNotifier customerLifecycleNotifier)
+            IServiceOrderCustomerLifecycleNotifier customerLifecycleNotifier,
+            IServiceOrderClosureService closureService)
         {
             _queryStore = queryStore;
             _commandStore = commandStore;
             _customerLifecycleNotifier = customerLifecycleNotifier;
+            _closureService = closureService;
         }
 
         public async Task<HandoverReadinessResponseDto?> GetHandoverReadinessAsync(long id)
@@ -36,7 +39,9 @@ namespace MyGarage.Services
             var isQcPassed = string.Equals(order.Qcstatus, nameof(ServiceOrderQcStatusCode.PASS), StringComparison.OrdinalIgnoreCase);
 
             // Check if all labor/service details are COMPLETED
-            var workDetails = order.ServiceOrderDetails.Where(d => d.ItemType == "LABOR" || d.ItemType == "SERVICE").ToList();
+            var workDetails = order.ServiceOrderDetails.Where(d =>
+                (string.Equals(d.ItemType, "LABOR", StringComparison.OrdinalIgnoreCase) || string.Equals(d.ItemType, "SERVICE", StringComparison.OrdinalIgnoreCase)) &&
+                !string.Equals(d.Status, nameof(ServiceOrderDetailStatusCode.CANCELED), StringComparison.OrdinalIgnoreCase)).ToList();
             var areAllTasksCompleted = workDetails.All(d => string.Equals(d.Status, nameof(ServiceOrderDetailStatusCode.COMPLETED), StringComparison.OrdinalIgnoreCase));
 
             var response = new HandoverReadinessResponseDto
@@ -58,29 +63,38 @@ namespace MyGarage.Services
 
         public async Task<bool> ProcessHandoverAsync(long id, HandoverRequestDto request)
         {
-            // Enforcement policy: Must be PAID and QC_PASS
-            var readiness = await GetHandoverReadinessAsync(id);
-            if (readiness == null || !readiness.CanHandover)
-            {
-                throw new InvalidOperationException(readiness?.BlockingReason ?? "Không thể bàn giao xe vào lúc này.");
-            }
-
             return await _commandStore.ExecuteInTransactionAsync(async () =>
             {
                 var order = await _queryStore.GetServiceOrderForUpdateAsync(id);
                 if (order == null) return false;
+                if (string.Equals(order.Status, nameof(ServiceOrderLifecycleStatus.CLOSED), StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (string.Equals(order.Status, nameof(ServiceOrderLifecycleStatus.CANCELED), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Không thể bàn giao lệnh sửa chữa đã hủy.");
+
+                var readiness = await GetHandoverReadinessAsync(id);
+                if (readiness == null || !readiness.CanHandover)
+                    throw new InvalidOperationException(readiness?.BlockingReason ?? "Không thể bàn giao xe vào lúc này.");
+
+                var receiverName = request.ReceiverName?.Trim();
+                var receiverPhone = request.ReceiverPhone?.Trim();
+                var notes = request.Notes?.Trim();
+                if (string.IsNullOrWhiteSpace(receiverName) || receiverName.Length > 255 ||
+                    receiverPhone?.Length > 30 || notes?.Length > 2000)
+                    throw new InvalidOperationException("Thông tin người nhận hoặc ghi chú bàn giao không hợp lệ.");
 
                 var effectiveStaffId = request.StaffId > 0 ? request.StaffId : (request.HandedOverBy ?? 0);
-
+                var previousStatus = order.Status;
                 order.Status = nameof(ServiceOrderLifecycleStatus.CLOSED);
                 order.ActualHandover = request.HandoverTime ?? VietnamTime.Now;
+                order.HandoverReceiverName = receiverName;
+                order.HandoverReceiverPhone = string.IsNullOrWhiteSpace(receiverPhone) ? null : receiverPhone;
+                order.HandoverNotes = string.IsNullOrWhiteSpace(notes) ? null : notes;
                 order.UpdatedAt = VietnamTime.Now;
                 order.UpdatedBy = effectiveStaffId;
-
+                _customerLifecycleNotifier.EnqueueAfterStatusChange(order, previousStatus ?? string.Empty);
                 await _commandStore.SaveChangesAsync();
-
-                _customerLifecycleNotifier.EnqueueAfterStatusChange(order, nameof(ServiceOrderLifecycleStatus.READY));
-
+                await _closureService.HandleOrderClosureAsync(order, previousStatus, effectiveStaffId);
                 return true;
             }, clearChangeTracker: true);
         }

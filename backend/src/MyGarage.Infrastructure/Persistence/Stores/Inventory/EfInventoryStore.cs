@@ -45,6 +45,11 @@ public sealed partial class EfInventoryStore : IInventoryStore
 
     public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> action, CancellationToken ct = default)
     {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            await action(ct);
+            return;
+        }
         var strategy = _db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
@@ -64,6 +69,10 @@ public sealed partial class EfInventoryStore : IInventoryStore
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
     {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            return await action(ct);
+        }
         var strategy = _db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {

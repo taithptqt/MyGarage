@@ -171,7 +171,7 @@ export default function TimesheetPage() {
     setError("");
     try {
       const res = await request({
-        url: "/api/timesheets/today",
+        url: "/api/v1/timesheets/today",
         method: "GET",
         params: { staffId: currentStaffId },
       });
@@ -188,7 +188,7 @@ export default function TimesheetPage() {
 
   const fetchPersonalAssignments = useCallback(async () => {
     try {
-      const res = await request({ url: "/api/service-staff-assignments", method: "GET" });
+      const res = await request({ url: "/api/v1/service-staff-assignments", method: "GET" });
       const allAssignments = Array.isArray(res) ? res : res?.items ?? res?.data ?? [];
       const mine = allAssignments.filter((item) => Number(readValue(item, "technicianId", "TechnicianId")) === Number(currentStaffId));
       setPersonalTasks(buildTaskBlocks(mine));
@@ -277,7 +277,7 @@ export default function TimesheetPage() {
       }
 
       await request({
-        url: "/api/timesheets/check-in",
+        url: "/api/v1/timesheets/check-ins",
         method: "POST",
         data: {
           staffId: currentStaffId,
@@ -301,8 +301,8 @@ export default function TimesheetPage() {
     try {
       const id = activeEntry.id || activeEntry.Id;
       await request({
-        url: `/api/timesheets/${id}/check-out`,
-        method: "PUT",
+        url: `/api/v1/timesheets/${id}/check-outs`,
+        method: "POST",
         data: {},
       });
       await fetchTimesheet();

@@ -3,3 +3,8 @@
 **/obj/
 **/artifacts/
 
+# Temporary and IDE files
+.vs/
+.agents/
+backend/_*/
+

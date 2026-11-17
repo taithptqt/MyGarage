@@ -1,4 +1,4 @@
-namespace MyGarage.Models;
+namespace MyGarage.Application.Payments.DTOs;
 
 public class OrderTransaction
 {
@@ -22,4 +22,3 @@ public class OrderTransaction
     public string? CounterAccountName { get; set; }
     public string? CounterAccountNumber { get; set; }
 }
-

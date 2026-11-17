@@ -4,7 +4,7 @@ import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
-import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { getReceptionOrderReferences } from "@features/admin/api/customerApi";
 import { getAllBranchOperatingHours, getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
@@ -729,8 +729,6 @@ export default function ServiceOrderEditPage() {
         packageRes,
         detailsRes,
         insuranceRes,
-        customerRes,
-        vehicleRes,
         modelRes,
         operatingHoursRes
       ] = await Promise.all([
@@ -744,8 +742,6 @@ export default function ServiceOrderEditPage() {
         getAllPackages().catch(() => []),
         serviceOrderApi.getDetails(orderId).catch(() => []),
         insuranceCompanyApi.getAll().catch(() => []),
-        getAllCustomers(),
-        getAllVehicles().catch(() => []),
         getVehicleModels().catch(() => []),
         getAllBranchOperatingHours().catch(() => []),
       ]);
@@ -753,6 +749,9 @@ export default function ServiceOrderEditPage() {
       if (!orderRes) {
         throw new Error("Không tìm thấy lệnh sửa chữa.");
       }
+
+      const orderBranchId = parsePositiveId(readField(orderRes, ["branchId", "BranchId", "executeBranchId", "ExecuteBranchId"], 0));
+      const [customerRes, vehicleRes] = await getReceptionOrderReferences(orderBranchId || effectiveBranchId);
 
       const staffList = Array.isArray(staffRes) ? staffRes : [];
       const roleList = Array.isArray(roleRes) ? roleRes : [];
@@ -1249,9 +1248,8 @@ export default function ServiceOrderEditPage() {
             <div className="reception-appt-left-column">
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BƯỚC 1</span>
+                  <span className="reception-step-badge">1. KHÁCH HÀNG & PHƯƠNG TIỆN</span>
                 </div>
-                <h4 className="reception-appt-section-title">Thông tin khách hàng và xe</h4>
 
                 <div className="reception-customer-selected-card">
                   <div className="reception-customer-selected-main">
@@ -1288,9 +1286,8 @@ export default function ServiceOrderEditPage() {
 
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BƯỚC 2</span>
+                  <span className="reception-step-badge">2. HẠNG MỤC DỊCH VỤ</span>
                 </div>
-                <h4 className="reception-appt-section-title">Dịch vụ yêu cầu</h4>
 
                 <div className="reception-service-layout">
                   <div className="reception-service-type-col">
@@ -1426,9 +1423,8 @@ export default function ServiceOrderEditPage() {
             <div className="reception-appt-right-column">
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BƯỚC 3</span>
+                  <span className="reception-step-badge">3. THÔNG TIN LỆNH (SO)</span>
                 </div>
-                <h4 className="reception-appt-section-title">Thông tin nghiệp vụ</h4>
 
                 <div className="form-group">
                   <label>Cố vấn dịch vụ *</label>

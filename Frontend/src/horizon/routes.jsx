@@ -22,6 +22,7 @@ import {
   MdAssessment,
   MdHistory,
   MdLocalOffer,
+  MdChat,
 } from 'react-icons/md';
 
 import MainDashboard from "@horizon/views/admin/default";
@@ -39,6 +40,17 @@ import VehicleManagementPage from "@features/cars/pages/VehicleManagementPage";
 import TechnicianProductivityDashboard from "@features/workshop/components/TechnicianProductivityDashboard";
 import MaintenanceReminderManager from "@features/workshop/components/MaintenanceReminderManager";
 import ConsumableBulkReturn from "@features/workshop/components/ConsumableBulkReturn";
+import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
+import CreateServiceOrderPage from "@features/workshop/pages/CreateServiceOrderPage";
+import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
+import ReceptionEditAppointmentPage from "@features/workshop/pages/ReceptionEditAppointmentPage";
+import ServiceOrderDiagnosisPage from "@features/workshop/pages/ServiceOrderDiagnosisPage";
+import ServiceOrderDiagnosisReportPage from "@features/workshop/pages/ServiceOrderDiagnosisReportPage";
+import ServiceOrderItemsPage from "@features/workshop/pages/ServiceOrderItemsPage";
+import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePage";
+import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
+import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
+import HandoverPage from "@features/workshop/pages/HandoverPage";
 
 const inventoryItems = [
   {
@@ -272,13 +284,7 @@ const routes = [
     path: '/default',
     icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
     component: <MainDashboard />,
-  },
-  {
-    name: 'Lịch hẹn',
-    layout: '/admin',
-    path: '/appointments',
-    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
-    component: <ReceptionAppointmentsPage />,
+    roles: ['ADMIN'],
   },
   {
     name: 'Lệnh sửa chữa',
@@ -286,6 +292,103 @@ const routes = [
     path: '/service-orders',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     component: <ReceptionOrdersSection />,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Lịch hẹn',
+    layout: '/admin',
+    path: '/appointments',
+    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
+    component: <ReceptionAppointmentsPage />,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Chat khách hàng',
+    layout: '/admin',
+    path: '/chat',
+    icon: <Icon as={MdChat} width="20px" height="20px" color="inherit" />,
+    component: <ReceptionChatPage />,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Tiếp nhận xe mới',
+    layout: '/admin',
+    path: '/service-orders/create',
+    component: <CreateServiceOrderPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Tạo lịch hẹn',
+    layout: '/admin',
+    path: '/appointments/new',
+    component: <ReceptionCreateAppointmentPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Chỉnh sửa lịch hẹn',
+    layout: '/admin',
+    path: '/appointments/:appointmentId/edit',
+    component: <ReceptionEditAppointmentPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Chẩn đoán',
+    layout: '/admin',
+    path: '/service-orders/:orderId/diagnosis',
+    component: <ServiceOrderDiagnosisPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Báo cáo chẩn đoán',
+    layout: '/admin',
+    path: '/service-orders/:orderId/diagnosis-report',
+    component: <ServiceOrderDiagnosisReportPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Vật tư & dịch vụ',
+    layout: '/admin',
+    path: '/service-orders/:orderId/items',
+    component: <ServiceOrderItemsPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Báo giá',
+    layout: '/admin',
+    path: '/service-orders/:orderId/quote',
+    component: <ServiceOrderQuotePage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Tình trạng xe',
+    layout: '/admin',
+    path: '/service-orders/:orderId/vehicleconditionlogs',
+    component: <VehicleConditionLogsPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Chỉnh sửa lệnh',
+    layout: '/admin',
+    path: '/service-orders/:orderId/edit',
+    component: <ServiceOrderEditPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
+  },
+  {
+    name: 'Bàn giao xe',
+    layout: '/admin',
+    path: '/service-orders/:orderId/handover',
+    component: <HandoverPage />,
+    hideInSidebar: true,
+    roles: ['ADMIN', 'RECEPTIONIST'],
   },
   {
     name: 'Chi nhánh',

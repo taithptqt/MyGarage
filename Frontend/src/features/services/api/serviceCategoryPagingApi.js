@@ -23,7 +23,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 export const getServiceCategoryPage = (params = {}, requester) =>
   requestWithDualRoute(
     "/api/v1/service-categories/admin-list",
-    "/api/service-categories/admin-list",
+    "/api/v1/service-categories/admin-list",
     {
       method: "GET",
       params: { page: 1, pageSize: 20, ...params },

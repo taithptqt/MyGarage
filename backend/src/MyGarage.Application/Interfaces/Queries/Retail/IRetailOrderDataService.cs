@@ -18,6 +18,11 @@ public sealed record RetailCheckoutResult(
     object? ErrorPayload,
     RetailOrder? Order);
 
+public sealed record RetailCancelResult(
+    bool Success,
+    string? ErrorMessage,
+    RetailOrder? Order);
+
 public interface IRetailOrderDataService
 {
     Task<(IReadOnlyList<RetailOrder> Items, int Total)> GetPagedByBranchAsync(
@@ -47,5 +52,16 @@ public interface IRetailOrderDataService
         IReadOnlyList<(long ProductId, int Quantity)> normalizedItems,
         string? voucherCode,
         string? customerNotes,
+        CancellationToken ct = default);
+
+    Task<RetailCancelResult> CancelOrderAsync(
+        long orderId,
+        long? customerId,
+        bool isStaff,
+        string? reason,
+        CancellationToken ct = default);
+
+    Task<int> CancelExpiredDraftOrdersAsync(
+        TimeSpan timeout,
         CancellationToken ct = default);
 }

@@ -51,7 +51,7 @@ namespace MyGarage.Services
 
         internal ServiceOrderCommandFacade(
             IServiceOrderService serviceOrderService,
-            IAuditLogService auditLogService,
+            IAuditLogWriter auditLogService,
             ICloudStorageService cloudStorageService,
             IServiceOrderDataService dataService,
             IMapper mapper)

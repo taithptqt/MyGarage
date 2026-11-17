@@ -316,6 +316,10 @@ public class ServiceOrderTests
                 SecurityStamp = "test-stamp"
             });
 
+            db.VehicleBrands.Add(new VehicleBrand { Id = 1, Code = "B1", Name = "Brand" });
+            db.VehicleModels.Add(new VehicleModel { Id = 1, BrandId = 1, ModelName = "Model" });
+            db.Vehicles.Add(new Vehicle { Id = 1, ModelId = 1, LicensePlate = "TEST-1" });
+
             // Unpaid, non-QC order
             db.ServiceOrders.Add(new ServiceOrder
             {

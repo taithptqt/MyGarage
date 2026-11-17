@@ -49,7 +49,7 @@ export async function getAdminChangeLogs(paramsOrRequester = {}, maybeRequester)
 
   return requestWithDualRoute(
     "/api/v1/audit-logs/admin-changes",
-    "/api/audit-logs/admin-changes",
+    "/api/v1/audit-logs/admin-changes",
     {
       method: "GET",
       params: boundedParams,
@@ -66,7 +66,7 @@ export async function getAuditLogs(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/audit-logs",
-    "/api/audit-logs",
+    "/api/v1/audit-logs",
     {
       method: "GET",
       params: boundedParams,
@@ -78,7 +78,7 @@ export async function getAuditLogs(paramsOrRequester = {}, maybeRequester) {
 export async function getAuditLogById(id, requester) {
   return requestWithDualRoute(
     `/api/v1/audit-logs/${id}`,
-    `/api/audit-logs/${id}`,
+    `/api/v1/audit-logs/${id}`,
     {
       method: "GET",
     },

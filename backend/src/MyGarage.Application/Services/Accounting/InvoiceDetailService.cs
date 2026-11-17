@@ -135,15 +135,24 @@ namespace MyGarage.Services
                 return InvoiceDetailCommandResult<InvoiceDetailResponseDto>.NotFound();
             }
 
-            var lockError = await ValidateInvoiceDetailMutationAsync(invoiceId, existingItem.InvoiceId, ct);
+            // Moving a detail changes both invoices. The source must be editable too;
+            // validating only the target would allow removing a line from a locked order.
+            var lockError = await ValidateInvoiceDetailMutationAsync(existingItem.InvoiceId, null, ct);
+            if (string.IsNullOrWhiteSpace(lockError) && invoiceId != existingItem.InvoiceId)
+            {
+                lockError = await ValidateInvoiceDetailMutationAsync(invoiceId, null, ct);
+            }
             if (!string.IsNullOrWhiteSpace(lockError))
             {
                 return InvoiceDetailCommandResult<InvoiceDetailResponseDto>.BadRequest(lockError);
             }
 
-            if (itemDto == null)
+            if (itemDto == null || string.IsNullOrWhiteSpace(itemDto.ItemType) ||
+                string.IsNullOrWhiteSpace(itemDto.ItemName) || string.IsNullOrWhiteSpace(itemDto.Unit) ||
+                !itemDto.Quantity.HasValue || !itemDto.UnitPriceAtTime.HasValue ||
+                !itemDto.SubTotal.HasValue || !itemDto.FinalAmount.HasValue)
             {
-                return InvoiceDetailCommandResult<InvoiceDetailResponseDto>.BadRequest("Invalid invoice detail payload.");
+                return InvoiceDetailCommandResult<InvoiceDetailResponseDto>.BadRequest("A complete invoice detail is required for this update.");
             }
 
             try

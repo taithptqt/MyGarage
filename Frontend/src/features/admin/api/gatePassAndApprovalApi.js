@@ -43,7 +43,7 @@ export async function getGatePasses(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/gate-passes",
-    "/api/gate-passes",
+    "/api/v1/gate-passes",
     {
       method: "GET",
       params: boundedParams,
@@ -55,7 +55,7 @@ export async function getGatePasses(paramsOrRequester = {}, maybeRequester) {
 export async function getGatePassById(id, requester) {
   return requestWithDualRoute(
     `/api/v1/gate-passes/${id}`,
-    `/api/gate-passes/${id}`,
+    `/api/v1/gate-passes/${id}`,
     {
       method: "GET",
     },
@@ -66,7 +66,7 @@ export async function getGatePassById(id, requester) {
 export async function createGatePass(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/gate-passes",
-    "/api/gate-passes",
+    "/api/v1/gate-passes",
     {
       method: "POST",
       data: payload,
@@ -78,7 +78,7 @@ export async function createGatePass(payload, requester) {
 export async function updateGatePass(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/gate-passes/${id}`,
-    `/api/gate-passes/${id}`,
+    `/api/v1/gate-passes/${id}`,
     {
       method: "PUT",
       data: payload,
@@ -90,7 +90,7 @@ export async function updateGatePass(id, payload, requester) {
 export async function deleteGatePass(id, requester) {
   return requestWithDualRoute(
     `/api/v1/gate-passes/${id}`,
-    `/api/gate-passes/${id}`,
+    `/api/v1/gate-passes/${id}`,
     {
       method: "DELETE",
     },
@@ -106,7 +106,7 @@ export async function getApprovalRequests(paramsOrRequester = {}, maybeRequester
 
   return requestWithDualRoute(
     "/api/v1/approval-requests",
-    "/api/approval-requests",
+    "/api/v1/approval-requests",
     {
       method: "GET",
       params: boundedParams,
@@ -118,7 +118,7 @@ export async function getApprovalRequests(paramsOrRequester = {}, maybeRequester
 export async function getApprovalRequestById(id, requester) {
   return requestWithDualRoute(
     `/api/v1/approval-requests/${id}`,
-    `/api/approval-requests/${id}`,
+    `/api/v1/approval-requests/${id}`,
     {
       method: "GET",
     },
@@ -129,7 +129,7 @@ export async function getApprovalRequestById(id, requester) {
 export async function createApprovalRequest(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/approval-requests",
-    "/api/approval-requests",
+    "/api/v1/approval-requests",
     {
       method: "POST",
       data: payload,
@@ -141,7 +141,7 @@ export async function createApprovalRequest(payload, requester) {
 export async function updateApprovalRequest(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/approval-requests/${id}`,
-    `/api/approval-requests/${id}`,
+    `/api/v1/approval-requests/${id}`,
     {
       method: "PUT",
       data: payload,

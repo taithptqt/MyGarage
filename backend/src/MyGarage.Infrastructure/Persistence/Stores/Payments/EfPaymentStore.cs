@@ -22,23 +22,11 @@ public sealed class EfPaymentStore : IPaymentStore
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
     {
-        if (_context.Database.CurrentTransaction != null)
+        if (_context.Database.CurrentTransaction != null || !_context.Database.IsRelational())
         {
             return null;
         }
-
-        try
-        {
-            return await _context.Database.BeginTransactionAsync();
-        }
-        catch (InvalidOperationException ex)
-        {
-            if (ex.Message.Contains("SqlServerRetryingExecutionStrategy"))
-            {
-                return null;
-            }
-            throw;
-        }
+        return await _context.Database.BeginTransactionAsync();
     }
 
     public Task<Payment?> GetPaymentByIdAsync(long id, bool track, CancellationToken ct = default)
@@ -113,6 +101,40 @@ public sealed class EfPaymentStore : IPaymentStore
                 {
                     await tx.RollbackAsync(ct);
                 }
+                throw;
+            }
+        });
+    }
+
+    public async Task<Payment> ExecuteSettlementAsync(long paymentId, Func<Payment, Task> action, CancellationToken ct = default)
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            var current = await GetPaymentByIdAsync(paymentId, true, ct)
+                ?? throw new InvalidOperationException("Không tìm thấy giao dịch thanh toán.");
+            await action(current);
+            return current;
+        }
+
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // Rebuild tracked state on each retry: SaveChanges may already have accepted it
+            // before a later statement or commit failed.
+            _context.ChangeTracker.Clear();
+            await using var tx = await TryBeginTransactionAsync();
+            try
+            {
+                var current = await GetPaymentByIdAsync(paymentId, true, ct)
+                    ?? throw new InvalidOperationException("Không tìm thấy giao dịch thanh toán.");
+                await action(current);
+                if (tx != null) await tx.CommitAsync(ct);
+                return current;
+            }
+            catch
+            {
+                if (tx != null) await tx.RollbackAsync(ct);
+                _context.ChangeTracker.Clear();
                 throw;
             }
         });

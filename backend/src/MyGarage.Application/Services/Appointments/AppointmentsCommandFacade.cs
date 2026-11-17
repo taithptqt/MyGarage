@@ -45,7 +45,7 @@ namespace MyGarage.Services
             IAppointmentReadService appointmentReadService,
             IAppointmentBookingCommandService appointmentBookingService,
             IAppointmentLifecycleCommandService appointmentLifecycleService,
-            IAuditLogService auditLogService,
+            IAuditLogWriter auditLogService,
             ICloudStorageService cloudStorageService,
             IAppointmentDataService dataService)
             : this(
@@ -82,7 +82,7 @@ namespace MyGarage.Services
             if (!scopeMeta.Found)
                 return AppointmentsCommandResult<object?>.NotFound();
 
-            if (!AppointmentEditRequestService.CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
+            if (!AppointmentAccessPolicy.CanAccess(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
                 return AppointmentsCommandResult<object?>.Forbid();
 
             var dto = await _appointmentReadService.GetDetailedAsync(id);
@@ -96,6 +96,13 @@ namespace MyGarage.Services
             BookAppointmentRequestDto dto,
             AppointmentActorContext actor)
         {
+            if (!actor.IsStaffUser)
+            {
+                if (actor.CurrentUserId != actorUserId || (dto.CustomerId.HasValue && dto.CustomerId.Value != actorUserId))
+                    return AppointmentsCommandResult<AppointmentCreatedPayload>.Forbid();
+                dto.CustomerId = actorUserId;
+            }
+
             dto.CreatedBy = actorUserId;
 
             try
@@ -111,26 +118,11 @@ namespace MyGarage.Services
             }
         }
 
-        public async Task<AppointmentsCommandResult<AppointmentCreatedPayload>> CreateGuestAsync(
+        public Task<AppointmentsCommandResult<AppointmentCreatedPayload>> CreateGuestAsync(
             BookAppointmentRequestDto dto)
         {
-            if (!dto.CustomerId.HasValue)
-            {
-                return AppointmentsCommandResult<AppointmentCreatedPayload>.BadRequest("Vui lòng cung cấp CustomerId cho luồng guest.");
-            }
-
-            try
-            {
-                dto.CreatedBy = null;
-                var appointment = await _appointmentBookingService.BookAsync(dto.CustomerId.Value, dto);
-                var detail = await _appointmentReadService.GetDetailedAsync(appointment.Id);
-                return AppointmentsCommandResult<AppointmentCreatedPayload>.Created(
-                    new AppointmentCreatedPayload(appointment.Id, MapAppointmentResponse(detail, actor: null, forceCustomerShape: true)));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return AppointmentsCommandResult<AppointmentCreatedPayload>.BadRequest(ex.Message);
-            }
+            // An unverified customer ID does not establish ownership of an account.
+            return Task.FromResult(AppointmentsCommandResult<AppointmentCreatedPayload>.Unauthorized());
         }
 
         public async Task<AppointmentsCommandResult<ReceptionAppointmentSaveResponseDto>> SaveReceptionBookingAsync(
@@ -216,7 +208,7 @@ namespace MyGarage.Services
             var scopeMeta = await _dataService.GetScopeMetaAsync(id, cancellationToken);
             if (!scopeMeta.Found)
                 return AppointmentsCommandResult<object?>.NotFound();
-            if (!AppointmentEditRequestService.CanAccessAppointment(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
+            if (!AppointmentAccessPolicy.CanAccess(scopeMeta.CustomerId, scopeMeta.BranchId, actor))
                 return AppointmentsCommandResult<object?>.Forbid();
             if (!actor.IsStaffUser && action != AppointmentPatchAction.CANCELED)
                 return AppointmentsCommandResult<object?>.Forbid();

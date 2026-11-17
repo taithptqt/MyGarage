@@ -1,4 +1,4 @@
-export const GROUP_SESSIONS_BASE = "/api/group-sessions";
+export const GROUP_SESSIONS_BASE = "/api/v1/group-sessions";
 
 export const GROUP_SESSIONS_ROUTES = {
   base: GROUP_SESSIONS_BASE,

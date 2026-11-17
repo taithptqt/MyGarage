@@ -51,6 +51,7 @@ namespace MyGarage.Controllers
 
         [Authorize]
         [HttpGet("customers/current")]
+        [HttpGet("~/api/v1/customers/current/retail-orders")]
         public async Task<ActionResult<PagedEnvelope<RetailOrderResponseDto>>> GetMine(
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
@@ -73,6 +74,7 @@ namespace MyGarage.Controllers
 
         [Authorize(Roles = "Customer")]
         [HttpGet("customers/current/page")]
+        [HttpGet("~/api/v1/customers/current/retail-orders/page")]
         public async Task<IActionResult> GetMinePage([FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] long? anchorId)
         {
             var customerId = this.GetCurrentUserId();
@@ -195,6 +197,33 @@ namespace MyGarage.Controllers
         public async Task<ActionResult<RetailOrderResponseDto>> Update(long id, [FromBody] RetailOrderUpdateDto itemDto)
         {
             return this.ProblemMessage(405, "Retail order must be updated through a controlled business workflow, not generic CRUD.");
+        }
+
+        [Authorize]
+        [HttpPost("{id:long}/cancel")]
+        public async Task<ActionResult<RetailOrderResponseDto>> Cancel(long id, [FromBody] RetailOrderCancelRequestDto? request = null)
+        {
+            var currentUserId = this.GetCurrentUserId();
+            if (!currentUserId.HasValue)
+            {
+                return Unauthorized();
+            }
+
+            var isStaff = this.IsStaffUser();
+            var result = await _dataService.CancelOrderAsync(
+                id,
+                currentUserId.Value,
+                isStaff,
+                request?.Reason,
+                HttpContext.RequestAborted);
+
+            if (!result.Success)
+            {
+                return this.BadRequestProblem(result.ErrorMessage ?? "Không thể hủy đơn hàng.");
+            }
+
+            var dto = _retailOrderService.MapToDto(result.Order!);
+            return Ok(dto);
         }
 
         [Authorize(Roles = "Staff")]

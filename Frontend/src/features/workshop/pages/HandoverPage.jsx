@@ -89,8 +89,8 @@ export default function HandoverPage() {
     setError("");
     try {
       const [orderRes, readinessRes] = await Promise.all([
-        request({ url: `/api/service-orders/${orderId}`, method: "GET" }),
-        request({ url: `/api/service-orders/${orderId}/handover-readiness`, method: "GET" })
+        request({ url: `/api/v1/service-orders/${orderId}`, method: "GET" }),
+        request({ url: `/api/v1/service-orders/${orderId}/handover-readiness`, method: "GET" })
           .catch(() => null),
       ]);
 
@@ -136,7 +136,7 @@ export default function HandoverPage() {
     setSuccess("");
     try {
       await request({
-        url: `/api/service-orders/${orderId}/handover`,
+        url: `/api/v1/service-orders/${orderId}/handovers`,
         method: "POST",
         data: {
           staffId:       user?.id ?? user?.staffId,

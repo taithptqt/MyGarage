@@ -1,15 +1,15 @@
-export const APPOINTMENTS_BASE = "/api/appointments";
+export const APPOINTMENTS_BASE = "/api/v1/appointments";
 
 export const APPOINTMENTS_ROUTES = {
   base: APPOINTMENTS_BASE,
-  mine: `${APPOINTMENTS_BASE}/customers/current`,
+  mine: `/api/v1/customers/current/appointments`,
   availability: `${APPOINTMENTS_BASE}/slots`,
   slotHolds: `${APPOINTMENTS_BASE}/slot-holds`,
   slotHoldDetail: (holdToken) => `${APPOINTMENTS_BASE}/slot-holds/${holdToken}`,
   guest: `${APPOINTMENTS_BASE}/public-bookings`,
   receptionBookings: `${APPOINTMENTS_BASE}/reception-bookings`,
   insuranceAssets: `${APPOINTMENTS_BASE}/insurance-assets`,
-  branches: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}`,
+  branches: (branchId) => `/api/v1/branches/${branchId}/appointments`,
   detail: (id) => `${APPOINTMENTS_BASE}/${id}`,
   editCapabilities: (id) => `${APPOINTMENTS_BASE}/${id}/edit-capabilities`,
   editRequests: (id) => `${APPOINTMENTS_BASE}/${id}/edit-requests`,

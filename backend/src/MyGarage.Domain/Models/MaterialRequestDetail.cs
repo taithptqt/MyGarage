@@ -15,6 +15,8 @@ public partial class MaterialRequestDetail
 
     public decimal RequestedQuantity { get; set; }
 
+    public decimal? ReservedQuantity { get; set; }
+
     public string? RequestedCondition { get; set; }
 
     public decimal? IssuedQuantity { get; set; }

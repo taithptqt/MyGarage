@@ -1,0 +1,532 @@
+{
+  "title": "Frontpage",
+  "id": "cG9zdDo4MzMx",
+  "seo": {
+    "title": "MY GARAGE Vejle | Everything Within Specialist & Luxury Cars in One Place",
+    "opengraphTitle": "MY GARAGE Vejle | Everything Within Specialist & Luxury Cars in One Place",
+    "opengraphImage": null,
+    "opengraphDescription": "MY GARAGE was created on the philosophy of offering the best expertise in the automotive world under one roof, with an international network.",
+    "metaKeywords": "",
+    "metaDesc": "MY GARAGE was created on the philosophy of offering the best expertise in the automotive world under one roof, with an international network."
+  },
+  "acf_page_header": {
+    "groupHeader": {
+      "heading": null,
+      "text": null,
+      "selectMedia": "video",
+      "vimeo": null,
+      "vimeoMobile": null,
+      "video": {
+        "mediaItemUrl": "https://mygarage.skaevt.com/wp-content/uploads/2024/10/Website_banner_01_35MB.mp4"
+      },
+      "videoMobile": null,
+      "image": {
+        "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/01/hero.jpg",
+        "altText": ""
+      },
+      "buttons": null,
+      "hideHero": null,
+      "hideNavigation": null,
+      "theme": "standard"
+    }
+  },
+  "acf_pagebottom_employee": {
+    "contactObjEmployee": null
+  },
+  "acf_components": {
+    "flexComponents": [
+      {
+        "__typename": "WPGraphQL_Page_AcfComponents_FlexComponents_PartnerGrid",
+        "heading": null,
+        "text": null,
+        "selectRows": "all",
+        "selectLogoColor": "grey",
+        "choiceRandomOrder": true,
+        "anchor": null,
+        "selectBgcolor": "grey",
+        "slider": true,
+        "relPartners": [
+          {
+            "title": "McMurtry",
+            "uri": "/en/partners/mcmurtry/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "McMurtry ",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/McMurtry-Primary-logo-guld-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/McMurtry-Primary-logo-graa-2.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/McMurtry-Primary-logo-graa-2.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "RML GROUP",
+            "uri": "/en/partners/rml-group/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "RML",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/logo-hvid.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/logo-graa-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/09/logo-graa-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Dallara Stradale",
+            "uri": "/en/partners/dallara-stradale/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "DALLARA STRADALE ",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/08/Dallara-logo-hvid-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/08/Dallara-logo-graa-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/08/Dallara-logo-graa-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Encor",
+            "uri": "/en/partners/encor/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Encor",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/logo.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/logo.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/logo.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Morgan",
+            "uri": "/en/partners/morgan/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "MORGAN",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/05/Morgan-Vejle-Brand-Mark_Colour-GRAa-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/05/Morgan-Vejle-Brand-Mark_Colour-GRAa-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/05/Morgan-Vejle-Brand-Mark_Colour-GRAa-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Lotus",
+            "uri": "/en/partners/lotus/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Lotus",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/12/LOTUS_Roundel_Primary_RGB2.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/12/LOTUS_Roundel_Primary_CMYK-GRAa-NY-2.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/12/LOTUS_Roundel_Primary_CMYK-GRAa-NY-2.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Corvette",
+            "uri": "/en/partners/corvette/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Corvette",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/05/Corvette-logo-hvid-uden-tekst.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/05/Corvette-logo-graa-uden-tekst.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/05/Corvette-logo-guld-uden-tekst.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Porsche",
+            "uri": "/en/partners/porsche/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Porsche",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/MyGarage-logo-gold-green-CMYK-PNG.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/MyGarage-logo-gold-green-CMYK-PNG.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/MyGarage-logo-gold-green-CMYK-PNG.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Rolls-Royce",
+            "uri": "/en/partners/rolls-royce/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Rolls-Royce",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-hvid-logo-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-logo-graa-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-logo-graa-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Kalmar Automotive",
+            "uri": "/en/partners/kalmar-automotive/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Kalmar Automotive",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/02/KALMAR_logo_WHITE.nobcg_.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/02/KALMAR_logo_KOKS.nobcg_.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2021/02/KALMAR_logo_KOKS.nobcg_.png"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "__typename": "WPGraphQL_Page_AcfComponents_FlexComponents_FeaturedCars",
+        "heading": "Selected cars from our Sales Studio",
+        "anchor": null,
+        "type": "standard",
+        "link": {
+          "url": "/en/cars-for-sale/",
+          "target": "",
+          "title": "See all cars for sale"
+        },
+        "selectBgcolor": "sand"
+      },
+      {
+        "__typename": "WPGraphQL_Page_AcfComponents_FlexComponents_OneColumnImage",
+        "selectBgcolor": "green",
+        "choiceWatermark": true,
+        "anchor": null,
+        "repeaterSections": [
+          {
+            "heading": "Storage",
+            "column": "<p>Have your specialist car stored in one of our 92 custom-built glass boxes. At MY GARAGE Storage, we have ensured heating, security against theft, and the option of ongoing servicing and insurance. We are not merely experts in the field — we share your passion and understand the needs of every top-class car. You can therefore rest assured that your investment and most treasured possession is in safe hands at MY GARAGE Storage.</p>\n",
+            "selectMedia": "image",
+            "vimeo": null,
+            "video": null,
+            "image": {
+              "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2024/11/Gentlemans_Garage_MG_2024-9.jpg"
+            },
+            "alignment": "right",
+            "link": {
+              "target": "",
+              "title": "Read more",
+              "url": "/en/storage"
+            }
+          },
+          {
+            "heading": "Meetings & events",
+            "column": "<p>Our exclusive meeting rooms are located in the central showroom, where glass walls offer unobstructed views of the beautiful specialist cars surrounding you. All rooms are luxuriously furnished with designer furniture and fully equipped with large screens and wi-fi. We also create the perfect setting for — and tailor — your next event for up to 300 guests.</p>\n",
+            "selectMedia": "image",
+            "vimeo": null,
+            "video": null,
+            "image": {
+              "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2024/11/Meeting_Garage_MG_2024-8-e1732700312672.jpg"
+            },
+            "alignment": "left",
+            "link": {
+              "target": "",
+              "title": "Read more",
+              "url": "/en/meetings-events/"
+            }
+          }
+        ]
+      },
+      {
+        "__typename": "WPGraphQL_Page_AcfComponents_FlexComponents_PartnerGrid",
+        "heading": "Meet our partners",
+        "text": "<p>MY GARAGE is built around a large number of partners, each representing the highest level of expertise in their respective field. This encompasses every aspect of the automotive world and can be summarised under our concept: SALES, SERVICE, STORAGE &amp; SOCIAL.</p>\n",
+        "selectRows": "excerpt",
+        "selectLogoColor": "gold",
+        "choiceRandomOrder": true,
+        "anchor": null,
+        "selectBgcolor": "grey",
+        "slider": null,
+        "relPartners": [
+          {
+            "title": "Rolls-Royce",
+            "uri": "/en/partners/rolls-royce/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Rolls-Royce",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-hvid-logo-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-logo-graa-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/02/RR-logo-graa-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "AH Autolak",
+            "uri": "/en/partners/ah-autolak/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "AH Autolak",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/ah-autolak-2.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/ah-autolak-1-e1584021517213.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/ah-autolak-1-e1584021517213.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "CARGLASS",
+            "uri": "/en/partners/carglass/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "CARGLASS",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Carglass®-logotype-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Carglass®-logotype.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Carglass®-logotype.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Crashpoint",
+            "uri": "/en/partners/crashpoint/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "CRASHPOINT",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Crashpoint-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Crashpoint.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Crashpoint.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "DC Workshop",
+            "uri": "/en/partners/dc-workshop/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "DC Workshop ",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/DC-WORKSHOP-LANG-GULD-HVID.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/DC-WORKSHOP-LANG-GULD-KOKS1-2.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/DC-WORKSHOP-LANG-GULD-KOKS1-2.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "EDC",
+            "uri": "/en/partners/edc/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "EDC DOMUS FIRST CLASS",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/EDC.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/EDC-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/EDC-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Nembilvask",
+            "uri": "/en/partners/nembilvask/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "NEMBILVASK ",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/NEMBILVASK.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/NEMBILVASK-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/NEMBILVASK-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "MY GARAGE Sales",
+            "uri": "/en/partners/my-garage-sales/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "MY GARAGE Sales",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/MY-GARAGE-SALES-Logo-graa-e1765892545664.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/MY-GARAGE-SALES-Logo-graa-e1765892545664.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/MY-GARAGE-SALES-Logo-graa-e1765892545664.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "SHELL",
+            "uri": "/en/partners/shell/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "SHELL",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/shell.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/shell-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/shell-2.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "BMW Service – KOED",
+            "uri": "/en/partners/bmw-service-koed/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "BMW Service - KOED",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/BMW-Service-KOED-2.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/BMW-Service-KOED-2.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/BMW-Service-KOED-2.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Carcare by Oxholm",
+            "uri": "/en/partners/carcare-by-oxholm/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Carcare by Oxholm",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/Asset-1.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/logo-gold-copy-copy.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/logo-gold-copy-copy.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "MarkussenRacing",
+            "uri": "/en/partners/markussenracing/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "Markussen Racing",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/MichaelMarkussen_logo_hvid-baggrund.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/MichaelMarkussen_logo_hvid-baggrund-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/05/MichaelMarkussen_logo_hvid-baggrund-1.png"
+                }
+              }
+            }
+          },
+          {
+            "title": "Formula Automobile",
+            "uri": "/en/partners/formula-automobile/",
+            "acf_partner": {
+              "groupInfo": {
+                "name": "FORMULA AUTOMOBILE",
+                "logo": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2025/12/Formula-logo-RGB-NEG.png"
+                },
+                "logoGold": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Formula-logo-CMYK-NY1-1.png"
+                },
+                "logoGrey": {
+                  "sourceUrl": "https://mygarage.skaevt.com/wp-content/uploads/2020/03/Formula-logo-CMYK-NY1-1.png"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

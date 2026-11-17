@@ -68,6 +68,14 @@ public sealed class WriteRequestSpamGuardMiddleware
             return false;
         }
 
+        // Each attachment is an independent upload. Multipart requests can have
+        // identical lengths even when they contain different photos.
+        if (HttpMethods.IsPost(request.Method) &&
+            request.Path.Equals("/api/v1/vehicle-condition-logs/attachments", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return true;
     }
 

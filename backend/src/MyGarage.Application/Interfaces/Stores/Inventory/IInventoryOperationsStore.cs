@@ -42,6 +42,9 @@ public interface IInventoryOperationsStore
 
     // Material Request / Return
     Task<Quotation?> GetQuotationWithDetailsAndServiceOrderAsync(long quotationId, CancellationToken ct = default);
+    Task<IReadOnlyList<ServiceOrderDetail>> GetQuotationOrderDetailsAsync(long quotationId, CancellationToken ct = default);
+    Task<IReadOnlyList<MaterialRequestDetail>> GetRequestsForOrderDetailsAsync(IReadOnlyCollection<long> orderDetailIds, CancellationToken ct = default);
+    Task<IReadOnlyList<MaterialRequestDetail>> GetUnlinkedRequestsForOrderAsync(long serviceOrderId, CancellationToken ct = default);
     Task<MaterialRequest?> GetMaterialRequestByIdAsync(long requestId, CancellationToken ct = default);
     Task<IReadOnlyList<MaterialRequestDetail>> GetMaterialRequestDetailsAsync(long requestId, CancellationToken ct = default);
     Task<MyGarage.Models.Inventory?> GetTrackedInventoryAsync(long productId, long warehouseId, CancellationToken ct = default);

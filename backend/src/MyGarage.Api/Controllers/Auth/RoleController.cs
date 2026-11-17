@@ -10,7 +10,7 @@ namespace MyGarage.Controllers
 {
     [Route("api/v1/roles")]
     [ApiController]
-    [Authorize(Policy = "AdminStaffOnly")]
+    [Authorize(Roles = "Staff")]
     public class RoleController : ControllerBase
     {
         private readonly IRoleService _roleService;
@@ -38,6 +38,7 @@ namespace MyGarage.Controllers
             return Ok(dto);
         }
 
+        [Authorize(Policy = "AdminStaffOnly")]
         [HttpPost]
         public async Task<ActionResult<RoleResponseDto>> Create([FromBody] RoleCreateDto itemDto)
         {
@@ -45,6 +46,7 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
         }
 
+        [Authorize(Policy = "AdminStaffOnly")]
         [HttpPut("{id}")]
         public async Task<ActionResult<RoleResponseDto>> Update(long id, [FromBody] RoleUpdateDto itemDto)
         {
@@ -56,6 +58,7 @@ namespace MyGarage.Controllers
             return Ok(responseDto);
         }
 
+        [Authorize(Policy = "AdminStaffOnly")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

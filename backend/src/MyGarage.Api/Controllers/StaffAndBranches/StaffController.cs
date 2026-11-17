@@ -1,6 +1,6 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,18 +20,15 @@ namespace MyGarage.Controllers
     public class StaffController : ControllerBase
     {
         private readonly IStaffService _staffService;
-        private readonly ICloudStorageService _cloudStorageService;
         private readonly IFileSecurityScanner _fileSecurityScanner;
         private readonly IStaffQueryService _staffQueryService;
 
         public StaffController(
             IStaffService staffService,
-            ICloudStorageService cloudStorageService,
             IFileSecurityScanner fileSecurityScanner,
             IStaffQueryService staffQueryService)
         {
             _staffService = staffService;
-            _cloudStorageService = cloudStorageService;
             _fileSecurityScanner = fileSecurityScanner;
             _staffQueryService = staffQueryService;
         }
@@ -56,6 +53,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("admin-list")]
+        [HttpGet("/api/v1/staff/admin-list")]
         public async Task<IActionResult> GetAdminList([FromQuery] long? branchId, [FromQuery] string? search,
             [FromQuery] int? page, [FromQuery] int? pageSize)
         {
@@ -97,6 +95,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost]
+        [HttpPost("/api/v1/staff")]
         public async Task<ActionResult<StaffResponseDto>> Create([FromBody] StaffCreateDto itemDto)
         {
             if (!this.TryResolveRequiredBranchId(itemDto?.BranchId > 0 ? itemDto.BranchId : null, out var targetBranchId, out var denied))
@@ -109,6 +108,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPut("{id:long}")]
+        [HttpPut("/api/v1/staff/{id:long}")]
         public async Task<ActionResult<StaffResponseDto>> Update(long id, [FromBody] StaffUpdateDto itemDto)
         {
             if (!this.TryResolveBranchScope(null, out var scopedBranchId, out var denied))
@@ -136,6 +136,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpDelete("{id:long}")]
+        [HttpDelete("/api/v1/staff/{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
             if (!this.TryResolveBranchScope(null, out var scopedBranchId, out var denied))
@@ -163,6 +164,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("{id:long}/avatars")]
+        [HttpPost("/api/v1/staff/{id:long}/avatars")]
         public async Task<ActionResult<object>> UploadAvatar(long id, IFormFile file)
         {
             if (!this.TryResolveBranchScope(null, out var scopedBranchId, out var denied))
@@ -189,36 +191,20 @@ namespace MyGarage.Controllers
                 return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
             }
 
-            var staff = await _staffService.GetByIdAsync(id);
-            if (staff == null)
-            {
-                return this.NotFoundProblem("Không tìm thấy nhân viên.");
-            }
-
-            if (scopedBranchId.HasValue && staff.BranchId != scopedBranchId.Value)
-            {
-                return Forbid();
-            }
-
-            var extension = Path.GetExtension(file!.FileName);
-            if (string.IsNullOrWhiteSpace(extension))
-            {
-                extension = ".jpg";
-            }
-
-            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-            await using var stream = new MemoryStream(scan.Bytes);
-            var avatarUrl = await _cloudStorageService.UploadAsync(
-                stream,
-                "avatars/staff",
-                fileName,
+            var result = await _staffService.UploadAvatarAsync(
+                id,
+                scopedBranchId,
+                file.FileName,
                 file.ContentType,
+                scan.Bytes,
                 HttpContext.RequestAborted);
 
-            staff.AvatarUrl = avatarUrl;
-            await _staffService.UpdateAsync(id, staff);
-
-            return Ok(new { avatarUrl });
+            return result.Status switch
+            {
+                StaffAvatarUploadStatus.NotFound => this.NotFoundProblem("Không tìm thấy nhân viên."),
+                StaffAvatarUploadStatus.Forbidden => Forbid(),
+                _ => Ok(new { avatarUrl = result.AvatarUrl })
+            };
         }
     }
 }

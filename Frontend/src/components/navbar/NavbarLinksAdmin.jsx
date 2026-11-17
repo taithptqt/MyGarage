@@ -168,6 +168,7 @@ export default function HeaderLinks(props) {
           />
         </MenuButton>
         <MenuList
+          zIndex={10000}
           boxShadow={shadow}
           p="20px"
           borderRadius="20px"
@@ -248,6 +249,7 @@ export default function HeaderLinks(props) {
           </Avatar>
         </MenuButton>
         <MenuList
+          zIndex={10000}
           boxShadow={shadow}
           p="0px"
           mt="10px"

@@ -1,8 +1,8 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
-import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
+import { getReceptionCustomerVehicleReferences } from "@features/admin/api/customerApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getAllBranchOperatingHours, getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
@@ -67,371 +67,44 @@ import {
 import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 import "./Workshop.css";
 
-const SERVICE_MODE = {
-  SHARED: "SHARED",
-  CUSTOM: "CUSTOM",
-};
-
-const EMPTY_PLAN = {
-  categoryIds: [],
-  serviceIds: [],
-  excludedSharedCategoryIds: [],
-  excludedSharedServiceIds: [],
-};
-
-const VEHICLE_KEY_GUEST = "guest";
-const VEHICLE_KEY_NEW = "new-customer";
-const VN_PHONE_PATTERN = "^(0[0-9]{9}|\\+84[0-9]{9})$";
-
-const EMPTY_FORM_DATA = {
-  customerId: "",
-  selectedVehicleIds: [],
-  vehicleLicensePlate: "",
-  vehicleModelId: "",
-  vehicleColor: "",
-  vehicleVin: "",
-  vehicleYear: "",
-  guestName: "",
-  guestPhone: "",
-  guestVehiclePlate: "",
-  guestVehicleModelId: "",
-  guestVehicleColor: "",
-  guestVehicleVin: "",
-  guestVehicleYear: "",
-  serviceAdvisorId: "",
-  orderCategory: "GENERAL_REPAIR",
-  insuranceEnabled: false,
-  insuranceCompanyId: "",
-  insuranceDeductibleAmount: null,
-  insuranceDeductibleOption: "",
-  insuranceClaimMode: "",
-  insuranceQuoteState: "",
-  insuranceCardImageUrls: [],
-  insuranceDamageImageUrls: [],
-  oldPartsReturnOption: "DISPOSE_ALL",
-  requiredDepositAmount: 0,
-  checkInTime: "",
-  estimatedHandover: "",
-  promisedHandoverTime: "",
-  isQuickOrder: false,
-  isNewVehicle: false,
-};
-
-function toNumberList(value) {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value
-        .map(Number)
-        .filter((id) => Number.isFinite(id) && id !== 0)
-    )
-  );
-}
-
-function readField(obj, keys, fallback = null) {
-  for (const key of keys) {
-    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
-  }
-  return fallback;
-}
-
-function normalizePhone(phone) {
-  return String(phone || "").replace(/\s+/g, "");
-}
-
-function normalizeSearchText(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
-}
-
-function validateVietnamesePhone(phone) {
-  return /^(0\d{9}|\+84\d{9})$/.test(normalizePhone(phone));
-}
-
-function getVehicleKeyFromId(vehicleId) {
-  return `existing-${Number(vehicleId)}`;
-}
-
-function getVehicleIdFromKey(vehicleKey) {
-  const match = String(vehicleKey || "").match(/^existing-(\d+)$/);
-  return match ? Number(match[1]) : null;
-}
-
-function normalizePlan(plan) {
-  const categoryIds = toNumberList(plan?.categoryIds || []);
-  const serviceIds = toNumberList(plan?.serviceIds || []);
-  const excludedSharedCategoryIds = toNumberList(plan?.excludedSharedCategoryIds || []);
-  const excludedSharedServiceIds = toNumberList(plan?.excludedSharedServiceIds || []);
-  return { categoryIds, serviceIds, excludedSharedCategoryIds, excludedSharedServiceIds };
-}
-
-function clonePlan(plan) {
-  return {
-    categoryIds: [...(plan?.categoryIds || [])],
-    serviceIds: [...(plan?.serviceIds || [])],
-    excludedSharedCategoryIds: [...(plan?.excludedSharedCategoryIds || [])],
-    excludedSharedServiceIds: [...(plan?.excludedSharedServiceIds || [])],
-  };
-}
-
-function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById) {
-  return (planSummaries || [])
-    .map((plan) => {
-      const categoryIds = toNumberList(plan?.categoryIds || []);
-      if (categoryIds.length === 0) return null;
-
-      const coveredCategoryIds = new Set(
-        toNumberList(plan?.serviceIds || [])
-          .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
-          .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
-      );
-
-      const missingCategoryNames = categoryIds
-        .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
-        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
-
-      if (missingCategoryNames.length === 0) return null;
-
-      return {
-        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
-        missingCategoryNames,
-      };
-    })
-    .filter(Boolean);
-}
-
-function buildMissingSpecificServiceMessage(missingByVehicle) {
-  if (!Array.isArray(missingByVehicle) || missingByVehicle.length === 0) return "";
-
-  const details = missingByVehicle.map((item) => {
-    const categories = (item.missingCategoryNames || []).map((name) => `'${name}'`).join(", ");
-    return `${item.vehicleLabel}: ${categories}`;
-  });
-
-  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
-}
-
-function normalizeService(service) {
-  const id = Number(readField(service, ["id", "Id"], 0));
-  const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
-  const rawName = String(readField(service, ["name", "Name"], "") || "").trim();
-  return {
-    id,
-    categoryId,
-    code: String(readField(service, ["code", "Code"], "") || ""),
-    name: getInspectionTriadDisplayName(service, rawName),
-    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
-    minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
-    price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0)),
-    items: readField(service, ["items", "Items"], []),
-  };
-}
-
-function buildCategoryOptions(serviceCategories, normalizedServices) {
-  const map = new Map();
-
-  (serviceCategories || []).forEach((category) => {
-    const id = Number(readField(category, ["id", "Id"], 0));
-    if (!Number.isFinite(id) || id <= 0) return;
-    const name = String(readField(category, ["categoryName", "name", "Name"], "") || "").trim();
-    if (!name) return;
-    if (category?.isDeleted === true || category?.isActive === false) return;
-    map.set(id, { id, name });
-  });
-
-  (normalizedServices || []).forEach((service) => {
-    if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
-    if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
-    }
-  });
-
-  return Array.from(map.values());
-}
-
-function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelInfoById = new Map()) {
-  const text = (value) => String(value || "").trim();
-
-  const brandObject = readField(vehicle, ["brand", "Brand"], null);
-  const modelObject = readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null);
-
-  const modelId = Number(
-    readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], readField(modelObject, ["id", "Id"], 0))
-  );
-  const brandId = Number(
-    readField(vehicle, ["brandId", "BrandId", "vehicleBrandId", "VehicleBrandId"], readField(brandObject, ["id", "Id"], 0))
-  );
-
-  const modelInfo = modelInfoById.get(modelId) || null;
-  const lookupBrandNameFromModel = modelInfo?.brandId ? text(brandNameById.get(Number(modelInfo.brandId))) : "";
-  const lookupBrandName = text(brandNameById.get(brandId));
-
-  const brandName =
-    [
-      text(readField(vehicle, ["brandName", "BrandName", "vehicleBrandName", "VehicleBrandName"], "")),
-      text(readField(brandObject, ["name", "Name", "brandName", "BrandName"], "")),
-      text(modelInfo?.brandName),
-      lookupBrandNameFromModel,
-      lookupBrandName,
-    ].find(Boolean) || "";
-
-  const modelName =
-    [
-      text(readField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "")),
-      text(readField(modelObject, ["modelName", "ModelName", "name", "Name"], "")),
-      text(modelInfo?.name),
-    ].find(Boolean) || "";
-
-  if (brandName && modelName) return `${brandName} ${modelName}`;
-  if (modelName) return modelName;
-  if (brandName) return brandName;
-  return "Chưa rõ hãng - chưa rõ dòng xe";
-}
-
-function toVehicleTabLabel(vehicleLabel, fallback = "") {
-  const normalizedLabel = String(vehicleLabel || "").trim();
-  if (!normalizedLabel) {
-    const normalizedFallback = String(fallback || "").trim();
-    return normalizedFallback || "Không biển số";
-  }
-
-  const [platePart] = normalizedLabel.split(" - ");
-  const plate = String(platePart || "").trim();
-  return plate || normalizedLabel;
-}
-
-function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
-}
-
-function parsePositiveId(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function formatDateTimeValue(value) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "--";
-  return parsed.toLocaleString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh",
-  });
-}
-
-function formatTimeWithDateInBrackets(value) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "--";
-
-  const time = parsed.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Ho_Chi_Minh",
-  });
-  const date = parsed.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh",
-  });
-
-  return `${time} (${date})`;
-}
-
-
-
-function toMinuteEpoch(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setSeconds(0, 0);
-  return parsed.getTime();
-}
-
-function toLocalDateTimeValue(value) {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  const hour = String(parsed.getHours()).padStart(2, "0");
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hour}:${minute}:00`;
-}
-
-function formatSlotTime(value) {
-  if (!value) return "--:--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "--:--";
-  return parsed.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Ho_Chi_Minh",
-  });
-}
-
-function toDateKey(value) {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function buildCheckInTimeWindowMap(now, rangeMinutes = 30) {
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
-
-  const dayEnd = new Date(now);
-  dayEnd.setHours(23, 59, 0, 0);
-
-  const start = new Date(now);
-  start.setSeconds(0, 0);
-  start.setMinutes(start.getMinutes() - rangeMinutes);
-
-  const end = new Date(now);
-  end.setSeconds(0, 0);
-  end.setMinutes(end.getMinutes() + rangeMinutes);
-
-  if (start < dayStart) start.setTime(dayStart.getTime());
-  if (end > dayEnd) end.setTime(dayEnd.getTime());
-
-  const timeMap = {};
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    const hour = String(cursor.getHours()).padStart(2, "0");
-    const minute = String(cursor.getMinutes()).padStart(2, "0");
-    if (!Array.isArray(timeMap[hour])) timeMap[hour] = [];
-    timeMap[hour].push(minute);
-    cursor.setMinutes(cursor.getMinutes() + 1);
-  }
-
-  return timeMap;
-}
-
-function hasPlanCompletionWarning(plan) {
-  if (!plan) return false;
-  return Boolean(plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && Number(plan.executionMinutes || 0) > 0 && plan.completionWarningText);
-}
+import {
+  SERVICE_MODE,
+  EMPTY_PLAN,
+  VEHICLE_KEY_GUEST,
+  VEHICLE_KEY_NEW,
+  VN_PHONE_PATTERN,
+  EMPTY_FORM_DATA,
+  toNumberList,
+  readField,
+  normalizePhone,
+  normalizeSearchText,
+  validateVietnamesePhone,
+  getVehicleKeyFromId,
+  getVehicleIdFromKey,
+  normalizePlan,
+  clonePlan,
+  getMissingSpecificServiceByVehicle,
+  buildMissingSpecificServiceMessage,
+  normalizeService,
+  buildCategoryOptions,
+  formatSavedVehicleDescriptor,
+  toVehicleTabLabel,
+  formatCurrency,
+  parsePositiveId,
+  formatDateTimeValue,
+  formatTimeWithDateInBrackets,
+  toMinuteEpoch,
+  toLocalDateTimeValue,
+  formatSlotTime,
+  toDateKey,
+  buildCheckInTimeWindowMap,
+  hasPlanCompletionWarning,
+} from "./createServiceOrderHelpers";
+import CreateServiceOrderPlanSummary from "./CreateServiceOrderPlanSummary";
 
 export default function CreateServiceOrderPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
 
@@ -509,7 +182,7 @@ export default function CreateServiceOrderPage() {
   useEffect(() => {
     if (!successOrderSummary) return undefined;
     const timeoutId = setTimeout(() => {
-      navigate("/workshop/reception", { replace: true });
+      navigate(location.pathname.startsWith("/admin") ? "/admin/service-orders" : "/workshop/reception", { replace: true });
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [navigate, successOrderSummary]);
@@ -566,10 +239,8 @@ export default function CreateServiceOrderPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes, operatingHoursRes] = await Promise.all([
-        getAllCustomers(),
-        getAllVehicles(),
-        getAllCustomerVehicles(),
+      const [references, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes, operatingHoursRes] = await Promise.all([
+        getReceptionCustomerVehicleReferences(effectiveBranchId),
         getAllStaff(),
         getAllRoles(),
         getAllServiceCategories(),
@@ -581,6 +252,7 @@ export default function CreateServiceOrderPage() {
         getAllBranchOperatingHours().catch(() => []),
       ]);
 
+      const [cRes, vRes, cvRes] = references;
       setCustomers(Array.isArray(cRes) ? cRes : []);
       setVehicles(Array.isArray(vRes) ? vRes : []);
       setCustomerVehicles(Array.isArray(cvRes) ? cvRes : []);
@@ -2198,7 +1870,7 @@ export default function CreateServiceOrderPage() {
       }
 
       if ((sharedPlan.categoryIds || []).includes(id)) {
-        setError('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
+        setError('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Áp dụng tất cả xe".');
         return;
       }
 
@@ -2508,7 +2180,9 @@ export default function CreateServiceOrderPage() {
           <div className="reception-appt-left-column">
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 1</span>
+                <span className="reception-step-badge">
+                  {!formData.isQuickOrder ? "1. KHÁCH HÀNG & PHƯƠNG TIỆN" : "1. KHÁCH VÃNG LAI"}
+                </span>
                 <label className="reception-appt-quick-toggle" htmlFor="service-order-quick-toggle">
                   <input
                     id="service-order-quick-toggle"
@@ -2519,7 +2193,6 @@ export default function CreateServiceOrderPage() {
                   <span>Tiếp nhận nhanh khách vãng lai</span>
                 </label>
               </div>
-              <h4 className="reception-appt-section-title">{formData.isQuickOrder ? "Khách vãng lai" : "Khách hàng và xe"}</h4>
 
               {!formData.isQuickOrder ? (
                 <>
@@ -2550,16 +2223,19 @@ export default function CreateServiceOrderPage() {
                   {formData.customerId ? (
                     <div className="reception-customer-selected-card">
                       <div className="reception-customer-selected-main">
-                        <small>KHÁCH ĐÃ CHỌN</small>
                         <strong>{formData.guestName || "Chưa có tên"}</strong>
                         <span>{formData.guestPhone || "Chưa có số điện thoại"}</span>
                       </div>
                     </div>
                   ) : null}
 
+                  <div className="reception-cluster-divider">
+                    <span>Thông tin phương tiện</span>
+                  </div>
+
                   {!formData.isNewVehicle ? (
                     <div className="form-group">
-                      <label>Xe của khách (có thể chọn nhiều xe) *</label>
+                      <label>Chọn xe (có thể chọn nhiều xe) *</label>
                       {!formData.customerId ? (
                         <div className="reception-muted-note">Hãy chọn khách hàng trước.</div>
                       ) : (
@@ -2571,10 +2247,10 @@ export default function CreateServiceOrderPage() {
                               onClick={() => setIsSavedVehiclePopupOpen(true)}
                               disabled={customerVehiclesFiltered.length === 0}
                             >
-                              Chọn xe đã lưu
+                              Xe đã lưu
                             </button>
                             <button type="button" className="reception-open-vehicle-popup-btn" onClick={switchToNewVehicleMode}>
-                              Thêm xe mới
+                              Thêm xe
                             </button>
                           </div>
 
@@ -2677,10 +2353,10 @@ export default function CreateServiceOrderPage() {
                           onClick={switchToSavedVehicleMode}
                           disabled={customerHasNoVehicles}
                         >
-                          Chọn xe đã lưu
+                          Xe đã lưu
                         </button>
                         <button type="button" className="reception-open-vehicle-popup-btn is-active" onClick={switchToNewVehicleMode}>
-                          Thêm xe mới
+                          Thêm xe
                         </button>
                       </div>
                       {customerHasNoVehicles ? (
@@ -2922,9 +2598,8 @@ export default function CreateServiceOrderPage() {
 
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 2</span>
+                <span className="reception-step-badge">2. HẠNG MỤC DỊCH VỤ</span>
               </div>
-              <h4 className="reception-appt-section-title reception-appt-section-title-service">Loại dịch vụ và dịch vụ cụ thể</h4>
 
               {showServiceModeSwitch ? (
                 <div className="reception-scope-switch">
@@ -2933,7 +2608,7 @@ export default function CreateServiceOrderPage() {
                     className={effectiveServiceMode === SERVICE_MODE.SHARED ? "active" : ""}
                     onClick={() => handleServiceModeChange(SERVICE_MODE.SHARED)}
                   >
-                    Dùng chung tất cả xe
+                    Áp dụng tất cả xe
                   </button>
                   <button
                     type="button"
@@ -3134,9 +2809,8 @@ export default function CreateServiceOrderPage() {
           <div className="reception-appt-right-column">
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 3</span>
+                <span className="reception-step-badge">3. THÔNG TIN LỆNH (SO)</span>
               </div>
-              <h4 className="reception-appt-section-title">Thông tin nghiệp vụ Service Order</h4>
 
               <div className="form-group">
                 <label>Cố vấn dịch vụ *</label>
@@ -3177,6 +2851,10 @@ export default function CreateServiceOrderPage() {
                   onChange={handleChange}
                 />
                 {showError("requiredDepositAmount") ? <div className="field-error">{fieldErrors.requiredDepositAmount}</div> : null}
+              </div>
+
+              <div className="reception-cluster-divider">
+                <span>Tiến độ &amp; Thời gian</span>
               </div>
 
               <div className="timeline-grid timeline-grid-vertical">
@@ -3267,7 +2945,12 @@ export default function CreateServiceOrderPage() {
                   {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
                 </div>
               </div>
-              <div className="form-group" style={{ marginTop: 14 }}>
+
+              <div className="reception-cluster-divider">
+                <span>Ghi chú tiếp nhận</span>
+              </div>
+
+              <div className="form-group">
                 <label>Ghi chú theo từng xe</label>
                 {selectedVehicleKeys.length > 0 ? (
                   <div className="reception-note-editor">
@@ -3322,132 +3005,16 @@ export default function CreateServiceOrderPage() {
 
               {showError("executeBranchId") ? <div className="field-error">{fieldErrors.executeBranchId}</div> : null}
 
-              <div className="reception-summary-inline" role="status" aria-live="polite">
-                <div className="reception-summary-inline-row">
-                  <span>{FLEET_SERVICE_PRICE_LABEL}</span>
-                  <strong>{formatCurrency(totalPrice)}</strong>
-                </div>
-                <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
-                <div className="reception-summary-inline-row">
-                  <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
-                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFleetCompletionIso)}</strong>
-                </div>
-                {isInsuranceOrderEnabled ? (
-                  <>
-                    <div className="reception-summary-inline-row">
-                      <span>Bảo hiểm dự kiến trả</span>
-                      <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
-                    </div>
-                    <div className="reception-summary-inline-row">
-                      <span>Khách dự kiến trả</span>
-                      <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
-                    </div>
-                  </>
-                ) : null}
-                <div className="reception-summary-inline-row">
-                  <span>Số xe</span>
-                  <strong>
-                    {selectedVehicleKeys.length}
-                    {selectedVehicleKeys.length > 1 ? " (lịch nhóm)" : " (lịch thường)"}
-                  </strong>
-                </div>
-              </div>
-
-              {planSummaries.length > 0 ? (
-                <div className="reception-plan-summary-grid">
-                  {planSummaries.map((plan) => {
-                    const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
-                    const insuranceSummary = insuranceDetails?.summary || null;
-
-                    return (
-                    <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
-                      <div className="reception-plan-summary-head">
-                        <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
-                        <span className="reception-plan-summary-badge">
-                          {`${plan.categoryIds.length} loại - ${plan.serviceIds.length} dịch vụ`}
-                        </span>
-                      </div>
-
-                      <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                        {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0 ? (
-                          <ul className="reception-plan-summary-list">
-                            {plan.serviceGroupsByCategory.map((group) => (
-                              <li key={`${plan.vehicleKey}-${group.categoryName}`} className="reception-plan-summary-list-item">
-                                <span className="reception-plan-summary-list-group">{group.categoryName}</span>
-                                <ul className="reception-plan-summary-sublist">
-                                  {(group.serviceNames || []).map((serviceName) => (
-                                    <li
-                                      key={`${plan.vehicleKey}-${group.categoryName}-${serviceName}`}
-                                      className="reception-plan-summary-sublist-item"
-                                    >
-                                      {serviceName}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
-                        )}
-                      </div>
-
-                      {insuranceSummary ? (
-                        <div className="reception-plan-summary-block">
-                          <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
-                          <div className="reception-plan-summary-time-row">
-                            <span>Công ty bảo hiểm:</span>
-                            <strong>{insuranceSummary.companyName}</strong>
-                          </div>
-                          <div className="reception-plan-summary-time-row">
-                            <span>Mức miễn thường:</span>
-                            <strong>{insuranceSummary.deductibleLabel}</strong>
-                          </div>
-                          <div className="reception-plan-summary-time-row">
-                            <span>Hình thức xử lý:</span>
-                            <strong>{insuranceSummary.claimModeLabel}</strong>
-                          </div>
-                          <div className="reception-plan-summary-time-row">
-                            <span>Hồ sơ bảo hiểm:</span>
-                            <strong>{insuranceSummary.assetSummaryLabel}</strong>
-                          </div>
-                          <p className="reception-plan-summary-text">
-                            {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
-                        <div className="reception-plan-summary-time-row">
-                          <span>Giờ bắt đầu:</span>
-                          <strong>{plan.startTimeLabel}</strong>
-                        </div>
-                        <div className="reception-plan-summary-time-row">
-                          <span>Giờ kết thúc:</span>
-                          <strong>{plan.endTimeLabel}</strong>
-                        </div>
-                        <div className="reception-plan-summary-time-row">
-                          <span>Tổng thời lượng:</span>
-                          <strong>{`${plan.serviceMinutes} phút`}</strong>
-                        </div>
-                      </div>
-
-                      {hasPlanCompletionWarning(plan) ? (
-                        <p className="reception-plan-summary-warning">
-                          {`* ${plan.completionWarningText}`}
-                        </p>
-                      ) : null}
-
-                      <div className="reception-plan-summary-footer">
-                        <span>{SERVICE_PRICE_LABEL}</span>
-                        <strong>{formatCurrency(plan.totalPrice)}</strong>
-                      </div>
-                    </article>
-                  )})}
-                </div>
-              ) : null}
+              <CreateServiceOrderPlanSummary
+                totalPrice={totalPrice}
+                estimatedHandover={formData.estimatedHandover}
+                suggestedFleetCompletionIso={suggestedFleetCompletionIso}
+                isInsuranceOrderEnabled={isInsuranceOrderEnabled}
+                insuranceDraftBreakdown={insuranceDraftBreakdown}
+                selectedVehicleCount={selectedVehicleKeys.length}
+                planSummaries={planSummaries}
+                insuranceSummaryByVehicleKey={insuranceSummaryByVehicleKey}
+              />
             </section>
           </div>
         </div>

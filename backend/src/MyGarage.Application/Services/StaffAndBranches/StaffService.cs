@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using AutoMapper;
 using MyGarage.Common;
 using MyGarage.DTOs.Requests;
@@ -18,16 +23,19 @@ namespace MyGarage.Services
 
         private readonly IStaffStore _store;
         private readonly IPasswordHasher _passwordHasher;
+        private readonly ICloudStorageService _cloudStorageService;
         private readonly IMapper _mapper;
 
         public StaffService(
             IStaffRepository repository,
             IStaffStore store,
             IPasswordHasher passwordHasher,
+            ICloudStorageService cloudStorageService,
             IMapper mapper) : base(repository)
         {
             _store = store;
             _passwordHasher = passwordHasher;
+            _cloudStorageService = cloudStorageService;
             _mapper = mapper;
         }
 
@@ -65,6 +73,46 @@ namespace MyGarage.Services
 
             var updatedItem = await UpdateAsync(id, existingItem);
             return updatedItem == null ? null : _mapper.Map<StaffResponseDto>(updatedItem);
+        }
+
+        public async Task<StaffAvatarUploadResult> UploadAvatarAsync(
+            long id,
+            long? scopedBranchId,
+            string? originalFileName,
+            string contentType,
+            byte[] fileBytes,
+            CancellationToken ct = default)
+        {
+            var staff = await GetByIdAsync(id);
+            if (staff == null)
+            {
+                return new StaffAvatarUploadResult(StaffAvatarUploadStatus.NotFound);
+            }
+
+            if (scopedBranchId.HasValue && staff.BranchId != scopedBranchId.Value)
+            {
+                return new StaffAvatarUploadResult(StaffAvatarUploadStatus.Forbidden);
+            }
+
+            var extension = Path.GetExtension(originalFileName);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                extension = ".jpg";
+            }
+
+            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            await using var stream = new MemoryStream(fileBytes);
+            var avatarUrl = await _cloudStorageService.UploadAsync(
+                stream,
+                "avatars/staff",
+                fileName,
+                contentType,
+                ct);
+
+            staff.AvatarUrl = avatarUrl;
+            await UpdateAsync(id, staff);
+
+            return new StaffAvatarUploadResult(StaffAvatarUploadStatus.Ok, avatarUrl);
         }
 
         public override async System.Threading.Tasks.Task<Staff> AddAsync(Staff entity)
@@ -127,7 +175,7 @@ namespace MyGarage.Services
 
         private static bool ShouldInvalidateSessions(Staff existingStaff, Staff updatedStaff)
         {
-            if (existingStaff.RoleId != updatedStaff.RoleId)
+            if (existingStaff.RoleId != updatedStaff.RoleId || existingStaff.BranchId != updatedStaff.BranchId)
             {
                 return true;
             }

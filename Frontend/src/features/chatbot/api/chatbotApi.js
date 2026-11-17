@@ -36,7 +36,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 }
 
 const V1_BASE = "/api/v1/chatbot";
-const LEGACY_BASE = "/api/chatbot";
+const LEGACY_BASE = "/api/v1/chatbot";
 
 export function createChatbotSession(payloadOrRequester = {}, maybeRequester) {
   const isRequester = typeof payloadOrRequester === "function";
@@ -49,6 +49,7 @@ export function createChatbotSession(payloadOrRequester = {}, maybeRequester) {
     {
       method: "POST",
       data: payload,
+      skipDuplicateGuard: true,
     },
     requester
   );
@@ -56,11 +57,12 @@ export function createChatbotSession(payloadOrRequester = {}, maybeRequester) {
 
 export function orchestrateChatbot(payload, requester) {
   return requestWithDualRoute(
-    `${V1_BASE}/orchestrate`,
-    `${LEGACY_BASE}/orchestrate`,
+    `${V1_BASE}/orchestrations`,
+    `${LEGACY_BASE}/orchestrations`,
     {
       method: "POST",
       data: payload,
+      skipDuplicateGuard: true,
     },
     requester
   );
@@ -106,8 +108,8 @@ export function uploadChatbotImage(payloadOrFormData, requester) {
   }
 
   return requestWithDualRoute(
-    `${V1_BASE}/upload-image`,
-    `${LEGACY_BASE}/upload-image`,
+    `${V1_BASE}/images`,
+    `${LEGACY_BASE}/images`,
     {
       method: "POST",
       data: formData,

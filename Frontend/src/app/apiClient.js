@@ -56,22 +56,23 @@ function extractErrorMessage(error) {
 }
 
 function isPublicAuthRequestUrl(requestUrl) {
-  const normalizedUrl = String(requestUrl || "").toLowerCase();
+  const normalizedUrl = String(requestUrl || "")
+    .toLowerCase()
+    .replace(/\/api\/(?!v1\/)/, "/api/v1/");
   return [
-    "/api/auth/session",
-    "/api/auth/sessions",
-    "/api/auth/accounts",
-    "/api/auth/external-sessions/google",
-    "/api/auth/forgot-password",
-    "/api/auth/reset-password",
-    "/api/auth/credential-recovery-requests",
-    "/api/auth/credential-recovery-finalizations",
+    "/api/v1/auth/session",
+    "/api/v1/auth/sessions",
+    "/api/v1/auth/accounts",
+    "/api/v1/auth/external-sessions/google",
+    "/api/v1/auth/credential-recovery-requests",
+    "/api/v1/auth/credential-recovery-finalizations",
   ].some((route) => normalizedUrl.includes(route));
 }
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL || undefined,
   withCredentials: true,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json"
   }
@@ -161,7 +162,8 @@ apiClient.interceptors.request.use((config) => {
 
   // Do not dedupe multipart uploads on client side; file uploads can legitimately
   // have similar metadata and should be guarded by server-side checks.
-  if (UNSAFE_HTTP_METHODS.has(method) && !isFormDataRequest) {
+  // Also bypass dedupe if caller explicitly sets skipDuplicateGuard or skipSpamGuard.
+  if (UNSAFE_HTTP_METHODS.has(method) && !isFormDataRequest && !config.skipDuplicateGuard && !config.skipSpamGuard) {
     const fingerprint = getRequestFingerprint(config);
     const now = Date.now();
     pruneCooldown(now);

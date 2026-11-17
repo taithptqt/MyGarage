@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -7,10 +8,12 @@ namespace MyGarage.Services;
 public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
 {
     private readonly IVehicleAdminDataService _dataService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public VehicleAdminLifecycleService(IVehicleAdminDataService dataService)
+    public VehicleAdminLifecycleService(IVehicleAdminDataService dataService, IAppConfigFileStore configStore)
     {
         _dataService = dataService;
+        _configStore = configStore;
     }
 
     public async Task<VehicleAdminCommandResult> CreateVehicleAsync(VehicleUpsertRequest? request, VehicleAdminActorContext actor, CancellationToken ct = default)
@@ -58,7 +61,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
 
         await _dataService.AddVehicleAsync(vehicle, ct);
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, vehicle.Id);
         VehicleAdminSupport.ApplyVehicleMetadata(metadata, request, now);
         if (request.BranchId.HasValue && request.BranchId.Value > 0) metadata.AssignedBranchId = request.BranchId.Value;
@@ -75,7 +78,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
 
         VehicleAdminSupport.AppendVehicleAudit(settings, vehicle.Id, "CREATE_VEHICLE", "Create vehicle by admin", userId, actorName, now);
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new
         {
@@ -91,7 +94,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
         var vehicle = await _dataService.GetVehicleByIdAsync(id, ct);
         if (vehicle == null) return VehicleAdminCommandResult.NotFound("Vehicle not found.");
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, id);
         if (metadata.IsEditLocked) return VehicleAdminCommandResult.BadRequest("Vehicle is locked for editing.");
 
@@ -153,7 +156,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
 
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "UPDATE_VEHICLE", "Update vehicle info", userId, actorName, now);
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle updated successfully." });
     }
@@ -169,7 +172,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
         var exists = await _dataService.VehicleExistsAsync(id, ct: ct);
         if (!exists) return VehicleAdminCommandResult.NotFound("Vehicle not found.");
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, id);
         var now = VietnamTime.Now;
         metadata.IsEditLocked = isLocked;
@@ -183,7 +186,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
             actor.UserId,
             actor.UserDisplayName,
             now);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = isLocked ? "Vehicle edit locked." : "Vehicle edit unlocked." });
     }
@@ -201,14 +204,14 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
         vehicle.UpdatedAt = now;
         vehicle.UpdatedBy = userId;
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, id);
         metadata.IsHidden = true;
         metadata.UpdatedAt = now;
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "HIDE_VEHICLE", "Hide vehicle", userId, actor.UserDisplayName, now);
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle hidden successfully." });
     }
@@ -221,7 +224,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
         var normalizedStatus = VehicleAdminSupport.NormalizeVehicleStatus(request.Status);
         if (!VehicleAdminSupport.IsKnownVehicleStatus(normalizedStatus)) return VehicleAdminCommandResult.BadRequest("Invalid vehicle status.");
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, id);
         var now = VietnamTime.Now;
         var userId = actor.UserId;
@@ -229,7 +232,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
 
         VehicleAdminSupport.UpdateVehicleStatus(metadata, settings, id, normalizedStatus, request.Note, userId, now, actorName);
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "SET_STATUS", $"Set status to {normalizedStatus}", userId, actorName, now);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle status updated." });
     }
@@ -249,7 +252,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
         var userId = actor.UserId;
         await VehicleAdminSupport.SetCurrentOwnerAsync(_dataService, id, request.CustomerId, request.Note, now, userId, ct);
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         VehicleAdminSupport.AppendVehicleAudit(
             settings,
             id,
@@ -260,7 +263,7 @@ public sealed class VehicleAdminLifecycleService : IVehicleAdminLifecycleService
             now);
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle owner updated." });
     }

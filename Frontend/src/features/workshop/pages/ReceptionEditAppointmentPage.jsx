@@ -1,10 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  getAllCustomers,
-  getAllCustomerVehicles,
-  getAllVehicles,
-} from "@features/admin/api/customerApi";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { getReceptionCustomerVehicleReferences } from "@features/admin/api/customerApi";
 import {
   getAllServiceCategories,
   getAllPackages,
@@ -31,7 +27,7 @@ const TEXT = {
   notEditableStatus: "Không thể sửa lịch hẹn ? trạng thái hiện tại.",
   notEditableWindow: "Không thể sửa lịch hẹn vì xe đã đến xưởng.",
   loadingData: "Đang tải dữ liệu lịch hẹn...",
-  pageTitle: "Chỉnh sửa lịch hẹn (Lễ tân)",
+  pageTitle: "Chỉnh sửa lịch hẹn",
   back: "Quay lại",
   submit: "Lưu cập nhật",
   successTitle: "Cập nhật lịch hẹn thành công",
@@ -310,6 +306,7 @@ function formatCurrentSlotText(appointment) {
 
 export default function ReceptionEditAppointmentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { appointmentId: appointmentIdParam } = useParams();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
@@ -369,13 +366,10 @@ export default function ReceptionEditAppointmentPage() {
     setLoadingEditRequests(true);
     setError("");
     try {
-      const [detailRes, capabilityRes, requestRes, customerRes, vehicleRes, customerVehicleRes, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
+      const [detailRes, capabilityRes, requestRes, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
         getAppointmentDetail(appointmentId),
         getAppointmentEditCapabilities(appointmentId).catch(() => null),
         getAppointmentEditRequests(appointmentId).catch(() => []),
-        getAllCustomers(),
-        getAllVehicles(),
-        getAllCustomerVehicles(),
         getAllStandardServices(),
         getAllPackages().catch(() => []),
         getAllServiceCategories(),
@@ -385,6 +379,10 @@ export default function ReceptionEditAppointmentPage() {
       if (!normalizedAppt?.id) {
         throw new Error(TEXT.notFound);
       }
+
+      const [customerRes, vehicleRes, customerVehicleRes] = await getReceptionCustomerVehicleReferences(
+        parseBranchId(normalizedAppt.branchId) || effectiveBranchId
+      );
 
       setAppointment(normalizedAppt);
       setEditCapability(normalizeAppointmentEditCapability(capabilityRes));
@@ -405,20 +403,20 @@ export default function ReceptionEditAppointmentPage() {
       setLoading(false);
       setLoadingEditRequests(false);
     }
-  }, [appointmentId]);
+  }, [appointmentId, effectiveBranchId]);
 
   useEffect(() => {
     fetchPageData();
   }, [fetchPageData]);
 
   const handleGoBack = useCallback(() => {
-    navigate("/workshop/reception/appointments");
+    navigate(location.pathname.startsWith("/admin") ? "/admin/appointments" : "/workshop/reception/appointments");
   }, [navigate]);
 
   useEffect(() => {
     if (!successAppt) return undefined;
     const timeoutId = setTimeout(() => {
-      navigate("/workshop/reception/appointments", { replace: true });
+      navigate(location.pathname.startsWith("/admin") ? "/admin/appointments" : "/workshop/reception/appointments", { replace: true });
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [successAppt, navigate]);

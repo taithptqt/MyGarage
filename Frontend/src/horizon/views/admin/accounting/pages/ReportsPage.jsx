@@ -121,7 +121,7 @@ export default function ReportsPage() {
           name='Cash flow (dashboard-v2)'
           value={formatCurrency(summary.cashFlow)}
         />
-        <MiniStatistics name='Pending approvals' value={String(summary.pendingApprovalCount || 0)} />
+        <MiniStatistics name='Pending approvals' value={summary.pendingApprovalCount == null ? "Chưa có dữ liệu" : String(summary.pendingApprovalCount)} />
       </SimpleGrid>
 
       <Card p='16px' mb='20px'>
@@ -169,7 +169,7 @@ export default function ReportsPage() {
         <Card p='20px'>
           <Text color={textColor} fontWeight='700' mb='12px'>Nguồn dữ liệu báo cáo</Text>
           <SimpleGrid columns={1} gap='8px'>
-            <Text color={textColorSecondary}>- Dashboard-v2 aging buckets: {agingBuckets.length} bucket</Text>
+            <Text color={textColorSecondary}>- Dashboard-v2 aging buckets: {dashboard?.detailsAvailable === true ? `${agingBuckets.length} bucket` : "Chưa tích hợp"}</Text>
             <Text color={textColorSecondary}>
               - Trial balance view: {trialBalance.available ? `${trialBalance.items.length} bản ghi` : "Chưa tích hợp API"}
             </Text>

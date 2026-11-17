@@ -21,70 +21,70 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 }
 
 export async function getAllVehicleBrands(params = {}, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-brands", "/api/vehicle-brands", {
+  return requestWithDualRoute("/api/v1/vehicle-brands", "/api/v1/vehicle-brands", {
     method: "GET",
     params: { page: 1, pageSize: 200, ...params },
   }, requester);
 }
 
 export async function getVehicleBrandPage(params = {}, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-brands/admin-list", "/api/vehicle-brands/admin-list", {
+  return requestWithDualRoute("/api/v1/vehicle-brands/admin-list", "/api/v1/vehicle-brands/admin-list", {
     method: "GET",
     params: { page: 1, pageSize: 20, ...params },
   }, requester);
 }
 
 export async function createVehicleBrand(payload, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-brands", "/api/vehicle-brands", {
+  return requestWithDualRoute("/api/v1/vehicle-brands", "/api/v1/vehicle-brands", {
     method: "POST",
     data: payload,
   }, requester);
 }
 
 export async function updateVehicleBrand(id, payload, requester) {
-  return requestWithDualRoute(`/api/v1/vehicle-brands/${id}`, `/api/vehicle-brands/${id}`, {
+  return requestWithDualRoute(`/api/v1/vehicle-brands/${id}`, `/api/v1/vehicle-brands/${id}`, {
     method: "PUT",
     data: payload,
   }, requester);
 }
 
 export async function deleteVehicleBrand(id, requester) {
-  await requestWithDualRoute(`/api/v1/vehicle-brands/${id}`, `/api/vehicle-brands/${id}`, {
+  await requestWithDualRoute(`/api/v1/vehicle-brands/${id}`, `/api/v1/vehicle-brands/${id}`, {
     method: "DELETE",
   }, requester);
   return true;
 }
 
 export async function getAllVehicleModels(params = {}, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-models", "/api/vehicle-models", {
+  return requestWithDualRoute("/api/v1/vehicle-models", "/api/v1/vehicle-models", {
     method: "GET",
     params: { page: 1, pageSize: 200, ...params },
   }, requester);
 }
 
 export async function getVehicleModelPage(params = {}, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-models/admin-list", "/api/vehicle-models/admin-list", {
+  return requestWithDualRoute("/api/v1/vehicle-models/admin-list", "/api/v1/vehicle-models/admin-list", {
     method: "GET",
     params: { page: 1, pageSize: 20, ...params },
   }, requester);
 }
 
 export async function createVehicleModel(payload, requester) {
-  return requestWithDualRoute("/api/v1/vehicle-models", "/api/vehicle-models", {
+  return requestWithDualRoute("/api/v1/vehicle-models", "/api/v1/vehicle-models", {
     method: "POST",
     data: payload,
   }, requester);
 }
 
 export async function updateVehicleModel(id, payload, requester) {
-  return requestWithDualRoute(`/api/v1/vehicle-models/${id}`, `/api/vehicle-models/${id}`, {
+  return requestWithDualRoute(`/api/v1/vehicle-models/${id}`, `/api/v1/vehicle-models/${id}`, {
     method: "PUT",
     data: payload,
   }, requester);
 }
 
 export async function deleteVehicleModel(id, requester) {
-  await requestWithDualRoute(`/api/v1/vehicle-models/${id}`, `/api/vehicle-models/${id}`, {
+  await requestWithDualRoute(`/api/v1/vehicle-models/${id}`, `/api/v1/vehicle-models/${id}`, {
     method: "DELETE",
   }, requester);
   return true;

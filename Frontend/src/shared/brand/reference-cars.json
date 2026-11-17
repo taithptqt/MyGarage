@@ -1,0 +1,38 @@
+[
+  {
+    "route": "/en/cars/aston-martin-v8-vantage-2088020639",
+    "title": "ASTON MARTIN V8 VANTAGE",
+    "tag": "",
+    "subtitle": "Volante",
+    "year": "1987",
+    "mileage": "12.100",
+    "image": "https://billeder.bilinfo.net/bilinfo/32515a53-7f4f-4b50-b502-65a792d3df07.jpeg?class=S1600X1600"
+  },
+  {
+    "route": "/en/cars/porsche-macan-4-1120285926",
+    "title": "PORSCHE MACAN 4",
+    "tag": "",
+    "subtitle": "",
+    "year": "2025",
+    "mileage": "24.500",
+    "image": "https://billeder.bilinfo.net/bilinfo/20d75c5e-7584-4eda-8f4c-c7abdc1509f4.jpeg?class=S1600X1600"
+  },
+  {
+    "route": "/en/cars/lotus-emeya-1690364891",
+    "title": "LOTUS EMEYA",
+    "tag": "",
+    "subtitle": "S",
+    "year": "2024",
+    "mileage": "59.400",
+    "image": "https://billeder.bilinfo.net/bilinfo/57868cb3-32dc-430b-a531-186bcea83250.jpeg?class=S1600X1600"
+  },
+  {
+    "route": "/en/cars/mercedes-e53-433715654",
+    "title": "MERCEDES E53",
+    "tag": "",
+    "subtitle": "AMG Cabriolet aut. 4Matic+",
+    "year": "2019",
+    "mileage": "67.000",
+    "image": "https://billeder.bilinfo.net/bilinfo/690538ec-e92e-41c6-ab9e-9da9f9a81b16.jpeg?class=S1600X1600"
+  }
+]

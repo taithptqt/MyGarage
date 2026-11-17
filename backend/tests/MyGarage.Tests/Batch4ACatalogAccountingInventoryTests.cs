@@ -330,9 +330,10 @@ public sealed class Batch4ACatalogAccountingInventoryTests
                 new() { DetailId = 0, QuantityToIssue = 1m },
                 new() { DetailId = 1, QuantityToIssue = 1.5m }
             });
-        var single = Assert.Single(explicitItems);
-        Assert.Equal(1, single.DetailId);
-        Assert.Equal(1.5m, single.QuantityToIssue);
+        Assert.Equal(2, explicitItems.Count);
+        Assert.Equal(0, explicitItems[0].DetailId);
+        Assert.Equal(1.5m, explicitItems[1].QuantityToIssue);
+        Assert.Empty(MaterialRequestService.ResolveIssuanceItems(details, new List<MaterialRequestIssuanceItemDto>()));
 
         var productWithCost = new Product { Id = 10, Sku = "SKU-1", Name = "Lọc dầu", Unit = "Cái", CostPrice = 80000m };
         var productWithoutCost = new Product { Id = 11, Sku = "SKU-2", Name = "Gioăng", Unit = "Cái", CostPrice = null };
@@ -428,8 +429,8 @@ public sealed class Batch4ACatalogAccountingInventoryTests
                     Note = "Xuất bù",
                     MaterialRequestDetails = new List<MaterialRequestDetail>
                     {
-                        new() { Id = 9501, RequestId = 9401, ProductId = 9201, WarehouseId = 9101, RequestedQuantity = 5m, IssuedQuantity = 2m, Status = "PARTIALLY_ISSUED" },
-                        new() { Id = 9502, RequestId = 9401, ProductId = 9202, WarehouseId = 9101, RequestedQuantity = 2m, IssuedQuantity = 2m, Status = "ISSUED" }
+                        new() { Id = 9501, RequestId = 9401, ProductId = 9201, WarehouseId = 9101, RequestedQuantity = 5m, ReservedQuantity = 3m, IssuedQuantity = 2m, Status = "PARTIALLY_ISSUED" },
+                        new() { Id = 9502, RequestId = 9401, ProductId = 9202, WarehouseId = 9101, RequestedQuantity = 2m, ReservedQuantity = 0m, IssuedQuantity = 2m, Status = "ISSUED" }
                     }
                 },
                 new MaterialRequest
@@ -442,6 +443,14 @@ public sealed class Batch4ACatalogAccountingInventoryTests
                     MaterialRequestDetails = new List<MaterialRequestDetail>
                     {
                         new() { Id = 9503, RequestId = 9402, ProductId = 9202, WarehouseId = 9101, RequestedQuantity = 2m, IssuedQuantity = 2m, Status = "ISSUED" }
+                    }
+                },
+                new MaterialRequest
+                {
+                    Id = 9403, ServiceOrderId = 9001, TechnicianId = 200, Status = "REJECTED",
+                    MaterialRequestDetails = new List<MaterialRequestDetail>
+                    {
+                        new() { Id = 9504, RequestId = 9403, ProductId = 9201, WarehouseId = 9101, RequestedQuantity = 1m, Status = "REJECTED" }
                     }
                 });
             return Task.CompletedTask;
@@ -465,6 +474,15 @@ public sealed class Batch4ACatalogAccountingInventoryTests
             note = "Closed SO"
         });
         Assert.Equal(HttpStatusCode.BadRequest, closedSoCreateRes.StatusCode);
+
+        using var excessRes = await client.PostAsJsonAsync("/api/v1/material-requests/9401/issuances", new
+        {
+            items = new[] { new { detailId = 9501, quantityToIssue = 4m } }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, excessRes.StatusCode);
+
+        using var rejectedRes = await client.PostAsJsonAsync("/api/v1/material-requests/9403/issuances", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedRes.StatusCode);
 
         using var issueRes = await client.PostAsJsonAsync("/api/v1/material-requests/9401/issuances", new
         {
@@ -507,13 +525,17 @@ public sealed class Batch4ACatalogAccountingInventoryTests
                 new ServiceOrder { Id = 9601, Code = "SO-9601", CustomerId = 100, VehicleId = 1, OriginBranchId = 1, ExecuteBranchId = 1, Status = "CLOSED" },
                 new ServiceOrder { Id = 9602, Code = "SO-9602", CustomerId = 100, VehicleId = 1, OriginBranchId = 1, ExecuteBranchId = 1, Status = "WAITING_PAYMENT" },
                 new ServiceOrder { Id = 9603, Code = "SO-9603", CustomerId = 100, VehicleId = 1, OriginBranchId = 2, ExecuteBranchId = 2, Status = "WAITING_PAYMENT" });
+            db.RetailOrders.Add(new RetailOrder { Id = 9604, BranchId = 1, OrderCode = "RO-9604" });
             db.Invoices.AddRange(
                 new Invoice { Id = 9701, ServiceOrderId = 9601, PayerType = "CUSTOMER" },
                 new Invoice { Id = 9702, ServiceOrderId = 9602, PayerType = "CUSTOMER" },
-                new Invoice { Id = 9703, ServiceOrderId = 9603, PayerType = "CUSTOMER" });
+                new Invoice { Id = 9703, ServiceOrderId = 9603, PayerType = "CUSTOMER" },
+                new Invoice { Id = 9704, RetailOrderId = 9604, PayerType = "CUSTOMER" });
             db.InvoiceDetails.AddRange(
+                new InvoiceDetail { Id = 9801, InvoiceId = 9701, ItemType = "SERVICE", ItemName = "Locked", Unit = "unit", Quantity = 1m, UnitPriceAtTime = 100m, SubTotal = 100m, FinalAmount = 100m },
                 new InvoiceDetail { Id = 9802, InvoiceId = 9702, ItemType = "SERVICE", ItemName = "Công thợ", Unit = "giờ", Quantity = 1m, UnitPriceAtTime = 100m, SubTotal = 100m, FinalAmount = 100m },
-                new InvoiceDetail { Id = 9803, InvoiceId = 9703, ItemType = "SERVICE", ItemName = "Công thợ CN2", Unit = "giờ", Quantity = 1m, UnitPriceAtTime = 100m, SubTotal = 100m, FinalAmount = 100m });
+                new InvoiceDetail { Id = 9803, InvoiceId = 9703, ItemType = "SERVICE", ItemName = "Công thợ CN2", Unit = "giờ", Quantity = 1m, UnitPriceAtTime = 100m, SubTotal = 100m, FinalAmount = 100m },
+                new InvoiceDetail { Id = 9804, InvoiceId = 9704, ItemType = "SERVICE", ItemName = "Open", Unit = "unit", Quantity = 1m, UnitPriceAtTime = 100m, SubTotal = 100m, FinalAmount = 100m });
             return Task.CompletedTask;
         });
 
@@ -544,6 +566,21 @@ public sealed class Batch4ACatalogAccountingInventoryTests
             finalAmount = 50
         });
         Assert.Equal(HttpStatusCode.BadRequest, closedCreateRes.StatusCode);
+        using var moveFromLocked = await client.PutAsJsonAsync("/api/v1/invoice-details/9801", new
+        {
+            invoiceId = 9704, itemType = "SERVICE", itemName = "Moved", unit = "unit",
+            quantity = 1, unitPriceAtTime = 100, subTotal = 100, finalAmount = 100
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, moveFromLocked.StatusCode);
+        using var lockedDetail = await client.GetAsync("/api/v1/invoice-details/9801");
+        using var lockedDetailJson = JsonDocument.Parse(await lockedDetail.Content.ReadAsStringAsync());
+        Assert.Equal(9701, lockedDetailJson.RootElement.GetProperty("invoiceId").GetInt64());
+        using var moveToLocked = await client.PutAsJsonAsync("/api/v1/invoice-details/9804", new
+        {
+            invoiceId = 9701, itemType = "SERVICE", itemName = "Moved", unit = "unit",
+            quantity = 1, unitPriceAtTime = 100, subTotal = 100, finalAmount = 100
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, moveToLocked.StatusCode);
         using var closedCreateJson = JsonDocument.Parse(await closedCreateRes.Content.ReadAsStringAsync());
         Assert.Equal("Không thể chỉnh sửa chi tiết hóa đơn vì service order đã đóng.", closedCreateJson.RootElement.GetProperty("detail").GetString());
 

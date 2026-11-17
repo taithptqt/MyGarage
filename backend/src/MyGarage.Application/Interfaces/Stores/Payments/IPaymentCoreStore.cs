@@ -9,5 +9,6 @@ public interface IPaymentCoreStore
     Task<long?> GetBranchIdForRetailOrderAsync(long retailOrderId, CancellationToken ct = default);
     Task AddPaymentAsync(Payment payment, CancellationToken ct = default);
     Task SaveChangesInTransactionAsync(CancellationToken ct = default);
+    Task<Payment> ExecuteSettlementAsync(long paymentId, Func<Payment, Task> action, CancellationToken ct = default);
     Task<IReadOnlyList<Payment>> GetCustomerPaymentsAsync(long customerId, CancellationToken ct = default);
 }

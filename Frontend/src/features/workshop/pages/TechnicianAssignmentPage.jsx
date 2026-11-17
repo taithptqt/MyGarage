@@ -143,10 +143,10 @@ export default function TechnicianAssignmentPage() {
     setError("");
     try {
       const [orderRes, staffRes] = await Promise.all([
-        request({ url: `/api/service-orders/${orderId}`, method: "GET" }),
-        request({ url: "/api/staff/available", method: "GET",
+        request({ url: `/api/v1/service-orders/${orderId}`, method: "GET" }),
+        request({ url: "/api/v1/staff/available", method: "GET",
           params: { branchId: user?.branchId ?? user?.BranchId ?? "", date: new Date().toISOString().slice(0, 10) } })
-          .catch(() => request({ url: "/api/staff", method: "GET" })),
+          .catch(() => request({ url: "/api/v1/staff", method: "GET" })),
       ]);
 
       const raw    = orderRes?.data ?? orderRes;
@@ -168,7 +168,7 @@ export default function TechnicianAssignmentPage() {
       })));
 
       // Load existing assignments
-      const assignRes = await request({ url: "/api/service-staff-assignments", method: "GET",
+      const assignRes = await request({ url: "/api/v1/service-staff-assignments", method: "GET",
         params: { serviceOrderId: orderId } })
         .catch(() => []);
       const existing = Array.isArray(assignRes) ? assignRes : (assignRes?.items ?? []);
@@ -273,7 +273,7 @@ export default function TechnicianAssignmentPage() {
     setSuccess("");
     try {
       await request({
-        url: "/api/service-staff-assignments/bulk",
+        url: "/api/v1/service-staff-assignments/bulk",
         method: "POST",
         data: { assignments: payload },
       });

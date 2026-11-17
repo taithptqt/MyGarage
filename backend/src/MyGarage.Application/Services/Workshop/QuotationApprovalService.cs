@@ -43,6 +43,8 @@ public sealed class QuotationApprovalService : IQuotationApprovalService
             return QuotationMappingHelper.MapQuotationResponse(quotation);
         }
 
+        QuotationPricingHelper.CalculateQuotationTotals(quotation);
+
         var now = VietnamTime.Now;
         var decisionMap = (request.Decisions ?? new List<QuotationDecisionDto>())
             .Where(x => x != null && x.QuotationDetailId > 0)

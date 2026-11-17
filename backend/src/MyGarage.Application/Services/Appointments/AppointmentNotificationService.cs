@@ -13,18 +13,21 @@ namespace MyGarage.Services
 {
     public class AppointmentNotificationService : IAppointmentNotificationService
     {
-        private readonly IAppointmentStore _store;
+        private readonly IAppointmentScheduleQueryStore _scheduleStore;
+        private readonly IAppointmentCatalogStore _catalogStore;
         private readonly ISystemClock _clock;
         private readonly IEmailService _emailService;
         private readonly IAppLogger<AppointmentNotificationService> _logger;
 
         public AppointmentNotificationService(
-            IAppointmentStore store,
+            IAppointmentScheduleQueryStore scheduleStore,
+            IAppointmentCatalogStore catalogStore,
             ISystemClock clock,
             IEmailService emailService,
             IAppLogger<AppointmentNotificationService> logger)
         {
-            _store = store;
+            _scheduleStore = scheduleStore;
+            _catalogStore = catalogStore;
             _clock = clock;
             _emailService = emailService;
             _logger = logger;
@@ -73,7 +76,7 @@ namespace MyGarage.Services
                 return new List<Appointment>();
             }
 
-            return await _store.GetAppointmentsForEmailAsync(ids);
+            return await _scheduleStore.GetAppointmentsForEmailAsync(ids);
         }
 
         private async Task TrySendBookingSuccessEmailAsync(IReadOnlyCollection<Appointment> appointments)
@@ -139,7 +142,7 @@ namespace MyGarage.Services
                 return new Dictionary<long, string>();
             }
 
-            return await _store.GetStandardServiceNamesByIdsAsync(ids);
+            return await _catalogStore.GetStandardServiceNamesByIdsAsync(ids);
         }
 
         private async Task<Dictionary<long, string>> LoadPackageNameMapAsync(IReadOnlyCollection<Appointment> appointments)
@@ -154,7 +157,7 @@ namespace MyGarage.Services
                 return new Dictionary<long, string>();
             }
 
-            return await _store.GetPackageNamesByIdsAsync(ids);
+            return await _catalogStore.GetPackageNamesByIdsAsync(ids);
         }
 
         private string BuildBookingSuccessEmailBody(

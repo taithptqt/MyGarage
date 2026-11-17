@@ -19,22 +19,27 @@ public class SalaryAdminController : ControllerBase
     }
 
     [HttpGet("profiles")]
+    [HttpGet("~/api/v1/salary-profiles")]
     public async Task<IActionResult> GetSalaryProfiles([FromQuery] long? branchId = null, [FromQuery] int? page = null, [FromQuery] int? pageSize = null) =>
         ToActionResult(await _facade.GetSalaryProfilesAsync(branchId, page, pageSize, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpPost("profiles")]
+    [HttpPost("~/api/v1/salary-profiles")]
     public async Task<IActionResult> CreateSalaryProfile([FromBody] SalaryProfileUpsertDto request) =>
         ToActionResult(await _facade.CreateSalaryProfileAsync(request, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpPut("profiles/{id:long}")]
+    [HttpPut("~/api/v1/salary-profiles/{id:long}")]
     public async Task<IActionResult> UpdateSalaryProfile(long id, [FromBody] SalaryProfileUpsertDto request) =>
         ToActionResult(await _facade.UpdateSalaryProfileAsync(id, request, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpDelete("profiles/{id:long}")]
+    [HttpDelete("~/api/v1/salary-profiles/{id:long}")]
     public async Task<IActionResult> DeleteSalaryProfile(long id) =>
         ToActionResult(await _facade.DeleteSalaryProfileAsync(id, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpGet("requests")]
+    [HttpGet("~/api/v1/initial-salary-requests")]
     public async Task<IActionResult> GetInitialSalaryRequests(
         [FromQuery] string? status = null,
         [FromQuery] long? branchId = null,
@@ -43,10 +48,12 @@ public class SalaryAdminController : ControllerBase
         ToActionResult(await _facade.GetInitialSalaryRequestsAsync(status, branchId, page, pageSize, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpPost("requests/{id:long}/approvals")]
+    [HttpPost("~/api/v1/initial-salary-requests/{id:long}/approvals")]
     public async Task<IActionResult> ApproveInitialSalaryRequest(long id, [FromBody] SalaryApprovalDecisionDto request) =>
         ToActionResult(await _facade.ApproveInitialSalaryRequestAsync(id, request, BuildActorContext(), HttpContext.RequestAborted));
 
     [HttpPost("requests/{id:long}/rejections")]
+    [HttpPost("~/api/v1/initial-salary-requests/{id:long}/rejections")]
     public async Task<IActionResult> RejectInitialSalaryRequest(long id, [FromBody] SalaryApprovalDecisionDto request) =>
         ToActionResult(await _facade.RejectInitialSalaryRequestAsync(id, request, BuildActorContext(), HttpContext.RequestAborted));
 

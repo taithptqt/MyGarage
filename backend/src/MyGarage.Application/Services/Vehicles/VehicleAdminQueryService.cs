@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Services;
@@ -6,13 +7,15 @@ namespace MyGarage.Services;
 public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
 {
     private readonly IVehicleAdminDataService _dataService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public VehicleAdminQueryService(IVehicleAdminDataService dataService)
+    public VehicleAdminQueryService(IVehicleAdminDataService dataService, IAppConfigFileStore configStore)
     {
         _dataService = dataService;
+        _configStore = configStore;
     }
 
-    public async Task<object> GetLookupsAsync(string contentRootPath, CancellationToken ct = default)
+    public async Task<object> GetLookupsAsync(CancellationToken ct = default)
     {
         var branchRows = await _dataService.GetLookupBranchesAsync(ct);
         var branches = branchRows.Select(b => new
@@ -63,7 +66,7 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
             status = s.Status
         }).ToList();
 
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: true, ct: ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: true, ct: ct);
         var colorOptions = rows
             .Select(x => x.Color)
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -91,9 +94,9 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
         };
     }
 
-    public async Task<object> GetListAsync(VehicleAdminListQuery request, string contentRootPath, CancellationToken ct = default)
+    public async Task<object> GetListAsync(VehicleAdminListQuery request, CancellationToken ct = default)
     {
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: true, ct: ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: true, ct: ct);
         var query = rows.AsEnumerable();
 
         if (!request.IncludeHidden) query = query.Where(x => !x.IsHidden);
@@ -144,10 +147,10 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
         };
     }
 
-    public async Task<object> GetSummaryAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
+    public async Task<object> GetSummaryAsync(long? branchId, CancellationToken ct = default)
     {
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(contentRootPath);
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: false, settings: settings, ct: ct);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: false, settings: settings, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -275,11 +278,11 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
         };
     }
 
-    public async Task<object> GetAlertsAsync(long? branchId, string contentRootPath, CancellationToken ct = default)
+    public async Task<object> GetAlertsAsync(long? branchId, CancellationToken ct = default)
     {
         var now = VietnamTime.Now;
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(contentRootPath);
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: false, settings: settings, nowUtc: now, ct: ct);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: false, settings: settings, nowUtc: now, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -353,12 +356,12 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
         return new { items = ordered, total = ordered.Count };
     }
 
-    public async Task<VehicleAdminCommandResult> GetVehicleDetailAsync(long id, int takeHistory, string contentRootPath, CancellationToken ct = default)
+    public async Task<VehicleAdminCommandResult> GetVehicleDetailAsync(long id, int takeHistory, CancellationToken ct = default)
     {
         takeHistory = Math.Clamp(takeHistory, 20, 2000);
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(contentRootPath);
-        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(contentRootPath);
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: true, settings: settings, baySettings: baySettings, ct: ct);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
+        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(_configStore, ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: true, settings: settings, baySettings: baySettings, ct: ct);
         var row = rows.FirstOrDefault(x => x.Id == id);
         if (row == null) return VehicleAdminCommandResult.NotFound("Vehicle not found.");
 
@@ -407,12 +410,12 @@ public sealed class VehicleAdminQueryService : IVehicleAdminQueryService
         });
     }
 
-    public async Task<object> GetHistoryAsync(long? vehicleId, long? branchId, int take, string contentRootPath, CancellationToken ct = default)
+    public async Task<object> GetHistoryAsync(long? vehicleId, long? branchId, int take, CancellationToken ct = default)
     {
         take = Math.Clamp(take, 50, 5000);
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(contentRootPath);
-        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(contentRootPath);
-        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, contentRootPath, includeHidden: true, settings: settings, baySettings: baySettings, ct: ct);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
+        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(_configStore, ct);
+        var rows = await VehicleAdminRowBuilder.BuildVehicleRowsAsync(_dataService, _configStore, includeHidden: true, settings: settings, baySettings: baySettings, ct: ct);
 
         var vehicleIds = rows
             .Where(x => (!vehicleId.HasValue || x.Id == vehicleId.Value) && (!branchId.HasValue || x.BranchId == branchId.Value))

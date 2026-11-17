@@ -18,9 +18,8 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
 
     public Task<BayAdminCommandResult> GetLookupsAsync(
         int takeVehicles,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetLookupsAsync(takeVehicles, contentRootPath, ct);
+        => _queryService.GetLookupsAsync(takeVehicles, ct);
 
     public Task<BayAdminCommandResult> GetListAsync(
         long? branchId,
@@ -30,7 +29,6 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
         string? sortBy,
         string? sortDirection,
         bool includeHidden,
-        string contentRootPath,
         CancellationToken ct = default)
         => _queryService.GetListAsync(
             branchId,
@@ -40,48 +38,41 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
             sortBy,
             sortDirection,
             includeHidden,
-            contentRootPath,
             ct);
 
     public Task<BayAdminCommandResult> GetByIdAsync(
         long id,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetByIdAsync(id, contentRootPath, ct);
+        => _queryService.GetByIdAsync(id, ct);
 
     public Task<BayAdminCommandResult> GetSummaryAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetSummaryAsync(branchId, contentRootPath, ct);
+        => _queryService.GetSummaryAsync(branchId, ct);
 
     public Task<BayAdminCommandResult> GetBayVehiclesAsync(
         long id,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetBayVehiclesAsync(id, contentRootPath, ct);
+        => _queryService.GetBayVehiclesAsync(id, ct);
 
     public Task<BayAdminCommandResult> GetBayHistoryAsync(
         long id,
         int take,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetBayHistoryAsync(id, take, contentRootPath, ct);
+        => _queryService.GetBayHistoryAsync(id, take, ct);
 
     public Task<BayAdminCommandResult> CreateBayAsync(
         BayUpsertRequest? request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _managementService.CreateBayAsync(request, currentUserId, contentRootPath, ct);
+        => _managementService.CreateBayAsync(request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> UpdateBayAsync(
         long id,
         BayUpsertRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _managementService.UpdateBayAsync(id, request, currentUserId, contentRootPath, ct);
+        => _managementService.UpdateBayAsync(id, request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> HideBayAsync(
         long id,
@@ -105,50 +96,43 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
         long id,
         UpdateBayStatusRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _managementService.UpdateBayStatusAsync(id, request, currentUserId, contentRootPath, ct);
+        => _managementService.UpdateBayStatusAsync(id, request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> AssignVehicleAsync(
         long id,
         AssignVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _assignmentService.AssignVehicleAsync(id, request, currentUserId, contentRootPath, ct);
+        => _assignmentService.AssignVehicleAsync(id, request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> RemoveVehicleFromBayAsync(
         long id,
         RemoveVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _assignmentService.RemoveVehicleFromBayAsync(id, request, currentUserId, contentRootPath, ct);
+        => _assignmentService.RemoveVehicleFromBayAsync(id, request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> MoveVehicleAsync(
         MoveVehicleRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _assignmentService.MoveVehicleAsync(request, currentUserId, contentRootPath, ct);
+        => _assignmentService.MoveVehicleAsync(request, currentUserId, ct);
 
     public Task<BayAdminCommandResult> GetUsageAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetUsageAsync(branchId, contentRootPath, ct);
+        => _queryService.GetUsageAsync(branchId, ct);
 
     public Task<BayAdminCommandResult> GetLayoutAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetLayoutAsync(branchId, contentRootPath, ct);
+        => _queryService.GetLayoutAsync(branchId, ct);
 
     public Task<BayAdminCommandResult> GetAlertsAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
-        => _queryService.GetAlertsAsync(branchId, contentRootPath, ct);
+        => _queryService.GetAlertsAsync(branchId, ct);
 
     public Task<BayAdminCommandResult> GetSuggestionsAsync(
         long? vehicleId,
@@ -156,7 +140,6 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
         string? preferredArea,
         long? sourceBayId,
         string? serviceStatus,
-        string contentRootPath,
         CancellationToken ct = default)
         => _queryService.GetSuggestionsAsync(
             vehicleId,
@@ -164,6 +147,5 @@ public sealed class BayAdminCommandFacade : IBayAdminCommandFacade
             preferredArea,
             sourceBayId,
             serviceStatus,
-            contentRootPath,
             ct);
 }

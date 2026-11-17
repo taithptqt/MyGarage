@@ -18,9 +18,12 @@
   --cp-shadow-soft: 0 18px 42px rgba(15, 31, 54, 0.08);
   --cp-shadow-strong: 0 28px 60px rgba(15, 31, 54, 0.14);
   position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-top: 0;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-x: clip;
   background:
     radial-gradient(circle at top left, rgba(61, 95, 150, 0.12), transparent 28%),
     radial-gradient(circle at top right, rgba(170, 127, 54, 0.12), transparent 26%),
@@ -61,9 +64,11 @@
 }
 
 .cp-inner {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 44px 24px 72px;
+  box-sizing: border-box;
 }
 
 .cp-eyebrow {

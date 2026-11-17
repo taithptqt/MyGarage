@@ -146,16 +146,15 @@ export default function VehicleActionPanel({
     <section className="vehicle-action-panel">
       <div className="vehicle-action-head">
         <h4>Danh sách xe</h4>
-        <p>Chọn nhiều xe đã lưu qua popup hoặc thêm xe mới ngay tại đây.</p>
       </div>
 
       <div className="vehicle-action-toolbar">
         <button type="button" className="ghost-btn" onClick={handleOpenSavedVehicles} disabled={!hasLinkedVehicles}>
-          Chọn xe đã lưu lại
+          Xe đã lưu
         </button>
         {!isNewVehicleFormVisible ? (
           <button type="button" className="ghost-btn" onClick={handleOpenNewVehicle}>
-            Thêm xe mới
+            Thêm xe
           </button>
         ) : null}
       </div>
@@ -166,11 +165,11 @@ export default function VehicleActionPanel({
           <div ref={savedVehiclePopupRef} className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
             <div className="vehicle-popup-head">
               <div className="vehicle-popup-head-text">
-                <h5>Chọn xe đã lưu lại</h5>
+                <h5>Xe đã lưu</h5>
                 <p>Chỉ hiển thị các xe chưa chọn.</p>
               </div>
               <button type="button" className="vehicle-popup-close-btn" onClick={handleCloseSavedVehicles}>
-                Đồng
+                Đóng
               </button>
             </div>
             <div className="vehicle-popup-list">
@@ -304,7 +303,7 @@ export default function VehicleActionPanel({
 
           <div className="vehicle-action-toolbar">
             <button type="button" className="vehicle-add-btn" onClick={handleSubmitNewVehicle}>
-              Thêm xe mới
+              Thêm xe
             </button>
             <button type="button" className="ghost-btn" onClick={handleCancelNewVehicle}>
               Hủy

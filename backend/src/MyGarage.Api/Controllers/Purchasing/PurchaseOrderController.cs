@@ -148,6 +148,7 @@ namespace MyGarage.Controllers
             return MapResult(result);
         }
 
+        [HttpGet("{id:long}/goods-receipts")]
         [HttpGet("{id}/receive-history")]
         public async Task<IActionResult> GetReceiveHistory(long id)
         {

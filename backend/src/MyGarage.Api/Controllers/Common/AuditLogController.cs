@@ -16,10 +16,10 @@ namespace MyGarage.Controllers
     [Authorize(Policy = "AdminStaffOnly")]
     public class AuditLogController : ControllerBase
     {
-        private readonly IAuditLogService _auditLogService;
+        private readonly IAuditLogReader _auditLogService;
         private readonly AdminAuditQuery _adminAuditQuery;
 
-        public AuditLogController(IAuditLogService auditLogService, AdminAuditQuery adminAuditQuery)
+        public AuditLogController(IAuditLogReader auditLogService, AdminAuditQuery adminAuditQuery)
         {
             _auditLogService = auditLogService;
             _adminAuditQuery = adminAuditQuery;
@@ -45,11 +45,10 @@ namespace MyGarage.Controllers
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
         {
-            var envelope = await _auditLogService.ToPagedEnvelopeAsync(
-                page,
-                pageSize,
-                paged => _auditLogService.MapToDtos(paged));
-            return Ok(envelope);
+            var (normalizedPage, normalizedSize) = PaginationExtensions.NormalizePagination(page, pageSize);
+            var (items, total) = await _auditLogService.GetPageByIdAsync(normalizedPage, normalizedSize);
+            return Ok(PagedEnvelope<AuditLogResponseDto>.Create(
+                _auditLogService.MapToDtos(items), total, normalizedPage, normalizedSize));
         }
 
         [HttpGet("{id}")]

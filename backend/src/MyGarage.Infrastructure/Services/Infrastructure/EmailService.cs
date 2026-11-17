@@ -40,7 +40,7 @@ namespace MyGarage.Services
                 _logger.LogWarning(
                     "[EmailService] EmailSettings chưa được cấu hình đầy đủ. " +
                     "Email tới '{ToEmail}' bị bỏ qua. Kiểm tra appsettings.Development.json.", toEmail);
-                return;
+                throw new InvalidOperationException("EmailSettings chưa được cấu hình đầy đủ.");
             }
 
             _logger.LogInformation("[EmailService] Đang gửi email tới {ToEmail} | Subject: {Subject}", toEmail, subject);

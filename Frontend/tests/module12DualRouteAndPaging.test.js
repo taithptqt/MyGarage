@@ -37,7 +37,7 @@ function createMockRequester(behavior = {}) {
   const calls = [];
   const requester = async (config) => {
     calls.push(config);
-    if (behavior.shouldFail404 && behavior.shouldFail404(config.url)) {
+    if (behavior.shouldFail404 && behavior.shouldFail404(config.url, calls.length)) {
       const err = new Error(`Not Found: ${config.url}`);
       err.status = 404;
       err.response = { status: 404 };
@@ -91,7 +91,7 @@ test("buildBoundedPaginationParams in auditLogApi, branchApi, and gatePassAndApp
 
 test("auditLogApi dual routes endpoints to /api/v1/audit-logs/... and falls back on 404 while cleaning empty params", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ ok: true, url: config.url }),
   });
 
@@ -101,7 +101,7 @@ test("auditLogApi dual routes endpoints to /api/v1/audit-logs/... and falls back
   );
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/audit-logs/admin-changes");
-  assert.equal(calls[1].url, "/api/audit-logs/admin-changes");
+  assert.equal(calls[1].url, "/api/v1/audit-logs/admin-changes");
   assert.equal(calls[0].method, "GET");
   assert.equal(calls[0].params.page, 2);
   assert.equal(calls[0].params.pageSize, 200);
@@ -114,7 +114,7 @@ test("auditLogApi dual routes endpoints to /api/v1/audit-logs/... and falls back
   await getAuditLogs({ page: -1, pageSize: 30, tableName: "Branches" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/audit-logs");
-  assert.equal(calls[1].url, "/api/audit-logs");
+  assert.equal(calls[1].url, "/api/v1/audit-logs");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 30);
   assert.equal(calls[0].params.tableName, "Branches");
@@ -123,27 +123,27 @@ test("auditLogApi dual routes endpoints to /api/v1/audit-logs/... and falls back
   await getAuditLogById(42, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/audit-logs/42");
-  assert.equal(calls[1].url, "/api/audit-logs/42");
+  assert.equal(calls[1].url, "/api/v1/audit-logs/42");
   assert.equal(calls[0].method, "GET");
 });
 
 test("branchApi dual routes all branch administration endpoints and falls back on 404", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ ok: true, url: config.url }),
   });
 
   await getAllBranches(requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/branches");
-  assert.equal(calls[1].url, "/api/branches");
+  assert.equal(calls[1].url, "/api/v1/branches");
   assert.equal(calls[0].method, "GET");
 
   calls.length = 0;
   await getBranchPage({ search: "Hà Nội", page: 1, pageSize: 999 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/branches/admin-list");
-  assert.equal(calls[1].url, "/api/branches/admin-list");
+  assert.equal(calls[1].url, "/api/v1/branches/admin-list");
   assert.equal(calls[0].params.search, "Hà Nội");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 200);
@@ -152,7 +152,7 @@ test("branchApi dual routes all branch administration endpoints and falls back o
   await createBranch({ name: "Chi nhánh Cầu Giấy", maxWorkSlots: 20 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/branches");
-  assert.equal(calls[1].url, "/api/branches");
+  assert.equal(calls[1].url, "/api/v1/branches");
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].data.name, "Chi nhánh Cầu Giấy");
 
@@ -160,7 +160,7 @@ test("branchApi dual routes all branch administration endpoints and falls back o
   await updateBranch(5, { name: "Chi nhánh Mỹ Đình" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/branches/5");
-  assert.equal(calls[1].url, "/api/branches/5");
+  assert.equal(calls[1].url, "/api/v1/branches/5");
   assert.equal(calls[0].method, "PUT");
 
   calls.length = 0;
@@ -168,13 +168,13 @@ test("branchApi dual routes all branch administration endpoints and falls back o
   assert.equal(deleted, true);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/branches/5");
-  assert.equal(calls[1].url, "/api/branches/5");
+  assert.equal(calls[1].url, "/api/v1/branches/5");
   assert.equal(calls[0].method, "DELETE");
 });
 
 test("gatePassAndApprovalApi dual routes all gate pass and approval request endpoints and falls back on 404", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: (config) => ({ ok: true, url: config.url }),
   });
 
@@ -182,7 +182,7 @@ test("gatePassAndApprovalApi dual routes all gate pass and approval request endp
   await getGatePasses({ branchId: 1, page: 0, pageSize: 500 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/gate-passes");
-  assert.equal(calls[1].url, "/api/gate-passes");
+  assert.equal(calls[1].url, "/api/v1/gate-passes");
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 200);
 
@@ -190,28 +190,28 @@ test("gatePassAndApprovalApi dual routes all gate pass and approval request endp
   await getGatePassById(101, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/gate-passes/101");
-  assert.equal(calls[1].url, "/api/gate-passes/101");
+  assert.equal(calls[1].url, "/api/v1/gate-passes/101");
   assert.equal(calls[0].method, "GET");
 
   calls.length = 0;
   await createGatePass({ serviceOrderId: 88, licensePlate: "30A-123.45" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/gate-passes");
-  assert.equal(calls[1].url, "/api/gate-passes");
+  assert.equal(calls[1].url, "/api/v1/gate-passes");
   assert.equal(calls[0].method, "POST");
 
   calls.length = 0;
   await updateGatePass(101, { status: "APPROVED" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/gate-passes/101");
-  assert.equal(calls[1].url, "/api/gate-passes/101");
+  assert.equal(calls[1].url, "/api/v1/gate-passes/101");
   assert.equal(calls[0].method, "PUT");
 
   calls.length = 0;
   await deleteGatePass(101, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/gate-passes/101");
-  assert.equal(calls[1].url, "/api/gate-passes/101");
+  assert.equal(calls[1].url, "/api/v1/gate-passes/101");
   assert.equal(calls[0].method, "DELETE");
 
   // Approval Requests
@@ -219,7 +219,7 @@ test("gatePassAndApprovalApi dual routes all gate pass and approval request endp
   await getApprovalRequests({ status: "PENDING", page: 2, pageSize: 50 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/approval-requests");
-  assert.equal(calls[1].url, "/api/approval-requests");
+  assert.equal(calls[1].url, "/api/v1/approval-requests");
   assert.equal(calls[0].params.page, 2);
   assert.equal(calls[0].params.pageSize, 50);
 
@@ -227,21 +227,21 @@ test("gatePassAndApprovalApi dual routes all gate pass and approval request endp
   await getApprovalRequestById(77, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/approval-requests/77");
-  assert.equal(calls[1].url, "/api/approval-requests/77");
+  assert.equal(calls[1].url, "/api/v1/approval-requests/77");
   assert.equal(calls[0].method, "GET");
 
   calls.length = 0;
   await createApprovalRequest({ requestType: "DISCOUNT", targetId: 15 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/approval-requests");
-  assert.equal(calls[1].url, "/api/approval-requests");
+  assert.equal(calls[1].url, "/api/v1/approval-requests");
   assert.equal(calls[0].method, "POST");
 
   calls.length = 0;
   await updateApprovalRequest(77, { status: "APPROVED" }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/approval-requests/77");
-  assert.equal(calls[1].url, "/api/approval-requests/77");
+  assert.equal(calls[1].url, "/api/v1/approval-requests/77");
   assert.equal(calls[0].method, "PUT");
 });
 

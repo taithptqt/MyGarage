@@ -62,7 +62,7 @@ function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
     setErrMsg("");
     setAiRecommendation(null);
     try {
-      const res = await request({ url: `/api/ai-smart-dispatchings/recommend-bay/${selectedSoId}`, method: "GET" });
+      const res = await request({ url: `/api/v1/ai-smart-dispatchings/recommend-bay/${selectedSoId}`, method: "GET" });
       setAiRecommendation(res);
     } catch (err) {
       setErrMsg("Không thể lấy gợi ý từ AI.");
@@ -287,9 +287,9 @@ export default function BayTimelinePage() {
     setError("");
     try {
       const [baysRes, ordersRes, allocationsRes] = await Promise.all([
-        request({ url: "/api/bays", method: "GET" }),
-        request({ url: "/api/service-orders", method: "GET" }),
-        request({ url: "/api/bays/timeline", method: "GET", params: { date: new Date().toISOString().slice(0, 10) } })
+        request({ url: "/api/v1/bays", method: "GET" }),
+        request({ url: "/api/v1/service-orders", method: "GET" }),
+        request({ url: "/api/v1/bays/timeline", method: "GET", params: { date: new Date().toISOString().slice(0, 10) } })
           .catch(() => []),
       ]);
 

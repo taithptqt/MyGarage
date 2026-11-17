@@ -12,7 +12,7 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(readAuthUser);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !readAuthUser());
   const navigate = useNavigate();
 
   const hydrateProfileAfterAuth = async (baseUser) => {
@@ -39,9 +39,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    let isMounted = true;
     const initAuth = async () => {
       try {
-        const { ok, status, data } = await authApi.getSession();
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => resolve({ ok: false, timeout: true }), 4000)
+        );
+        const sessionPromise = authApi.getSession();
+        const res = await Promise.race([sessionPromise, timeoutPromise]);
+
+        if (!isMounted) return;
+        if (res?.timeout) {
+          return;
+        }
+
+        const { ok, status, data } = res || {};
         if (ok && status === 200 && data && (data.roleCode || data.RoleCode)) {
           const updatedUser = mapAuthUserPayload(data);
           ensureAuthorizedRole(updatedUser);
@@ -53,12 +65,17 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error("Auth initialization failed:", error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-
-      setLoading(false);
     };
 
     initAuth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (credentials) => {

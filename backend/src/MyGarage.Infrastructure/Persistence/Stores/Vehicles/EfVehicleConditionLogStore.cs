@@ -37,7 +37,7 @@ public sealed class EfVehicleConditionLogStore : IVehicleConditionLogStore
     public async Task<IReadOnlyList<VehicleConditionLog>> GetByOrderAsync(long serviceOrderId)
     {
         return await _context.VehicleConditionLogs
-            .Where(x => x.ServiceOrderId == serviceOrderId)
+            .Where(x => x.ServiceOrderId == serviceOrderId && x.LogType != "REPAIR_3D")
             .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
             .ToListAsync();
     }

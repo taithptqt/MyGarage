@@ -38,7 +38,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 export async function getAllBranches(requester) {
   return requestWithDualRoute(
     "/api/v1/branches",
-    "/api/branches",
+    "/api/v1/branches",
     {
       method: "GET",
     },
@@ -54,7 +54,7 @@ export async function getBranchPage(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/branches/admin-list",
-    "/api/branches/admin-list",
+    "/api/v1/branches/admin-list",
     {
       method: "GET",
       params: boundedParams,
@@ -66,7 +66,7 @@ export async function getBranchPage(paramsOrRequester = {}, maybeRequester) {
 export async function createBranch(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/branches",
-    "/api/branches",
+    "/api/v1/branches",
     {
       method: "POST",
       data: payload,
@@ -78,7 +78,7 @@ export async function createBranch(payload, requester) {
 export async function updateBranch(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/branches/${id}`,
-    `/api/branches/${id}`,
+    `/api/v1/branches/${id}`,
     {
       method: "PUT",
       data: payload,
@@ -90,7 +90,7 @@ export async function updateBranch(id, payload, requester) {
 export async function deleteBranch(id, requester) {
   await requestWithDualRoute(
     `/api/v1/branches/${id}`,
-    `/api/branches/${id}`,
+    `/api/v1/branches/${id}`,
     {
       method: "DELETE",
     },

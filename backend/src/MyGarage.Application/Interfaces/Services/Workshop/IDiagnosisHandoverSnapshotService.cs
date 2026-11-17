@@ -6,6 +6,11 @@ using MyGarage.Models;
 
 namespace MyGarage.Interfaces
 {
+    public interface IDiagnosisIntakeKpiService
+    {
+        Task<DiagnosisIntakeKpiResponseDto> GetIntakeConversionKpiAsync(long? branchId, DateTime? startDate, DateTime? endDate);
+    }
+
     public interface IDiagnosisHandoverSnapshotService
     {
         Task RecordIntakeSnapshotAsync(

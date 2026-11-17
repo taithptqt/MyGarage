@@ -1,4 +1,4 @@
-namespace MyGarage.Models;
+namespace MyGarage.Application.Payments.DTOs;
 
 public class OrderInvoice
 {
@@ -23,4 +23,3 @@ public class OrderInvoicesInfo
 {
     public List<OrderInvoice> Invoices { get; set; } = [];
 }
-

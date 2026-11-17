@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Application.Payments.DTOs;
 using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers;
 
@@ -26,12 +25,16 @@ public partial class OrderController : ControllerBase
 
             return Ok(result.Data);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to retrieve order {OrderId}", id);
             return this.ProblemMessage(
                 StatusCodes.Status500InternalServerError,
-                $"Failed to retrieve order {id}",
-                extensions: new Dictionary<string, object?> { ["error"] = ex.Message });
+                $"Failed to retrieve order {id}");
         }
     }
 
@@ -55,12 +58,16 @@ public partial class OrderController : ControllerBase
 
             return Ok(result.Data);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to cancel order {OrderId}", orderId);
             return this.ProblemMessage(
                 StatusCodes.Status500InternalServerError,
-                $"Failed to cancel order {orderId}",
-                extensions: new Dictionary<string, object?> { ["error"] = ex.Message });
+                $"Failed to cancel order {orderId}");
         }
     }
 
@@ -82,12 +89,16 @@ public partial class OrderController : ControllerBase
 
             return Ok(result.Data);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to retrieve invoices for order {OrderId}", orderId);
             return this.ProblemMessage(
                 StatusCodes.Status500InternalServerError,
-                $"Failed to retrieve invoice for order {orderId}",
-                extensions: new Dictionary<string, object?> { ["error"] = ex.Message });
+                $"Failed to retrieve invoice for order {orderId}");
         }
     }
 
@@ -111,12 +122,16 @@ public partial class OrderController : ControllerBase
 
             return File(result.Data.Content, result.Data.ContentType, result.Data.FileName);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to download invoice for order {OrderId}", orderId);
             return this.ProblemMessage(
                 StatusCodes.Status500InternalServerError,
-                $"Failed to download invoice {invoiceId}",
-                extensions: new Dictionary<string, object?> { ["error"] = ex.Message });
+                "Failed to download invoice");
         }
     }
 }

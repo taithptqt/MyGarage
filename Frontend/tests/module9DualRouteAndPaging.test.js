@@ -44,7 +44,7 @@ function createMockRequester(behavior = {}) {
   const calls = [];
   const requester = async (config) => {
     calls.push(config);
-    if (behavior.shouldFail404 && behavior.shouldFail404(config.url)) {
+    if (behavior.shouldFail404 && behavior.shouldFail404(config.url, calls.length)) {
       const err = new Error(`Not Found: ${config.url}`);
       err.status = 404;
       err.response = { status: 404 };
@@ -85,14 +85,14 @@ test("buildBoundedPaginationParams enforces boundary limits and clamps defaults"
 
 test("payrollApi dual routes /api/v1/payroll-runs and falls back to /api/payroll-runs on 404", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: () => ({ items: [{ id: 1, period: "2026-11" }], total: 1 }),
   });
 
   const res = await getPayrollRuns({ branchId: 2, page: 1, pageSize: 10 }, requester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/payroll-runs");
-  assert.equal(calls[1].url, "/api/payroll-runs");
+  assert.equal(calls[1].url, "/api/v1/payroll-runs");
   assert.equal(calls[0].params.branchId, 2);
   assert.equal(calls[0].params.page, 1);
   assert.equal(calls[0].params.pageSize, 10);
@@ -100,18 +100,19 @@ test("payrollApi dual routes /api/v1/payroll-runs and falls back to /api/payroll
 
   calls.length = 0;
   await getPayrollPreview({ branchId: 2, period: "2026-11" }, requester);
-  assert.equal(calls[0].url, "/api/v1/payroll-runs/preview");
-  assert.equal(calls[1].url, "/api/payroll-runs/preview");
+  assert.equal(calls[0].url, "/api/v1/payroll-runs/previews");
+  assert.equal(calls[1].url, "/api/v1/payroll-runs/previews");
 
   calls.length = 0;
   await createPayrollRun({ period: "2026-11", branchId: 2 }, requester);
   assert.equal(calls[0].url, "/api/v1/payroll-runs");
-  assert.equal(calls[1].url, "/api/payroll-runs");
+  assert.equal(calls[1].url, "/api/v1/payroll-runs");
 
   calls.length = 0;
   await approvePayrollRun(5, { approvedBy: 1 }, requester);
-  assert.equal(calls[0].url, "/api/v1/payroll-runs/5/approve");
-  assert.equal(calls[1].url, "/api/payroll-runs/5/approve");
+  assert.equal(calls[0].url, "/api/v1/payroll-runs/5/approvals");
+  assert.equal(calls[1].url, "/api/v1/payroll-runs/5/approvals");
+  assert.equal(calls[0].method, "POST");
 });
 
 test("payrollApi propagates 500 server error without fallback", async () => {
@@ -129,87 +130,87 @@ test("payrollApi propagates 500 server error without fallback", async () => {
 
 test("commissionApi and payslipApi dual route and fall back cleanly", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: () => ({ items: [] }),
   });
 
   await getCommissions({ branchId: 4, period: "2026-11" }, requester);
   assert.equal(calls[0].url, "/api/v1/commissions");
-  assert.equal(calls[1].url, "/api/commissions");
+  assert.equal(calls[1].url, "/api/v1/commissions");
   assert.equal(calls[0].params.branchId, 4);
   assert.equal(calls[0].params.period, "2026-11");
 
   calls.length = 0;
   await getMyPayslips({}, requester);
-  assert.equal(calls[0].url, "/api/v1/payslips/my");
-  assert.equal(calls[1].url, "/api/payslips/my");
+  assert.equal(calls[0].url, "/api/v1/staff/current/payslips");
+  assert.equal(calls[1].url, "/api/v1/payslips/my");
 });
 
 test("salaryAdminApi dual routes profiles and request workflows", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
     handle: () => [{ id: 10 }],
   });
 
   await getSalaryProfiles(3, {}, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/profiles");
-  assert.equal(calls[1].url, "/api/salary-admin/profiles");
+  assert.equal(calls[0].url, "/api/v1/salary-profiles");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/profiles");
   assert.equal(calls[0].params.branchId, 3);
 
   calls.length = 0;
   await createSalaryProfile({ staffId: 1, baseSalary: 10000000 }, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/profiles");
-  assert.equal(calls[1].url, "/api/salary-admin/profiles");
+  assert.equal(calls[0].url, "/api/v1/salary-profiles");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/profiles");
 
   calls.length = 0;
   await updateSalaryProfile(10, { baseSalary: 12000000 }, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/profiles/10");
-  assert.equal(calls[1].url, "/api/salary-admin/profiles/10");
+  assert.equal(calls[0].url, "/api/v1/salary-profiles/10");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/profiles/10");
 
   calls.length = 0;
   await deleteSalaryProfile(10, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/profiles/10");
-  assert.equal(calls[1].url, "/api/salary-admin/profiles/10");
+  assert.equal(calls[0].url, "/api/v1/salary-profiles/10");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/profiles/10");
 
   calls.length = 0;
   await getInitialSalaryRequests({ status: "PENDING" }, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/requests");
-  assert.equal(calls[1].url, "/api/salary-admin/requests");
+  assert.equal(calls[0].url, "/api/v1/initial-salary-requests");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/requests");
 
   calls.length = 0;
   await approveInitialSalaryRequest(7, { note: "Approved" }, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/requests/7/approve");
-  assert.equal(calls[1].url, "/api/salary-admin/requests/7/approve");
+  assert.equal(calls[0].url, "/api/v1/initial-salary-requests/7/approvals");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/requests/7/approvals");
 
   calls.length = 0;
   await rejectInitialSalaryRequest(7, { reason: "Too high" }, requester);
-  assert.equal(calls[0].url, "/api/v1/salary-admin/requests/7/reject");
-  assert.equal(calls[1].url, "/api/salary-admin/requests/7/reject");
+  assert.equal(calls[0].url, "/api/v1/initial-salary-requests/7/rejections");
+  assert.equal(calls[1].url, "/api/v1/salary-admin/requests/7/rejections");
 });
 
 test("salaryCoefficientApi dual routes CRUD endpoints", async () => {
   const { calls, requester } = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url, callCount) => callCount === 1 && url.startsWith("/api/v1/"),
   });
 
   await getAllSalaryCoefficients({}, requester);
   assert.equal(calls[0].url, "/api/v1/salary-coefficients");
-  assert.equal(calls[1].url, "/api/salary-coefficients");
+  assert.equal(calls[1].url, "/api/v1/salary-coefficients");
 
   calls.length = 0;
   await createSalaryCoefficient({ title: "Senior" }, requester);
   assert.equal(calls[0].url, "/api/v1/salary-coefficients");
-  assert.equal(calls[1].url, "/api/salary-coefficients");
+  assert.equal(calls[1].url, "/api/v1/salary-coefficients");
 
   calls.length = 0;
   await updateSalaryCoefficient(4, { title: "Lead" }, requester);
   assert.equal(calls[0].url, "/api/v1/salary-coefficients/4");
-  assert.equal(calls[1].url, "/api/salary-coefficients/4");
+  assert.equal(calls[1].url, "/api/v1/salary-coefficients/4");
 
   calls.length = 0;
   await deleteSalaryCoefficient(4, requester);
   assert.equal(calls[0].url, "/api/v1/salary-coefficients/4");
-  assert.equal(calls[1].url, "/api/salary-coefficients/4");
+  assert.equal(calls[1].url, "/api/v1/salary-coefficients/4");
 });
 
 test("UTF-8 strictness: Module 9 files contain 0 corrupted chars, 0 mojibake, valid Vietnamese", () => {

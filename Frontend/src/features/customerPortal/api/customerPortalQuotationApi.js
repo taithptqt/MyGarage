@@ -23,7 +23,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 export function getQuotationById(quotationId, requester) {
   return requestWithDualRoute(
     `/api/v1/quotations/${quotationId}`,
-    `/api/quotations/${quotationId}`,
+    `/api/v1/quotations/${quotationId}`,
     { method: "GET" },
     requester
   );
@@ -31,8 +31,8 @@ export function getQuotationById(quotationId, requester) {
 
 export function applyCustomerQuotationDecision(quotationId, data, requester) {
   return requestWithDualRoute(
-    `/api/v1/quotations/${quotationId}/customer-decision`,
-    `/api/quotations/${quotationId}/customer-decision`,
+    `/api/v1/quotations/${quotationId}/customer-decisions`,
+    `/api/v1/quotations/${quotationId}/customer-decisions`,
     { method: "POST", data },
     requester
   );
@@ -40,8 +40,8 @@ export function applyCustomerQuotationDecision(quotationId, data, requester) {
 
 export function sendCustomerQuotationDecisionOtpByToken(token, data = {}, requester) {
   return requestWithDualRoute(
-    `/api/v1/quotations/public/${token}/otp/send`,
-    `/api/quotations/public/${token}/otp/send`,
+    `/api/v1/quotations/public/${token}/otp-requests`,
+    `/api/v1/quotations/public/${token}/otp-requests`,
     { method: "POST", data },
     requester
   );
@@ -49,8 +49,8 @@ export function sendCustomerQuotationDecisionOtpByToken(token, data = {}, reques
 
 export function applyCustomerQuotationDecisionByToken(token, data, requester) {
   return requestWithDualRoute(
-    `/api/v1/quotations/public/${token}/decision`,
-    `/api/quotations/public/${token}/decision`,
+    `/api/v1/quotations/public/${token}/decisions`,
+    `/api/v1/quotations/public/${token}/decisions`,
     { method: "POST", data },
     requester
   );

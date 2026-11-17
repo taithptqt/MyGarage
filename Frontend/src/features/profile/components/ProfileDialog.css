@@ -14,11 +14,17 @@
   width: min(980px, 100%);
   max-height: 92vh;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   background: #ffffff;
   border-radius: 22px;
   border: 1px solid #e8eefc;
   box-shadow: 0 24px 60px rgba(18, 35, 77, 0.22);
   padding: 24px;
+}
+
+.profile-dialog-card::-webkit-scrollbar {
+  display: none;
 }
 
 .profile-dialog-header {

@@ -55,6 +55,9 @@ namespace MyGarage.DTOs.Responses
         public DateTime? EstimatedHandover { get; set; }
         public DateTime? PromisedHandoverTime { get; set; }
         public DateTime? ActualHandover { get; set; }
+        public string? HandoverReceiverName { get; set; }
+        public string? HandoverReceiverPhone { get; set; }
+        public string? HandoverNotes { get; set; }
         public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }

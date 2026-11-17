@@ -1,10 +1,6 @@
 ﻿import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  getAllCustomers,
-  getAllCustomerVehicles,
-  getAllVehicles,
-} from "@features/admin/api/customerApi";
+import { useNavigate, useLocation } from "react-router-dom";
+import { getReceptionCustomerVehicleReferences } from "@features/admin/api/customerApi";
 import { getAllPackages, getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
 import ReceptionCreateAppointmentForm from "@features/workshop/components/ReceptionCreateAppointmentForm";
 import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
@@ -19,8 +15,8 @@ const TEXT = {
     "Vui l\u00f2ng ch\u1ecdn \u0111\u00fang chi nh\u00e1nh l\u00e0m vi\u1ec7c tr\u01b0\u1edbc khi t\u1ea1o l\u1ecbch h\u1eb9n.",
   createError: "Kh\u00f4ng th\u1ec3 t\u1ea1o l\u1ecbch h\u1eb9n.",
   loadingData: "\u0110ang t\u1ea3i d\u1eef li\u1ec7u \u0111\u1eb7t l\u1ecbch...",
-  pageTitle: "T\u1ea1o l\u1ecbch h\u1eb9n m\u1edbi (L\u1ec5 t\u00e2n)",
-  back: "<- Quay l\u1ea1i l\u1ecbch h\u1eb9n",
+  pageTitle: "T\u1ea1o l\u1ecbch h\u1eb9n m\u1edbi",
+  back: "<- Quay l\u1ea1i",
   successTitle: "\u0110\u1eb7t l\u1ecbch th\u00e0nh c\u00f4ng",
   successMessage: "L\u1ecbch h\u1eb9n \u0111\u00e3 \u0111\u01b0\u1ee3c t\u1ea1o th\u00e0nh c\u00f4ng.",
   infoNote: "",
@@ -34,6 +30,7 @@ function parseBranchId(value) {
 
 export default function ReceptionCreateAppointmentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
 
@@ -57,14 +54,13 @@ export default function ReceptionCreateAppointmentPage() {
     setLoading(true);
     setError("");
     try {
-      const [customerRes, vehicleRes, customerVehicleRes, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
-        getAllCustomers(),
-        getAllVehicles(),
-        getAllCustomerVehicles(),
+      const [references, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
+        getReceptionCustomerVehicleReferences(effectiveBranchId),
         getAllStandardServices(),
         getAllPackages().catch(() => []),
         getAllServiceCategories(),
       ]);
+      const [customerRes, vehicleRes, customerVehicleRes] = references;
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setCustomerVehicles(Array.isArray(customerVehicleRes) ? customerVehicleRes : []);
@@ -82,13 +78,13 @@ export default function ReceptionCreateAppointmentPage() {
   }, [fetchReferenceData]);
 
   const handleGoBack = useCallback(() => {
-    navigate("/workshop/reception/appointments");
+    navigate(location.pathname.startsWith("/admin") ? "/admin/appointments" : "/workshop/reception/appointments");
   }, [navigate]);
 
   useEffect(() => {
     if (!successAppt) return undefined;
     const timeoutId = setTimeout(() => {
-      navigate("/workshop/reception/appointments", { replace: true });
+      navigate(location.pathname.startsWith("/admin") ? "/admin/appointments" : "/workshop/reception/appointments", { replace: true });
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [successAppt, navigate]);

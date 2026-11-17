@@ -23,8 +23,7 @@ public interface IWebhookPaymentDataService
 
     Task EnsureRetailOrderStockDeductedAsync(long retailOrderId, CancellationToken ct = default);
 
-    Task<Payment?> FindPendingPaymentByLinkOrReferenceAsync(
+    Task<Payment?> FindRecoverablePaymentByLinkAsync(
         string? linkId,
-        string? reference,
         CancellationToken ct = default);
 }

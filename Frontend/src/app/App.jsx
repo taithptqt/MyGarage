@@ -4,14 +4,18 @@ import ErrorBoundary from "@shared/core/components/ErrorBoundary";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { BranchProvider } from "@shared/core/context/BranchContext";
+import { SceneTransitionProvider } from "@shared/core/context/SceneTransitionContext";
 import useIdleTimeout from "@shared/core/hooks/useIdleTimeout";
 import CustomerLayout from "@shared/layouts/CustomerLayout";
+import PublicBrandTheme from "@shared/brand/PublicBrandTheme";
+import HomeChatVisibility from "@shared/components/HomeChatVisibility";
 
 // Lazy-loaded route components
 const AuthPage = lazy(() => import("@features/auth/pages/AuthPage"));
 const ForgotPasswordPage = lazy(() => import("@features/auth/recovery/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@features/auth/recovery/ResetPasswordPage"));
 const HomePage = lazy(() => import("@features/home/pages/HomePage"));
+const ReferencePage = lazy(() => import("@shared/brand/ReferencePage"));
 const AdminPage = lazy(() => import("@features/admin/pages/AdminPage"));
 const DispatchCenterPage = lazy(() => import("@features/admin/pages/DispatchCenterPage"));
 const WorkshopPage = lazy(() => import("@features/workshop/pages/WorkshopPage"));
@@ -66,6 +70,7 @@ const MyRetailOrdersPage = lazy(() => import("@features/retail/pages/MyRetailOrd
 const GarageDashboardPage = lazy(() => import("@features/customerPortal/pages/GarageDashboardPage"));
 const MyVehiclesPage = lazy(() => import("@features/customerPortal/pages/MyVehiclesPage"));
 const VehicleDetailPage = lazy(() => import("@features/customerPortal/pages/VehicleDetailPage"));
+const CustomerVehicleConditionReportPage = lazy(() => import("@features/customerPortal/pages/CustomerVehicleConditionReportPage"));
 const MyNotificationsPage = lazy(() => import("@features/customerPortal/pages/MyNotificationsPage"));
 const QuotationDetailPage = lazy(() => import("@features/customerPortal/pages/QuotationDetailPage"));
 const PublicQuotationAccessPage = lazy(() => import("@features/customerPortal/pages/PublicQuotationAccessPage"));
@@ -73,8 +78,12 @@ const ReceptionChatPage = lazy(() => import("@features/chat/pages/ReceptionChatP
 const CustomerMessengerWidget = lazy(() => import("@features/chat/components/CustomerMessengerWidget"));
 const CustomerChatbotWidget = lazy(() => import("@features/chatbot/components/CustomerChatbotWidget"));
 const AccountingMain = lazy(() => import("@horizon/AccountingMain"));
+const CustomerServicesPage = lazy(() => import("@features/services/pages/CustomerServicesPage"));
 const ContactPage = lazy(() => import("@features/contact/pages/ContactPage"));
 const StorageServicesPage = lazy(() => import("@features/storage/pages/StorageServicesPage"));
+const Garage3DPage = lazy(() => import("@features/storage/garage3d/Garage3DPage"));
+const CustomerGarage3DPage = lazy(() => import("@features/storage/garage3d/CustomerGarage3DPage"));
+const CustomRequestsPage = lazy(() => import("@features/storage/garage3d/CustomRequestsPage"));
 const NewsJournalPage = lazy(() => import("@features/news/pages/NewsJournalPage"));
 
 function RouteLoadingSpinner() {
@@ -145,8 +154,10 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <PublicBrandTheme />
       <BranchProvider>
-        <Suspense fallback={<RouteLoadingSpinner />}>
+        <SceneTransitionProvider>
+          <Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/login" element={<AuthPage />} />
@@ -156,9 +167,17 @@ function App() {
             <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
             <Route path="/home" element={<HomePage />} />
+            <Route path="/services" element={<CustomerServicesPage />} />
+            <Route path="/tracking" element={<Navigate to="/my-garage-dashboard" replace />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/storage" element={<StorageServicesPage />} />
-            <Route path="/news" element={<NewsJournalPage />} />
+            <Route path="/storage" element={<Navigate to="/services" replace />} />
+            <Route path="/storage/garage-3d" element={<Garage3DPage />} />
+            <Route path="/my-garage-3d" element={<ProtectedRoute allowedRoles={["CUSTOMER"]}><CustomerRoute><CustomerGarage3DPage /></CustomerRoute></ProtectedRoute>} />
+            <Route path="/news" element={<Navigate to="/services" replace />} />
+            <Route path="/discover/about-my-garage" element={<Navigate to="/home" replace />} />
+            <Route path="/events" element={<ReferencePage sourcePath="/en/meetings-events" />} />
+            <Route path="/partners" element={<ReferencePage sourcePath="/en/partners" />} />
+            <Route path="/discover/*" element={<ReferencePage />} />
 
             {/* Customer Appointment Routes */}
             <Route
@@ -209,6 +228,22 @@ function App() {
               }
             />
             <Route
+              path="/my-vehicles/:vehicleId/condition-report"
+              element={
+                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                  <CustomerRoute><CustomerVehicleConditionReportPage /></CustomerRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/my-condition-report/:serviceOrderId"
+              element={
+                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                  <CustomerRoute><CustomerVehicleConditionReportPage /></CustomerRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/my-notifications"
               element={
                 <ProtectedRoute allowedRoles={["CUSTOMER"]}>
@@ -228,31 +263,25 @@ function App() {
             <Route
               path="/parts-shop"
               element={
-                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                  <CustomerRoute><PartsSalesPage /></CustomerRoute>
-                </ProtectedRoute>
+                <CustomerRoute><PartsSalesPage /></CustomerRoute>
               }
             />
             <Route
               path="/parts-cart"
               element={
-                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                  <CustomerRoute><RetailCartPage /></CustomerRoute>
-                </ProtectedRoute>
+                <CustomerRoute><RetailCartPage /></CustomerRoute>
               }
             />
             <Route
               path="/parts-shop/products/:productId"
               element={
-                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                  <CustomerRoute><PartProductDetailPage /></CustomerRoute>
-                </ProtectedRoute>
+                <CustomerRoute><PartProductDetailPage /></CustomerRoute>
               }
             />
             <Route
               path="/my-retail-orders"
               element={
-                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN", "STAFF", "MANAGER"]}>
                   <CustomerRoute><MyRetailOrdersPage /></CustomerRoute>
                 </ProtectedRoute>
               }
@@ -285,7 +314,7 @@ function App() {
             <Route
               path="/admin/*"
               element={
-                <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}>
                   <HorizonMain />
                 </ProtectedRoute>
               }
@@ -330,10 +359,10 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="reception" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionOrdersSection /></WorkshopChildRoute>} />
+              <Route path="reception" element={<Navigate to="/admin/service-orders" replace />} />
               <Route path="reception/create" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><CreateServiceOrderPage /></WorkshopChildRoute>} />
-              <Route path="reception/appointments" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionAppointmentsPage /></WorkshopChildRoute>} />
-              <Route path="reception/chat" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionChatPage /></WorkshopChildRoute>} />
+              <Route path="reception/appointments" element={<Navigate to="/admin/appointments" replace />} />
+              <Route path="reception/chat" element={<Navigate to="/admin/chat" replace />} />
               <Route path="reception/appointments/new" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></WorkshopChildRoute>} />
               <Route path="reception/appointments/:appointmentId/edit" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionEditAppointmentPage /></WorkshopChildRoute>} />
               <Route path="reception/orders/:orderId/diagnosis" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></WorkshopChildRoute>} />
@@ -343,6 +372,7 @@ function App() {
               <Route path="reception/orders/:orderId/vehicleconditionlogs" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><VehicleConditionLogsPage /></WorkshopChildRoute>} />
               <Route path="reception/orders/:orderId/edit" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderEditPage /></WorkshopChildRoute>} />
               <Route path="manager" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></WorkshopChildRoute>} />
+              <Route path="custom-requests" element={<WorkshopChildRoute allowedRoles={["ADMIN", "MANAGER"]}><CustomRequestsPage /></WorkshopChildRoute>} />
               <Route path="manager/dispatch/:orderId" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></WorkshopChildRoute>} />
               <Route path="manager/orders/:orderId/quote" element={<WorkshopChildRoute allowedRoles={["MANAGER"]}><ManagerDiagnosisApprovalPage /></WorkshopChildRoute>} />
               <Route path="foreman" element={<WorkshopChildRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></WorkshopChildRoute>} />
@@ -404,9 +434,12 @@ function App() {
           </Routes>
         </Suspense>
         <Suspense fallback={null}>
-          <CustomerChatbotWidget />
-          <CustomerMessengerWidget />
+          <HomeChatVisibility>
+            <CustomerChatbotWidget />
+            <CustomerMessengerWidget />
+          </HomeChatVisibility>
         </Suspense>
+        </SceneTransitionProvider>
       </BranchProvider>
     </ErrorBoundary>
   );

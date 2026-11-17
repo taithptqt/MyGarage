@@ -43,7 +43,7 @@ export function getAiForecasts(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/ai-forecasts",
-    "/api/ai-forecasts",
+    "/api/v1/ai-forecasts",
     {
       method: "GET",
       params: boundedParams,
@@ -60,7 +60,7 @@ export function getAiKnowledgePage(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/ai-knowledge-bases/page",
-    "/api/ai-knowledge-bases/page",
+    "/api/v1/ai-knowledge-bases/page",
     {
       method: "GET",
       params: boundedParams,
@@ -72,7 +72,7 @@ export function getAiKnowledgePage(paramsOrRequester = {}, maybeRequester) {
 export function createAiKnowledgeEntry(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/ai-knowledge-bases",
-    "/api/ai-knowledge-bases",
+    "/api/v1/ai-knowledge-bases",
     {
       method: "POST",
       data: payload,
@@ -84,7 +84,7 @@ export function createAiKnowledgeEntry(payload, requester) {
 export function updateAiKnowledgeEntry(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/ai-knowledge-bases/${id}`,
-    `/api/ai-knowledge-bases/${id}`,
+    `/api/v1/ai-knowledge-bases/${id}`,
     {
       method: "PUT",
       data: payload,
@@ -96,7 +96,7 @@ export function updateAiKnowledgeEntry(id, payload, requester) {
 export function deleteAiKnowledgeEntry(id, requester) {
   return requestWithDualRoute(
     `/api/v1/ai-knowledge-bases/${id}`,
-    `/api/ai-knowledge-bases/${id}`,
+    `/api/v1/ai-knowledge-bases/${id}`,
     {
       method: "DELETE",
     },
@@ -112,7 +112,7 @@ export function getAiModelConfigPage(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/ai-model-configs/page",
-    "/api/ai-model-configs/page",
+    "/api/v1/ai-model-configs/page",
     {
       method: "GET",
       params: boundedParams,
@@ -124,7 +124,7 @@ export function getAiModelConfigPage(paramsOrRequester = {}, maybeRequester) {
 export function createAiModelConfig(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/ai-model-configs",
-    "/api/ai-model-configs",
+    "/api/v1/ai-model-configs",
     {
       method: "POST",
       data: payload,
@@ -136,7 +136,7 @@ export function createAiModelConfig(payload, requester) {
 export function updateAiModelConfig(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/ai-model-configs/${id}`,
-    `/api/ai-model-configs/${id}`,
+    `/api/v1/ai-model-configs/${id}`,
     {
       method: "PUT",
       data: payload,
@@ -153,7 +153,7 @@ export function getAiSmartDispatchings(paramsOrRequester = {}, maybeRequester) {
 
   return requestWithDualRoute(
     "/api/v1/ai-smart-dispatchings",
-    "/api/ai-smart-dispatchings",
+    "/api/v1/ai-smart-dispatchings",
     {
       method: "GET",
       params: boundedParams,
@@ -165,7 +165,7 @@ export function getAiSmartDispatchings(paramsOrRequester = {}, maybeRequester) {
 export function recommendBayForOrder(serviceOrderId, requester) {
   return requestWithDualRoute(
     `/api/v1/ai-smart-dispatchings/recommend-bay/${serviceOrderId}`,
-    `/api/ai-smart-dispatchings/recommend-bay/${serviceOrderId}`,
+    `/api/v1/ai-smart-dispatchings/recommend-bay/${serviceOrderId}`,
     {
       method: "GET",
     },

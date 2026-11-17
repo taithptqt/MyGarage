@@ -19,6 +19,7 @@ public sealed class PayslipsController : ControllerBase
     }
 
     [HttpGet("my")]
+    [HttpGet("~/api/v1/staff/current/payslips")]
     public async Task<IActionResult> GetMyPayslips([FromQuery] string? period = null)
     {
         if (!this.IsStaffUser())

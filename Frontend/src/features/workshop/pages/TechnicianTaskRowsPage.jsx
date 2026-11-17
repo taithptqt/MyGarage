@@ -177,17 +177,17 @@ export default function TechnicianTaskRowsPage() {
 
       const [assignRes, allOrdersRes, allDetailsRes] = await Promise.all([
         request({
-          url: "/api/service-staff-assignments",
+          url: "/api/v1/service-staff-assignments",
           method: "GET",
           params: { staffId: techId, technicianId: techId },
         }),
-        request({ url: "/api/service-orders", method: "GET" }),
-        request({ url: "/api/service-order-details", method: "GET" }),
+        request({ url: "/api/v1/service-orders", method: "GET" }),
+        request({ url: "/api/v1/service-order-details", method: "GET" }),
       ]);
 
       let assigns = toArray(assignRes);
       if (assigns.length === 0) {
-        const allAssignRes = await request({ url: "/api/service-staff-assignments", method: "GET" });
+        const allAssignRes = await request({ url: "/api/v1/service-staff-assignments", method: "GET" });
         const allAssignments = toArray(allAssignRes);
         const targetId = Number(techId);
         assigns = allAssignments.filter((item) => {
@@ -207,7 +207,7 @@ export default function TechnicianTaskRowsPage() {
 
       if (assigns.length === 0) {
         const diagBoardRes = await request({
-          url: "/api/diagnoses/dispatch-board",
+          url: "/api/v1/diagnoses/dispatch-board",
           method: "GET",
           params: { includeCompleted: true },
         });

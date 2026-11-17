@@ -79,6 +79,7 @@ function formatCountdown(seconds) {
 const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng.";
 const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng.";
 const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
+const OTP_RATE_LIMIT_MESSAGE = "Bạn đã gửi quá nhiều yêu cầu. Vui lòng chờ một phút rồi thử lại.";
 
 export default function PublicQuotationAccessPage() {
   const { token } = useParams();
@@ -209,8 +210,13 @@ export default function PublicQuotationAccessPage() {
     const groups = new Map();
     let baseBeforeVat = 0;
     let totalVat = 0;
+    let missingTaxData = false;
 
     lineItems.forEach((row) => {
+      if (row?.taxRate == null || row?.taxAmount == null || row?.subTotal == null || row?.discountValue == null) {
+        missingTaxData = true;
+        return;
+      }
       const quantity = Number(row?.quantity || 0);
       const unitPrice = Number(row?.unitPriceAtTime || 0);
       const subTotalRaw = Number(row?.subTotal);
@@ -253,7 +259,8 @@ export default function PublicQuotationAccessPage() {
       baseBeforeVat: resolvedBase,
       totalVat: resolvedVat,
       totalWithVat: resolvedWithVat,
-      groups: normalizedGroups,
+      groups: missingTaxData ? [] : normalizedGroups,
+      taxDataAvailable: !missingTaxData,
     };
   }, [lineItems, quotation?.finalAmount, quotation?.subTotalAmount, quotation?.taxAmount]);
 
@@ -293,6 +300,7 @@ export default function PublicQuotationAccessPage() {
       totalParts: executionCostSummary.partsAndMaterialBeforeVat,
       beforeVat: vatSummary.baseBeforeVat,
       totalVat: vatSummary.totalVat,
+      taxDataAvailable: vatSummary.taxDataAvailable,
       vatGroups: Array.isArray(vatSummary.groups) ? vatSummary.groups : [],
       totalRepairCost,
       insuranceCompensation,
@@ -306,6 +314,7 @@ export default function PublicQuotationAccessPage() {
     quotation?.totalInsuranceAmount,
     vatSummary.baseBeforeVat,
     vatSummary.groups,
+    vatSummary.taxDataAvailable,
     vatSummary.totalVat,
     vatSummary.totalWithVat,
   ]);
@@ -412,7 +421,7 @@ export default function PublicQuotationAccessPage() {
       setOtpRemainingSeconds(0);
       await loadQuotation();
     } catch (err) {
-      setError(err?.message || "Không thể ghi nhận quyết định.");
+      setError(err?.status === 429 ? OTP_RATE_LIMIT_MESSAGE : (err?.message || "Không thể ghi nhận quyết định."));
     } finally {
       setSaving(false);
       isAutoSubmittingOtpRef.current = false;
@@ -453,7 +462,7 @@ export default function PublicQuotationAccessPage() {
       }, 50);
     } catch (err) {
       setPendingDecision(null);
-      setError(err?.message || "Không thể gửi mã OTP.");
+      setError(err?.status === 429 ? OTP_RATE_LIMIT_MESSAGE : (err?.message || "Không thể gửi mã OTP."));
     } finally {
       setSendingOtp(false);
     }
@@ -561,7 +570,7 @@ export default function PublicQuotationAccessPage() {
                 Tổng chi phí Nhân công
               </span>
               <span className="summary-line-dots" />
-              <span className="summary-line-value">{formatMoney(paymentSummary.totalLabor)}</span>
+              <span className="summary-line-value">{paymentSummary.taxDataAvailable ? formatMoney(paymentSummary.totalLabor) : "Chưa có dữ liệu"}</span>
             </div>
             <div className="summary-line">
               <span className="summary-line-label">
@@ -569,12 +578,12 @@ export default function PublicQuotationAccessPage() {
                 Tổng chi phí Phụ tùng / Vật tư
               </span>
               <span className="summary-line-dots" />
-              <span className="summary-line-value">{formatMoney(paymentSummary.totalParts)}</span>
+              <span className="summary-line-value">{paymentSummary.taxDataAvailable ? formatMoney(paymentSummary.totalParts) : "Chưa có dữ liệu"}</span>
             </div>
             <div className="summary-line summary-line-strong">
               <span className="summary-line-label">TỔNG TIỀN HÀNG (CHƯA VAT)</span>
               <span className="summary-line-dots" />
-              <span className="summary-line-value">{formatMoney(paymentSummary.beforeVat)}</span>
+              <span className="summary-line-value">{paymentSummary.taxDataAvailable ? formatMoney(paymentSummary.beforeVat) : "Chưa có dữ liệu"}</span>
             </div>
 
             <div className="summary-subtitle">Thuế Giá trị gia tăng (VAT):</div>
@@ -596,7 +605,7 @@ export default function PublicQuotationAccessPage() {
                     Thuế VAT
                   </span>
                   <span className="summary-line-dots" />
-                  <span className="summary-line-value">{formatMoney(paymentSummary.totalVat)}</span>
+                  <span className="summary-line-value">{paymentSummary.taxDataAvailable ? formatMoney(paymentSummary.totalVat) : "Chưa có dữ liệu"}</span>
                 </div>
               )}
             <div className="summary-line summary-line-strong">

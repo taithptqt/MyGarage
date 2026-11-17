@@ -202,18 +202,12 @@ public sealed class QuotationBuildService : IQuotationBuildService
         var latestAssignmentByDiagnosisId = latestAssignmentIdsByDiagnosis
             .GroupBy(x => x.DiagnosisId)
             .ToDictionary(x => x.Key, x => x.First().Id);
-        var latestAssignmentIds = latestAssignmentByDiagnosisId.Values.ToList();
+        var (currentAssignmentIds, legacyDiagnosisIds) = SelectCurrentRecommendationScope(latestAssignmentIdsByDiagnosis, sourceDiagnosisIds);
 
         var recommendations = await _buildStore.GetRecommendationsByAssignmentsOrDiagnosesAsync(
-            latestAssignmentIds,
-            sourceDiagnosisIds,
+            currentAssignmentIds,
+            legacyDiagnosisIds,
             nameof(RecommendationLifecycleStatusCode.SOFT_DELETED_BY_TL));
-        if (recommendations.Count == 0)
-        {
-            recommendations = await _buildStore.GetRecommendationsByDiagnosesAsync(
-                sourceDiagnosisIds,
-                nameof(RecommendationLifecycleStatusCode.SOFT_DELETED_BY_TL));
-        }
         if (recommendations.Count == 0)
         {
             throw new InvalidOperationException("No recommendation found to create quotation.");
@@ -245,7 +239,7 @@ public sealed class QuotationBuildService : IQuotationBuildService
                     ? latestAssignmentId
                     : null,
                 Title = null,
-                QuotationType = nameof(QuotationTypeCode.INSURANCE),
+                QuotationType = nameof(QuotationTypeCode.NORMAL),
                 ServiceAdvisorId = QuotationValidationHelper.ResolveServiceAdvisorForQuotation(
                     null,
                     serviceOrder.ServiceAdvisorId,
@@ -269,7 +263,7 @@ public sealed class QuotationBuildService : IQuotationBuildService
                     CostPriceAtTime = mapped.CostPrice,
                     DiscountValue = 0,
                     TaxRate = mapped.TaxRate,
-                    PayerType = "INSURANCE",
+                    PayerType = "CUSTOMER",
                     IsBlocking = true,
                     IsMandatory = QuotationValidationHelper.IsMandatoryByUrgency(rec.Urgency),
                     EstimatedMinutes = null,
@@ -278,14 +272,7 @@ public sealed class QuotationBuildService : IQuotationBuildService
             }
 
             var quotation = await CreateQuotationAsync(serviceOrderId, request, actorStaffId);
-            var quotationEntity = await _buildStore.GetQuotationRequiredForUpdateAsync(quotation.Id);
-            quotationEntity.Status = QuotationWorkflowConstants.StatusPendingInsurance;
-            quotationEntity.CustomerDecisionStatus = QuotationWorkflowConstants.ApprovalPending;
-            quotationEntity.UpdatedBy = actorStaffId;
-            quotationEntity.UpdatedAt = now;
-            await _buildStore.SaveChangesInTransactionAsync();
-
-            return await _queryService.GetQuotationAsync(quotationEntity.Id) ?? QuotationMappingHelper.MapQuotationResponse(quotationEntity);
+            return await _queryService.GetQuotationAsync(quotation.Id) ?? quotation;
         });
     }
 
@@ -311,28 +298,50 @@ public sealed class QuotationBuildService : IQuotationBuildService
         }
 
         var latestAssignments = await _buildStore.GetDiagnosisAssignmentsOrderedAsync(sourceDiagnosisIds);
-        var latestAssignmentIds = latestAssignments
-            .GroupBy(x => x.DiagnosisId)
-            .Select(x => x.First().Id)
-            .ToList();
+        var (currentAssignmentIds, legacyDiagnosisIds) = SelectCurrentRecommendationScope(latestAssignments, sourceDiagnosisIds);
 
-        var hasRecommendation = await _buildStore.HasRecommendationAsync(
-            latestAssignmentIds,
-            sourceDiagnosisIds,
+        var recommendations = await _buildStore.GetRecommendationsByAssignmentsOrDiagnosesAsync(
+            currentAssignmentIds,
+            legacyDiagnosisIds,
             nameof(RecommendationLifecycleStatusCode.SOFT_DELETED_BY_TL));
-        if (!hasRecommendation)
-        {
-            hasRecommendation = await _buildStore.HasRecommendationByDiagnosesAsync(
-                sourceDiagnosisIds,
-                nameof(RecommendationLifecycleStatusCode.SOFT_DELETED_BY_TL));
-        }
 
-        if (!hasRecommendation)
+        if (recommendations.Count == 0)
         {
             return "No recommendation found to create quotation.";
         }
 
+        var serviceIds = recommendations.Where(x => x.StandardServiceId.GetValueOrDefault() > 0).Select(x => x.StandardServiceId!.Value).Distinct().ToList();
+        var productIds = recommendations.Where(x => x.InventoryItemId.GetValueOrDefault() > 0).Select(x => x.InventoryItemId!.Value).Distinct().ToList();
+        var services = await _buildStore.GetStandardServicesMapAsync(serviceIds);
+        var products = await _buildStore.GetProductsMapAsync(productIds);
+        try
+        {
+            foreach (var recommendation in recommendations)
+                QuotationPricingHelper.MapRecommendationToPrice(recommendation, services, products);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message;
+        }
+
         return null;
+    }
+
+    private static (List<long> AssignmentIds, List<long> LegacyDiagnosisIds) SelectCurrentRecommendationScope(
+        IReadOnlyList<DiagnosisAssignment> assignments, IReadOnlyList<long> diagnosisIds)
+    {
+        var assignmentIds = new List<long>();
+        var legacyDiagnosisIds = new List<long>();
+        foreach (var diagnosisId in diagnosisIds.Distinct())
+        {
+            var logs = assignments.Where(x => x.DiagnosisId == diagnosisId).ToList();
+            var boundary = logs.Where(x => string.Equals(x.EventType, "REDIAGNOSE_REQUESTED", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
+            if (boundary == null) legacyDiagnosisIds.Add(diagnosisId);
+            assignmentIds.AddRange(logs.Where(x => boundary == null || x.CreatedAt > boundary.CreatedAt ||
+                (x.CreatedAt == boundary.CreatedAt && x.Id >= boundary.Id)).Select(x => x.Id));
+        }
+        return (assignmentIds, legacyDiagnosisIds);
     }
 
     public async Task<QuotationResponseDto> CloneQuotationAsync(long quotationId, QuotationCloneRequestDto request)
@@ -342,176 +351,204 @@ public sealed class QuotationBuildService : IQuotationBuildService
             throw new InvalidOperationException("Actor staff is required.");
         }
 
-        var source = await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(quotationId);
-        if (source == null)
+        return await _buildStore.ExecuteTransactionalAsync(async () =>
         {
-            throw new InvalidOperationException("Quotation not found.");
-        }
-
-        if (string.Equals(source.Status, QuotationWorkflowConstants.StatusCanceled, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Cannot clone a cancelled quotation.");
-        }
-
-        var removedIds = (request.RemoveQuotationDetailIds ?? new List<long>())
-            .Where(x => x > 0)
-            .Distinct()
-            .ToHashSet();
-
-        var serviceIds = source.QuotationDetails
-            .Where(x => x.ItemId.HasValue && string.Equals(QuotationMappingHelper.NormalizeServiceOrderDetailItemType(x.ItemType), "LABOR", StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.ItemId!.Value)
-            .Distinct()
-            .ToList();
-        var productIds = source.QuotationDetails
-            .Where(x => x.ItemId.HasValue && string.Equals(QuotationMappingHelper.NormalizeServiceOrderDetailItemType(x.ItemType), "PART", StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.ItemId!.Value)
-            .Distinct()
-            .ToList();
-
-        var serviceById = await _buildStore.GetStandardServicesMapAsync(serviceIds);
-        var productById = await _buildStore.GetProductsMapAsync(productIds);
-
-        var cloneRequest = new QuotationCreateRequestDto
-        {
-            DiagnosisId = source.DiagnosisId,
-            DiagnosisAssignmentId = source.DiagnosisAssignmentId,
-            Title = source.Title,
-            QuotationType = source.QuotationType,
-            ServiceAdvisorId = source.ServiceAdvisorId,
-            InsuranceClaimNumber = source.InsuranceClaimNumber,
-            CustomerNotes = source.CustomerNotes,
-            InternalNotes = request.Note,
-            SubmitForApproval = false
-        };
-
-        var removedMandatoryRows = new List<QuotationDetail>();
-        var removedInsuranceAmount = 0m;
-        foreach (var detail in source.QuotationDetails.OrderBy(x => x.Id))
-        {
-            var markCanceled = removedIds.Contains(detail.Id);
-            if (markCanceled)
+            var source = await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(quotationId);
+            if (source == null)
             {
-                if (detail.IsMandatory)
-                {
-                    removedMandatoryRows.Add(detail);
-                }
-
-                if (string.Equals(detail.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(detail.PayerType, "SPLIT", StringComparison.OrdinalIgnoreCase))
-                {
-                    removedInsuranceAmount += detail.InsuranceCoveredAmount
-                        ?? (string.Equals(detail.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ? detail.FinalAmount : 0m);
-                }
+                throw new InvalidOperationException("Quotation not found.");
             }
 
-            var repriced = QuotationPricingHelper.RepriceQuotationDetail(detail, serviceById, productById);
-            cloneRequest.Items.Add(new QuotationCreateItemDto
+            if (string.Equals(source.Status, QuotationWorkflowConstants.StatusCanceled, StringComparison.OrdinalIgnoreCase))
             {
-                SourceQuotationDetailId = detail.Id,
-                DiagnosisRecommendationId = detail.DiagnosisRecommendationId,
-                ItemType = detail.ItemType,
-                ItemId = detail.ItemId,
-                ItemName = detail.ItemName,
-                Description = detail.Description,
-                Quantity = detail.Quantity,
-                UnitPriceAtTime = repriced.UnitPrice,
-                CostPriceAtTime = repriced.CostPrice,
-                DiscountValue = 0m,
-                TaxRate = repriced.TaxRate,
-                PayerType = detail.PayerType,
-                InsuranceCompanyId = detail.InsuranceCompanyId,
-                InsuranceCoveredAmount = detail.InsuranceCoveredAmount,
-                CustomerCoveredAmount = detail.CustomerCoveredAmount,
-                IsBlocking = detail.IsBlocking,
-                IsMandatory = detail.IsMandatory,
-                EstimatedMinutes = detail.EstimatedMinutes,
-                IsReturnOldPart = detail.IsReturnOldPart,
-                Status = markCanceled ? QuotationWorkflowConstants.DetailStatusCanceled : (string.IsNullOrWhiteSpace(detail.Status) ? QuotationWorkflowConstants.DetailStatusActive : detail.Status),
-                CancelReason = markCanceled
-                    ? (QuotationValidationHelper.NormalizeText(request.Note, 500) ?? "Khách yêu cầu hủy hạng mục")
-                    : detail.CancelReason,
-                CanceledBy = markCanceled ? request.ActorStaffId : detail.CanceledBy
+                throw new InvalidOperationException("Cannot clone a cancelled quotation.");
+            }
+
+            var removedIds = (request.RemoveQuotationDetailIds ?? new List<long>())
+                .Where(x => x > 0)
+                .Distinct()
+                .ToHashSet();
+
+            var serviceIds = source.QuotationDetails
+                .Where(x => x.ItemId.HasValue && string.Equals(QuotationMappingHelper.NormalizeServiceOrderDetailItemType(x.ItemType), "LABOR", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.ItemId!.Value)
+                .Distinct()
+                .ToList();
+            var productIds = source.QuotationDetails
+                .Where(x => x.ItemId.HasValue && string.Equals(QuotationMappingHelper.NormalizeServiceOrderDetailItemType(x.ItemType), "PART", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.ItemId!.Value)
+                .Distinct()
+                .ToList();
+
+            var serviceById = await _buildStore.GetStandardServicesMapAsync(serviceIds);
+            var productById = await _buildStore.GetProductsMapAsync(productIds);
+
+            var cloneRequest = new QuotationCreateRequestDto
+            {
+                DiagnosisId = source.DiagnosisId,
+                DiagnosisAssignmentId = source.DiagnosisAssignmentId,
+                Title = source.Title,
+                QuotationType = source.QuotationType,
+                ServiceAdvisorId = source.ServiceAdvisorId,
+                InsuranceClaimNumber = source.InsuranceClaimNumber,
+                CustomerNotes = source.CustomerNotes,
+                InternalNotes = request.Note,
+                SubmitForApproval = false
+            };
+
+            var removedMandatoryRows = new List<QuotationDetail>();
+            var removedInsuranceAmount = 0m;
+            foreach (var detail in source.QuotationDetails.OrderBy(x => x.Id))
+            {
+                var markCanceled = removedIds.Contains(detail.Id);
+                if (markCanceled)
+                {
+                    if (detail.IsMandatory)
+                    {
+                        removedMandatoryRows.Add(detail);
+                    }
+
+                    if (string.Equals(detail.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(detail.PayerType, "SPLIT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        removedInsuranceAmount += detail.InsuranceCoveredAmount
+                            ?? (string.Equals(detail.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ? detail.FinalAmount : 0m);
+                    }
+                }
+
+                var repriced = QuotationPricingHelper.RepriceQuotationDetail(detail, serviceById, productById);
+                cloneRequest.Items.Add(new QuotationCreateItemDto
+                {
+                    SourceQuotationDetailId = detail.Id,
+                    DiagnosisRecommendationId = detail.DiagnosisRecommendationId,
+                    ItemType = detail.ItemType,
+                    ItemId = detail.ItemId,
+                    ItemName = detail.ItemName,
+                    Description = detail.Description,
+                    Quantity = detail.Quantity,
+                    UnitPriceAtTime = repriced.UnitPrice,
+                    CostPriceAtTime = repriced.CostPrice,
+                    DiscountValue = 0m,
+                    TaxRate = repriced.TaxRate,
+                    PayerType = detail.PayerType,
+                    InsuranceCompanyId = detail.InsuranceCompanyId,
+                    InsuranceCoveredAmount = detail.InsuranceCoveredAmount,
+                    CustomerCoveredAmount = detail.CustomerCoveredAmount,
+                    IsBlocking = detail.IsBlocking,
+                    IsMandatory = detail.IsMandatory,
+                    EstimatedMinutes = detail.EstimatedMinutes,
+                    IsReturnOldPart = detail.IsReturnOldPart,
+                    Status = markCanceled ? QuotationWorkflowConstants.DetailStatusCanceled : (string.IsNullOrWhiteSpace(detail.Status) ? QuotationWorkflowConstants.DetailStatusActive : detail.Status),
+                    CancelReason = markCanceled
+                        ? (QuotationValidationHelper.NormalizeText(request.Note, 500) ?? "Khách yêu cầu hủy hạng mục")
+                        : detail.CancelReason,
+                    CanceledBy = markCanceled ? request.ActorStaffId : detail.CanceledBy
+                });
+            }
+
+            if (cloneRequest.Items.Count == 0)
+            {
+                throw new InvalidOperationException("Quotation clone has no remaining items.");
+            }
+
+            // Validate the copied discounts before saving the repriced clone.
+            var previewTime = VietnamTime.Now;
+            var previewDetails = cloneRequest.Items
+                .Select(x => QuotationMappingHelper.BuildQuotationDetailEntity(x, source.ServiceOrderId, request.ActorStaffId, previewTime))
+                .ToList();
+            var previewBySource = previewDetails.Where(x => x.SourceQuotationDetailId.HasValue)
+                .ToDictionary(x => x.SourceQuotationDetailId!.Value);
+            var preview = new Quotation { QuotationDetails = previewDetails, QuotationDiscounts = new List<QuotationDiscount>() };
+            foreach (var discount in source.QuotationDiscounts ?? new List<QuotationDiscount>())
+            {
+                QuotationDetail? line = null;
+                if (discount.QuotationDetailId.HasValue && !previewBySource.TryGetValue(discount.QuotationDetailId.Value, out line))
+                    throw new InvalidOperationException("Không tìm thấy dòng báo giá tương ứng với giảm giá.");
+                preview.QuotationDiscounts.Add(new QuotationDiscount
+                {
+                    QuotationDetail = line, DiscountValue = discount.DiscountValue,
+                    AppliedAmount = discount.AppliedAmount, ValueType = discount.ValueType
+                });
+            }
+            QuotationPricingHelper.CalculateQuotationTotals(preview);
+
+            var cloned = await CreateQuotationAsync(source.ServiceOrderId, cloneRequest, request.ActorStaffId);
+            var clonedQuotationId = cloned.Id;
+
+            await _buildStore.ExecuteTransactionalAsync(async () =>
+            {
+                var clonedEntity = (await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(clonedQuotationId))!;
+                clonedEntity.CustomerDecisionStatus = QuotationWorkflowConstants.ApprovalPending;
+                clonedEntity.UpdatedBy = request.ActorStaffId;
+                clonedEntity.UpdatedAt = VietnamTime.Now;
+
+                var sourceDiscounts = source.QuotationDiscounts ?? new List<QuotationDiscount>();
+                if (sourceDiscounts.Count > 0)
+                {
+                    var linesBySource = clonedEntity.QuotationDetails.Where(x => x.SourceQuotationDetailId.HasValue)
+                        .ToDictionary(x => x.SourceQuotationDetailId!.Value);
+                    var copiedDiscounts = sourceDiscounts.Select(discount => new QuotationDiscount
+                    {
+                        QuotationId = clonedEntity.Id,
+                        QuotationDetailId = discount.QuotationDetailId.HasValue
+                            ? linesBySource[discount.QuotationDetailId.Value].Id : null,
+                        DiscountType = discount.DiscountType,
+                        CustomerTierId = discount.CustomerTierId,
+                        VoucherId = discount.VoucherId,
+                        DiscountValue = discount.DiscountValue,
+                        ValueType = discount.ValueType,
+                        AppliedAmount = discount.AppliedAmount,
+                        Reason = discount.Reason,
+                        AppliedBy = discount.AppliedBy,
+                        CreatedAt = discount.CreatedAt ?? VietnamTime.Now
+                    }).ToList();
+                    _approvalStore.AddQuotationDiscounts(copiedDiscounts);
+                    clonedEntity.QuotationDiscounts = copiedDiscounts;
+                    QuotationPricingHelper.RecalculateQuotationTotals(clonedEntity);
+                    clonedEntity.InsuranceChangeType = await QuotationValidationHelper.ResolveInsuranceChangeTypeAsync(_lineageStore, clonedEntity, null);
+                }
+
+                if (removedMandatoryRows.Count > 0)
+                {
+                    var now = VietnamTime.Now;
+                    var pendingRows = removedMandatoryRows.Select(row => new MandatoryOverrideRequest
+                    {
+                        ServiceOrderId = source.ServiceOrderId,
+                        QuotationId = clonedEntity.Id,
+                        QuotationDetailId = row.Id,
+                        Status = nameof(MandatoryOverrideStatusCode.PENDING_FOREMAN),
+                        Reason = string.IsNullOrWhiteSpace(request.Note) ? "Mandatory item removed on quotation clone." : request.Note!.Trim(),
+                        RequestedBy = request.ActorStaffId,
+                        RequestedAt = now,
+                        CreatedAt = now
+                    }).ToList();
+
+                    _approvalStore.AddMandatoryOverrideRequests(pendingRows);
+                }
+
+                await _buildStore.SaveChangesInTransactionAsync();
+                return 0;
             });
-        }
 
-        if (cloneRequest.Items.Count == 0)
-        {
-            throw new InvalidOperationException("Quotation clone has no remaining items.");
-        }
-
-        var cloned = await CreateQuotationAsync(source.ServiceOrderId, cloneRequest, request.ActorStaffId);
-        var clonedQuotationId = cloned.Id;
-
-        await _buildStore.ExecuteTransactionalAsync(async () =>
-        {
-            var clonedEntity = (await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(clonedQuotationId))!;
-            clonedEntity.CustomerDecisionStatus = QuotationWorkflowConstants.ApprovalPending;
-            clonedEntity.UpdatedBy = request.ActorStaffId;
-            clonedEntity.UpdatedAt = VietnamTime.Now;
-
-            var sourceDiscounts = source.QuotationDiscounts ?? new List<QuotationDiscount>();
-            if (sourceDiscounts.Count > 0)
+            var warnings = new List<string>();
+            if (removedInsuranceAmount > 0)
             {
-                var copiedDiscounts = sourceDiscounts.Select(discount => new QuotationDiscount
-                {
-                    QuotationId = clonedEntity.Id,
-                    DiscountType = discount.DiscountType,
-                    CustomerTierId = discount.CustomerTierId,
-                    VoucherId = discount.VoucherId,
-                    DiscountValue = discount.DiscountValue,
-                    ValueType = discount.ValueType,
-                    AppliedAmount = discount.AppliedAmount,
-                    Reason = discount.Reason,
-                    AppliedBy = discount.AppliedBy,
-                    CreatedAt = discount.CreatedAt ?? VietnamTime.Now
-                }).ToList();
-                _approvalStore.AddQuotationDiscounts(copiedDiscounts);
-                clonedEntity.QuotationDiscounts = copiedDiscounts;
-                QuotationPricingHelper.RecalculateQuotationTotals(clonedEntity);
-                clonedEntity.InsuranceChangeType = await QuotationValidationHelper.ResolveInsuranceChangeTypeAsync(_lineageStore, clonedEntity, null);
+                warnings.Add("Tổng bồi thường đã thay đổi. Vui lòng cập nhật với Giám định viên.");
             }
 
-            if (removedMandatoryRows.Count > 0)
+            var latest = await _queryService.GetQuotationAsync(clonedQuotationId);
+            if (latest != null)
             {
-                var now = VietnamTime.Now;
-                var pendingRows = removedMandatoryRows.Select(row => new MandatoryOverrideRequest
+                if (warnings.Count > 0)
                 {
-                    ServiceOrderId = source.ServiceOrderId,
-                    QuotationId = clonedEntity.Id,
-                    QuotationDetailId = row.Id,
-                    Status = nameof(MandatoryOverrideStatusCode.PENDING_FOREMAN),
-                    Reason = string.IsNullOrWhiteSpace(request.Note) ? "Mandatory item removed on quotation clone." : request.Note!.Trim(),
-                    RequestedBy = request.ActorStaffId,
-                    RequestedAt = now,
-                    CreatedAt = now
-                }).ToList();
+                    latest.Warnings = warnings;
+                }
 
-                _approvalStore.AddMandatoryOverrideRequests(pendingRows);
+                return latest;
             }
 
-            await _buildStore.SaveChangesInTransactionAsync();
-            return 0;
+            var fallbackEntity = (await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(clonedQuotationId))!;
+            return QuotationMappingHelper.MapQuotationResponse(fallbackEntity, warnings);
         });
-
-        var warnings = new List<string>();
-        if (removedInsuranceAmount > 0)
-        {
-            warnings.Add("Tổng bồi thường đã thay đổi. Vui lòng cập nhật với Giám định viên.");
-        }
-
-        var latest = await _queryService.GetQuotationAsync(clonedQuotationId);
-        if (latest != null)
-        {
-            if (warnings.Count > 0)
-            {
-                latest.Warnings = warnings;
-            }
-
-            return latest;
-        }
-
-        var fallbackEntity = (await _approvalStore.GetQuotationWithDetailsAndDiscountsAsync(clonedQuotationId))!;
-        return QuotationMappingHelper.MapQuotationResponse(fallbackEntity, warnings);
     }
 }

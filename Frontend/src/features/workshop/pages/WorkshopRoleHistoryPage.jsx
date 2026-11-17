@@ -12,11 +12,17 @@ import {
   HStack,
   SimpleGrid,
   Spinner,
-  Stack,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { TimeIcon } from "@chakra-ui/icons";
+import {
+  ArrowForwardIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  RepeatClockIcon,
+  RepeatIcon,
+  TimeIcon,
+} from "@chakra-ui/icons";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllStaff } from "@features/admin/api/staffApi";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -26,41 +32,38 @@ import { useSearch } from "@shared/core/context/SearchContext";
 
 const ROLE_CONFIG = {
   TECH: {
-    title: "Lịch sử xử lý của thợ",
-    subtitle: "Theo dõi các yêu cầu chẩn đoán mà bạn đã xử lý xong.",
+    title: "Lịch sử xử lý",
     dashboardPath: "/workshop/technician",
     openOrderPath: (orderId) => `/workshop/technician/orders/${orderId}/diagnosis`,
     openDiagnosisPath: (orderId) => `/workshop/technician/orders/${orderId}/diagnosis`,
-    processedLabel: "Đã hoàn tất chẩn đoán",
+    processedLabel: "Hoàn tất chẩn đoán",
   },
   TEAM_LEADER: {
-    title: "Lịch sử xử lý của tổ trưởng",
-    subtitle: "Theo dõi các yêu cầu đã được tổ trưởng duyệt kỹ thuật.",
+    title: "Lịch sử xử lý",
     dashboardPath: "/workshop/team-leader",
     openOrderPath: (orderId) => `/workshop/team-leader/dispatch/${orderId}`,
     openDiagnosisPath: (orderId) => `/workshop/team-leader/orders/${orderId}/quote`,
-    processedLabel: "Đã duyệt kỹ thuật",
+    processedLabel: "Duyệt kỹ thuật",
   },
   FOREMAN: {
-    title: "Lịch sử xử lý của quản đốc",
-    subtitle: "Theo dõi các yêu cầu đã được quản đốc duyệt cuối.",
+    title: "Lịch sử xử lý",
     dashboardPath: "/workshop/foreman",
     openOrderPath: (orderId) => `/workshop/foreman/dispatch/${orderId}`,
     openDiagnosisPath: (orderId) => `/workshop/foreman/orders/${orderId}/quote`,
-    processedLabel: "Đã duyệt cuối",
+    processedLabel: "Duyệt cuối",
   },
 };
 
 const DIAGNOSIS_WORKFLOW_STATUS_LABELS = {
   NEW: "Mới tạo",
-  IN_PROGRESS: "Đang chuẩn đoán",
+  IN_PROGRESS: "Đang chẩn đoán",
   SUBMITTED: "Đã gửi duyệt",
   TL_APPROVED: "Tổ trưởng đã duyệt",
-  TL_REJECTED_REDIAGNOSE: "Tổ trưởng từ chối khám lại",
-  ESCALATED_TO_FOREMAN: "Đã chuyển cấp cho quản đốc",
-  FOREMAN_REJECTED_REDIAGNOSE: "Quản đốc từ chối khám lại",
+  TL_REJECTED_REDIAGNOSE: "Từ chối khám lại",
+  ESCALATED_TO_FOREMAN: "Chuyển cấp quản đốc",
+  FOREMAN_REJECTED_REDIAGNOSE: "Quản đốc từ chối",
   FOREMAN_APPROVED_LOCKED: "Quản đốc duyệt cuối",
-  CANCELED: "Hủy do khách",
+  CANCELED: "Đã hủy",
 };
 
 const HISTORY_STATUS_BY_ROLE = {
@@ -68,13 +71,6 @@ const HISTORY_STATUS_BY_ROLE = {
   TEAM_LEADER: ["TL_APPROVED", "TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE", "CANCELED"],
   TECH: ["TL_APPROVED", "FOREMAN_APPROVED_LOCKED", "TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE", "CANCELED"],
 };
-
-const HISTORY_FILTER_TABS = [
-  { value: "ALL", label: "Tất cả" },
-  { value: "COMPLETED", label: "Hoàn thành" },
-  { value: "CANCELED", label: "Đã hủy" },
-  { value: "REDIAGNOSE", label: "Làm lại" },
-];
 
 function toText(value) {
   if (value === null || value === undefined) return "";
@@ -134,18 +130,6 @@ function resolveCurrentStaff(staffs, user) {
   return null;
 }
 
-function isCompletedRecord(item) {
-  const workflowStatus = resolveWorkflowStatus(item);
-  return [
-    "TL_APPROVED",
-    "TL_REJECTED_REDIAGNOSE",
-    "ESCALATED_TO_FOREMAN",
-    "FOREMAN_REJECTED_REDIAGNOSE",
-    "FOREMAN_APPROVED_LOCKED",
-    "CANCELED",
-  ].includes(workflowStatus);
-}
-
 function resolveWorkflowStatus(item) {
   const workflowStatus = normalizeCode(readValue(item, "workflowStatus", "WorkflowStatus"));
   if (workflowStatus && DIAGNOSIS_WORKFLOW_STATUS_LABELS[workflowStatus]) return workflowStatus;
@@ -170,28 +154,6 @@ function resolveWorkflowStatus(item) {
   if (submittedAt) return "SUBMITTED";
   if (queueState === "IN_PROGRESS") return "IN_PROGRESS";
   return "NEW";
-}
-
-function getWorkflowStatusLabel(statusCode) {
-  if (!statusCode) return "--";
-  return DIAGNOSIS_WORKFLOW_STATUS_LABELS[statusCode] || statusCode;
-}
-
-function getHistoryStatusLabel(statusCode, roleCode) {
-  const normalized = normalizeCode(statusCode);
-  if (normalized === "CANCELED") return "Đã hủy";
-  if (["TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE"].includes(normalized)) return "Làm lại";
-
-  if (roleCode === "FOREMAN") {
-    if (normalized === "FOREMAN_APPROVED_LOCKED") return "Hoàn thành";
-  }
-
-  if (roleCode === "TEAM_LEADER") {
-    if (normalized === "TL_APPROVED") return "Hoàn thành";
-  }
-
-  if (normalized.endsWith("_APPROVED") || normalized.includes("APPROVED")) return "Hoàn thành";
-  return getWorkflowStatusLabel(statusCode);
 }
 
 function toHistoryFilterStatus(statusCode) {
@@ -316,55 +278,10 @@ function resolveAssignmentSequence(item) {
   );
 }
 
-function toRow(item) {
-  const diagnosisId = toPositiveNumber(readValue(item, "diagnosisId", "DiagnosisId")) || 0;
-  const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId")) || 0;
-  const code = toText(readValue(item, "serviceOrderCode", "ServiceOrderCode")) || `SO-${serviceOrderId}`;
-  const customerName = toText(readValue(item, "customerName", "CustomerName")) || "Khách hàng chưa rõ";
-  const plate = toText(readValue(item, "vehicleLicensePlate", "VehicleLicensePlate")) || "--";
-  const brand = toText(readValue(item, "vehicleBrandName", "VehicleBrandName"));
-  const model = toText(readValue(item, "vehicleModelName", "VehicleModelName"));
-  const descriptor = toText(readValue(item, "vehicleDescriptor", "VehicleDescriptor")) || [brand, model].filter(Boolean).join(" ");
-  const teamName = toText(readValue(item, "primaryTeamName", "PrimaryTeamName", "teamName", "TeamName")) || "--";
-  const completedAt = resolveCompletedAt(item);
-  const latestRecordAt = resolveLatestRecordAt(item);
-
-  return {
-    diagnosisId,
-    serviceOrderId,
-    serviceOrderCode: code,
-    customerName,
-    vehicleLicensePlate: plate,
-    vehicleDescriptor: descriptor || "Chưa rõ dòng xe",
-    workflowStatus: resolveWorkflowStatus(item),
-    teamName,
-    assignedAt: resolveAssignedAt(item),
-    startedAt: readValue(
-      item,
-      "startedAt",
-      "StartedAt",
-      "technicianAcceptedAt",
-      "TechnicianAcceptedAt",
-      "leadTechnicianAcceptedAt",
-      "LeadTechnicianAcceptedAt"
-    ),
-    technicalApprovedAt: readValue(item, "technicalApprovedAt", "TechnicalApprovedAt"),
-    finalApprovedAt: readValue(item, "finalApprovedAt", "FinalApprovedAt"),
-    completedAt,
-    latestRecordAt,
-    raw: item,
-  };
-}
-
-function getProcessedAtLabel(roleCode) {
+function getProcessedTimelineLabel(roleCode) {
   if (roleCode === "FOREMAN") return "Duyệt cuối";
   if (roleCode === "TEAM_LEADER") return "Duyệt kỹ thuật";
   return "Hoàn tất xử lý";
-}
-
-function getProcessedTimelineLabel(roleCode) {
-  if (roleCode === "FOREMAN") return "Ghi nhận lịch sử";
-  return getProcessedAtLabel(roleCode);
 }
 
 function toDateText(dateObj) {
@@ -405,21 +322,34 @@ export default function WorkshopRoleHistoryPage() {
   const [dateTo, setDateTo] = useState("");
   const [isDateRangePickerOpen, setIsDateRangePickerOpen] = useState(false);
 
+  useEffect(() => {
+    document.title = "Lịch sử xử lý | MyGarage";
+  }, []);
+
   const fetchHistory = useCallback(async () => {
     if (!roleConfig) return;
     setLoading(true);
     setError("");
 
     try {
-      const [boardRes, diagnosesRes, staffsRes] = await Promise.all([
-        serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
-        serviceOrderApi.getDiagnoses(),
-        getAllStaff(),
+      const [boardRes, diagnosesRes, staffsRes, ordersRes] = await Promise.all([
+        serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }).catch(() => []),
+        serviceOrderApi.getDiagnoses().catch(() => []),
+        getAllStaff().catch(() => []),
+        serviceOrderApi.getAll().catch(() => []),
       ]);
 
       const board = Array.isArray(boardRes) ? boardRes : [];
       const diagnoses = Array.isArray(diagnosesRes) ? diagnosesRes : [];
       const staffs = Array.isArray(staffsRes) ? staffsRes : [];
+      const rawOrders = Array.isArray(ordersRes)
+        ? ordersRes
+        : Array.isArray(ordersRes?.items)
+        ? ordersRes.items
+        : Array.isArray(ordersRes?.data)
+        ? ordersRes.data
+        : [];
+
       const currentStaff = resolveCurrentStaff(staffs, user);
       const currentStaffId = toPositiveNumber(readValue(currentStaff, "id", "Id"));
       const currentTeamId = toPositiveNumber(readValue(currentStaff, "teamId", "TeamId"));
@@ -430,11 +360,19 @@ export default function WorkshopRoleHistoryPage() {
         return;
       }
 
+      const ordersById = new Map();
+      for (const order of rawOrders) {
+        const id = toPositiveNumber(readValue(order, "id", "Id"));
+        if (id) {
+          ordersById.set(id, order);
+        }
+      }
+
       const boardByServiceOrderId = new Map();
       for (const item of board) {
-        const row = toRow(item);
-        if (row.serviceOrderId > 0 && !boardByServiceOrderId.has(row.serviceOrderId)) {
-          boardByServiceOrderId.set(row.serviceOrderId, row);
+        const sid = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId")) || 0;
+        if (sid > 0 && !boardByServiceOrderId.has(sid)) {
+          boardByServiceOrderId.set(sid, item);
         }
       }
 
@@ -472,31 +410,72 @@ export default function WorkshopRoleHistoryPage() {
           if (!workflowStatus) return null;
 
           const boardMeta = boardByServiceOrderId.get(serviceOrderId);
+          const orderMeta = ordersById.get(serviceOrderId);
+
           const completedAt = resolveCompletedAtFromDiagnosis(item, workflowStatus);
-          const assignedAt = readValue(item, "assignedAt", "AssignedAt") || boardMeta?.assignedAt || null;
+          const assignedAt =
+            readValue(item, "assignedAt", "AssignedAt") ||
+            readValue(boardMeta, "assignedAt", "AssignedAt") ||
+            readValue(orderMeta, "assignedAt", "AssignedAt") ||
+            null;
           const startedAt =
-            readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt") || boardMeta?.startedAt || null;
+            readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt") ||
+            readValue(boardMeta, "startedAt", "StartedAt") ||
+            readValue(orderMeta, "startedAt", "StartedAt") ||
+            null;
           const technicalApprovedAt =
             readValue(item, "approvedByForemanAt", "ApprovedByForemanAt", "technicalApprovedAt", "TechnicalApprovedAt") ||
-            boardMeta?.technicalApprovedAt ||
+            readValue(boardMeta, "technicalApprovedAt", "TechnicalApprovedAt") ||
             null;
           const finalApprovedAt =
             readValue(item, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt", "finalApprovedAt", "FinalApprovedAt") ||
-            boardMeta?.finalApprovedAt ||
+            readValue(boardMeta, "finalApprovedAt", "FinalApprovedAt") ||
             null;
+
+          const code =
+            toText(readValue(boardMeta, "serviceOrderCode", "ServiceOrderCode")) ||
+            toText(readValue(orderMeta, "serviceOrderCode", "ServiceOrderCode", "code", "Code")) ||
+            `SO-${serviceOrderId}`;
+
+          const customer =
+            toText(readValue(boardMeta, "customerName", "CustomerName")) ||
+            toText(readValue(orderMeta, "customerName", "CustomerName")) ||
+            toText(readValue(item, "customerName", "CustomerName")) ||
+            "";
+
+          const plate =
+            toText(readValue(boardMeta, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+            toText(readValue(orderMeta, "vehicleLicensePlate", "VehicleLicensePlate", "licensePlate", "LicensePlate")) ||
+            toText(readValue(item, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+            "--";
+
+          const brand =
+            toText(readValue(orderMeta, "vehicleBrandName", "VehicleBrandName")) ||
+            toText(readValue(boardMeta, "vehicleBrandName", "VehicleBrandName"));
+          const model =
+            toText(readValue(orderMeta, "vehicleModelName", "VehicleModelName")) ||
+            toText(readValue(boardMeta, "vehicleModelName", "VehicleModelName"));
+          const descriptor =
+            toText(readValue(boardMeta, "vehicleDescriptor", "VehicleDescriptor")) ||
+            toText(readValue(orderMeta, "vehicleDescriptor", "VehicleDescriptor")) ||
+            [brand, model].filter(Boolean).join(" ") ||
+            "";
+
+          const teamName =
+            toText(readValue(item, "assignedTeamName", "AssignedTeamName")) ||
+            toText(readValue(orderMeta, "teamName", "TeamName", "primaryTeamName", "PrimaryTeamName")) ||
+            toText(readValue(boardMeta, "primaryTeamName", "PrimaryTeamName", "teamName", "TeamName")) ||
+            "--";
 
           return {
             diagnosisId,
             serviceOrderId,
-            serviceOrderCode: boardMeta?.serviceOrderCode || `SO-${serviceOrderId}`,
-            customerName: boardMeta?.customerName || "Khách hàng chưa rõ",
-            vehicleLicensePlate: boardMeta?.vehicleLicensePlate || "--",
-            vehicleDescriptor: boardMeta?.vehicleDescriptor || "Chưa rõ dòng xe",
+            serviceOrderCode: code,
+            customerName: customer,
+            vehicleLicensePlate: plate,
+            vehicleDescriptor: descriptor,
             workflowStatus,
-            teamName:
-              toText(readValue(item, "assignedTeamName", "AssignedTeamName")) ||
-              boardMeta?.teamName ||
-              "--",
+            teamName,
             assignedAt,
             startedAt,
             technicalApprovedAt,
@@ -567,6 +546,24 @@ export default function WorkshopRoleHistoryPage() {
     [dateFrom, dateTo]
   );
 
+  const stats = useMemo(() => {
+    const total = rows.length;
+    const now = Date.now();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const today = rows.filter((row) => new Date(row.completedAt || 0).getTime() >= dayStart.getTime()).length;
+    const sevenDays = rows.filter((row) => {
+      const ts = new Date(row.completedAt || 0).getTime();
+      return Number.isFinite(ts) && ts >= now - 7 * 24 * 60 * 60 * 1000;
+    }).length;
+
+    const completedCount = rows.filter((row) => toHistoryFilterStatus(row.workflowStatus) === "COMPLETED").length;
+    const canceledCount = rows.filter((row) => toHistoryFilterStatus(row.workflowStatus) === "CANCELED").length;
+    const rediagnoseCount = rows.filter((row) => toHistoryFilterStatus(row.workflowStatus) === "REDIAGNOSE").length;
+
+    return { total, today, sevenDays, completedCount, canceledCount, rediagnoseCount };
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     const normalizedKeyword = toText(searchQuery).toLowerCase();
     const startDate = toStartOfDay(dateFrom);
@@ -606,19 +603,6 @@ export default function WorkshopRoleHistoryPage() {
     });
   }, [dateFrom, dateTo, rows, searchQuery, sortBy, statusFilter]);
 
-  const stats = useMemo(() => {
-    const total = filteredRows.length;
-    const now = Date.now();
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const today = filteredRows.filter((row) => new Date(row.completedAt || 0).getTime() >= dayStart.getTime()).length;
-    const sevenDays = filteredRows.filter((row) => {
-      const ts = new Date(row.completedAt || 0).getTime();
-      return Number.isFinite(ts) && ts >= now - 7 * 24 * 60 * 60 * 1000;
-    }).length;
-    return { total, today, sevenDays };
-  }, [filteredRows]);
-
   const openHistoryDetail = useCallback((serviceOrderId) => {
     const targetOrderId = toPositiveNumber(serviceOrderId);
     if (!targetOrderId || !roleConfig) return;
@@ -627,6 +611,7 @@ export default function WorkshopRoleHistoryPage() {
       state: { returnToPath: location.pathname },
     });
   }, [location.pathname, navigate, roleConfig]);
+
   const openHistoryDiagnosis = useCallback((serviceOrderId) => {
     const targetOrderId = toPositiveNumber(serviceOrderId);
     if (!targetOrderId || !roleConfig) return;
@@ -647,52 +632,180 @@ export default function WorkshopRoleHistoryPage() {
   }
 
   return (
-    <Box p={{ base: 4, md: 6 }}>
-      <Stack spacing={5}>
-        <Flex justify="space-between" align={{ base: "start", md: "center" }} direction={{ base: "column", md: "row" }} gap={3}>
-          <Box>
-            <Heading size="md" color="#1b2559">{roleConfig.title}</Heading>
-            <Text mt={1} color="#707eae">{roleConfig.subtitle}</Text>
-          </Box>
+    <Box p={{ base: 3.5, md: 6 }} maxW="1600px" mx="auto">
+      <VStack align="stretch" spacing={{ base: 3.5, md: 4.5 }}>
+        {/* Header Row: Title + Refresh CTA */}
+        <Flex
+          justify="space-between"
+          align="center"
+          gap={3}
+        >
+          <Heading size="md" color="#0f172a" fontWeight="900" letterSpacing="-0.02em">
+            Lịch sử xử lý
+          </Heading>
+          <Button
+            size="sm"
+            height="38px"
+            px={4}
+            variant="outline"
+            borderColor="#cbd5e1"
+            bg="white"
+            color="#334155"
+            borderRadius="xl"
+            fontWeight="700"
+            _hover={{ bg: "#f8fafc", borderColor: "#94a3b8" }}
+            _active={{ bg: "#f1f5f9" }}
+            onClick={fetchHistory}
+            isLoading={loading}
+            leftIcon={<RepeatIcon />}
+          >
+            Làm mới
+          </Button>
         </Flex>
 
-        <HStack justify="flex-end" align="center" spacing={3} flexWrap="wrap">
-          <Button variant="outline" colorScheme="blue" onClick={fetchHistory} isLoading={loading}>
-            ⟳ Làm mới
-          </Button>
-        </HStack>
+        {/* Compact KPI Metric Strip: Sleek single-line metrics banner */}
+        <Box
+          bg="white"
+          border="1px solid #e2e8f0"
+          borderRadius="xl"
+          p={{ base: 3, sm: 3.5 }}
+          boxShadow="0 1px 3px rgba(15,23,42,0.03)"
+        >
+          <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={{ base: 3, sm: 4 }}>
+            <HStack spacing={3} align="center">
+              <Box
+                w="38px"
+                h="38px"
+                borderRadius="lg"
+                bg="#eff6ff"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                color="#2563eb"
+                flexShrink={0}
+              >
+                <CheckCircleIcon boxSize={4} />
+              </Box>
+              <Box>
+                <Text fontSize="11px" fontWeight="700" color="#64748b" textTransform="uppercase" letterSpacing="0.05em">
+                  Tổng yêu cầu đã xử lý
+                </Text>
+                <Text fontSize={{ base: "xl", sm: "22px" }} fontWeight="900" color="#0f172a" lineHeight="1.1">
+                  {stats.total}
+                </Text>
+              </Box>
+            </HStack>
 
-        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-          <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-            <Text fontSize="sm" color="#707eae">Tổng yêu cầu đã xử lý</Text>
-            <Text mt={1} fontWeight="800" fontSize="2xl" color="#1b2559">{stats.total}</Text>
-          </Box>
-          <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-            <Text fontSize="sm" color="#707eae">Đã xử lý hôm nay</Text>
-            <Text mt={1} fontWeight="800" fontSize="2xl" color="#1b2559">{stats.today}</Text>
-          </Box>
-          <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-            <Text fontSize="sm" color="#707eae">7 ngày gần nhất</Text>
-            <Text mt={1} fontWeight="800" fontSize="2xl" color="#1b2559">{stats.sevenDays}</Text>
-          </Box>
-        </SimpleGrid>
+            <HStack spacing={3} align="center">
+              <Box
+                w="38px"
+                h="38px"
+                borderRadius="lg"
+                bg="#f0fdf4"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                color="#16a34a"
+                flexShrink={0}
+              >
+                <TimeIcon boxSize={4} />
+              </Box>
+              <Box>
+                <Text fontSize="11px" fontWeight="700" color="#64748b" textTransform="uppercase" letterSpacing="0.05em">
+                  Đã xử lý hôm nay
+                </Text>
+                <Text fontSize={{ base: "xl", sm: "22px" }} fontWeight="900" color="#0f172a" lineHeight="1.1">
+                  {stats.today}
+                </Text>
+              </Box>
+            </HStack>
 
-        <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-          <div className="table-toolbar" style={{ marginBottom: 0 }}>
-            <div className="toolbar-controls">
-              <HStack spacing={2} flexWrap="wrap">
-                {HISTORY_FILTER_TABS.map((tab) => (
+            <HStack spacing={3} align="center">
+              <Box
+                w="38px"
+                h="38px"
+                borderRadius="lg"
+                bg="#f5f3ff"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                color="#7c3aed"
+                flexShrink={0}
+              >
+                <RepeatClockIcon boxSize={4} />
+              </Box>
+              <Box>
+                <Text fontSize="11px" fontWeight="700" color="#64748b" textTransform="uppercase" letterSpacing="0.05em">
+                  7 ngày gần nhất
+                </Text>
+                <Text fontSize={{ base: "xl", sm: "22px" }} fontWeight="900" color="#0f172a" lineHeight="1.1">
+                  {stats.sevenDays}
+                </Text>
+              </Box>
+            </HStack>
+          </SimpleGrid>
+        </Box>
+
+        {/* Filter & Search Toolbar */}
+        <Box
+          bg="white"
+          border="1px solid #e2e8f0"
+          borderRadius="xl"
+          p={{ base: 3, md: 3.5 }}
+          boxShadow="0 1px 3px rgba(15,23,42,0.03)"
+          position="relative"
+          zIndex={10}
+        >
+          <Flex
+            justify="space-between"
+            align={{ base: "stretch", lg: "center" }}
+            direction={{ base: "column", lg: "row" }}
+            gap={3}
+            wrap="wrap"
+          >
+            {/* Filter Pills with Counter Badges */}
+            <HStack spacing={1.5} wrap="wrap">
+              {[
+                { value: "ALL", label: "Tất cả", count: stats.total },
+                { value: "COMPLETED", label: "Hoàn thành", count: stats.completedCount },
+                { value: "CANCELED", label: "Đã hủy", count: stats.canceledCount },
+                { value: "REDIAGNOSE", label: "Làm lại", count: stats.rediagnoseCount },
+              ].map((tab) => {
+                const isActive = statusFilter === tab.value;
+                return (
                   <Button
                     key={tab.value}
                     size="sm"
-                    variant={statusFilter === tab.value ? "solid" : "outline"}
-                    colorScheme={statusFilter === tab.value ? "blue" : "gray"}
+                    height="34px"
+                    px={3}
+                    borderRadius="lg"
+                    fontSize="xs"
+                    fontWeight={isActive ? "800" : "600"}
+                    bg={isActive ? "#0f172a" : "#f8fafc"}
+                    color={isActive ? "white" : "#475569"}
+                    border="1px solid"
+                    borderColor={isActive ? "#0f172a" : "#e2e8f0"}
+                    _hover={{ bg: isActive ? "#1e293b" : "#f1f5f9" }}
                     onClick={() => setStatusFilter(tab.value)}
                   >
                     {tab.label}
+                    <Badge
+                      ml={1.5}
+                      bg={isActive ? "rgba(255,255,255,0.22)" : "#e2e8f0"}
+                      color={isActive ? "white" : "#475569"}
+                      borderRadius="full"
+                      px={1.5}
+                      fontSize="10px"
+                    >
+                      {tab.count}
+                    </Badge>
                   </Button>
-                ))}
-              </HStack>
+                );
+              })}
+            </HStack>
+
+            {/* Controls: Sort Dropdown, Date Range, Reset, Counter */}
+            <Flex align="center" gap={2.5} wrap="wrap">
               <FilterDropdown
                 id="history-sort-filter"
                 label="Sắp xếp"
@@ -702,30 +815,49 @@ export default function WorkshopRoleHistoryPage() {
                   { value: "COMPLETED_ASC", label: "Cũ nhất" },
                 ]}
                 onChange={(value) => setSortBy(String(value || "COMPLETED_DESC"))}
-                minWidth={180}
+                minWidth={140}
               />
-              <button
-                type="button"
-                className="toolbar-action-btn toolbar-action-outline"
+
+              <Button
+                size="sm"
+                height="36px"
+                variant="outline"
+                borderColor={dateFrom || dateTo ? "#2563eb" : "#d8e1ef"}
+                bg={dateFrom || dateTo ? "#eff6ff" : "white"}
+                color={dateFrom || dateTo ? "#1d4ed8" : "#334155"}
+                fontWeight="700"
+                borderRadius="xl"
+                leftIcon={<CalendarIcon />}
                 onClick={() => setIsDateRangePickerOpen(true)}
               >
                 {dateFilterButtonLabel || "Chọn khoảng ngày"}
-              </button>
-              <button
-                type="button"
-                className="toolbar-action-btn toolbar-action-ghost"
-                onClick={() => {
-                  setStatusFilter("ALL");
-                  setSortBy("COMPLETED_DESC");
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-              >
-                Xóa lọc
-              </button>
-            </div>
-            <span className="result-count">{filteredRows.length} yêu cầu</span>
-          </div>
+              </Button>
+
+              {(statusFilter !== "ALL" || sortBy !== "COMPLETED_DESC" || dateFrom || dateTo) && (
+                <Button
+                  size="sm"
+                  height="36px"
+                  variant="ghost"
+                  color="#dc2626"
+                  fontWeight="700"
+                  borderRadius="xl"
+                  _hover={{ bg: "#fef2f2" }}
+                  onClick={() => {
+                    setStatusFilter("ALL");
+                    setSortBy("COMPLETED_DESC");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Xóa lọc
+                </Button>
+              )}
+
+              <Text fontSize="xs" fontWeight="700" color="#64748b" ml={{ base: 0, sm: 2 }} whiteSpace="nowrap">
+                Hiển thị <strong>{filteredRows.length}</strong> yêu cầu
+              </Text>
+            </Flex>
+          </Flex>
         </Box>
 
         <DateRangePickerModal
@@ -744,103 +876,199 @@ export default function WorkshopRoleHistoryPage() {
         />
 
         {error ? (
-          <Alert status="error" borderRadius="lg">
+          <Alert status="error" borderRadius="xl">
             <AlertIcon />
             {error}
           </Alert>
         ) : null}
 
-        <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-          {loading ? (
-            <Flex py={14} justify="center">
-              <Spinner size="lg" color="blue.500" />
-            </Flex>
-          ) : filteredRows.length === 0 ? (
-            <Text color="#707eae">Chưa có dữ liệu lịch sử phù hợp với bộ lọc hiện tại.</Text>
-          ) : (
-            <VStack align="stretch" spacing={3}>
-              {filteredRows.map((row) => (
+        {/* Job History List */}
+        {loading ? (
+          <Box p={8} bg="white" borderRadius="xl" border="1px solid #e2e8f0" textAlign="center">
+            <Spinner size="lg" color="blue.500" />
+            <Text mt={3} color="#64748b" fontSize="sm" fontWeight="600">
+              Đang tải lịch sử xử lý...
+            </Text>
+          </Box>
+        ) : filteredRows.length === 0 ? (
+          <Box p={8} bg="white" borderRadius="xl" border="1px solid #e2e8f0" textAlign="center">
+            <Text color="#64748b" fontSize="sm" fontWeight="600">
+              Chưa có dữ liệu lịch sử phù hợp với bộ lọc hiện tại.
+            </Text>
+          </Box>
+        ) : (
+          <VStack align="stretch" spacing={2.5}>
+            {filteredRows.map((row) => {
+              const statusMeta = (() => {
+                const normalized = normalizeCode(row.workflowStatus);
+                if (normalized === "CANCELED") {
+                  return {
+                    label: "Đã hủy",
+                    bg: "#fef2f2",
+                    color: "#991b1b",
+                    border: "1px solid #fecaca",
+                  };
+                }
+                if (["TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE"].includes(normalized)) {
+                  return {
+                    label: "Làm lại",
+                    bg: "#fffbeb",
+                    color: "#92400e",
+                    border: "1px solid #fde68a",
+                  };
+                }
+                return {
+                  label: "Hoàn thành",
+                  bg: "#f0fdf4",
+                  color: "#166534",
+                  border: "1px solid #bbf7d0",
+                };
+              })();
+
+              const hasPlate = row.vehicleLicensePlate && row.vehicleLicensePlate !== "--" && row.vehicleLicensePlate.trim() !== "";
+              const processedLabel = getProcessedTimelineLabel(roleCode);
+              const milestoneTitle = row.workflowStatus === "CANCELED" ? "Đã hủy vào lúc" : processedLabel;
+
+              return (
                 <Box
                   key={`${row.diagnosisId || 0}-${row.serviceOrderId}-${row.completedAt || ""}`}
-                  role="button"
-                  tabIndex={0}
-                  p={4}
-                  borderRadius="lg"
-                  border="1px solid #e6ecf8"
-                  bg="#fbfdff"
+                  bg="white"
+                  border="1px solid #e2e8f0"
+                  borderRadius="xl"
+                  p={{ base: 3.5, sm: 4 }}
+                  boxShadow="0 1px 3px rgba(15,23,42,0.03)"
+                  transition="all 0.16s ease"
+                  _hover={{
+                    borderColor: "#cbd5e1",
+                    boxShadow: "0 6px 16px rgba(15,23,42,0.06)",
+                    transform: "translateY(-1px)",
+                  }}
                   cursor="pointer"
                   onClick={() => openHistoryDetail(row.serviceOrderId)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openHistoryDetail(row.serviceOrderId);
-                    }
-                  }}
-                  _hover={{ borderColor: "#c9d9f3", boxShadow: "0 6px 18px rgba(27, 37, 89, 0.08)" }}
-                  _focusVisible={{ outline: "2px solid #7aa2ff", outlineOffset: "2px" }}
-                  transition="all 0.18s ease"
                 >
-                  <Stack spacing={3}>
-                    <Flex justify="space-between" align={{ base: "start", md: "center" }} direction={{ base: "column", md: "row" }} gap={3}>
-                      <Box>
-                        <HStack spacing={2} flexWrap="wrap">
-                          <Text fontWeight="800" color="#1b2559">{row.serviceOrderCode}</Text>
-                          <Badge colorScheme="blue" borderRadius="full" px={2.5} py={0.5}>
-                            {getHistoryStatusLabel(row.workflowStatus, roleCode)}
-                          </Badge>
-                        </HStack>
-                        <Text mt={1} color="#4a5568">{row.customerName}</Text>
-                        <HStack mt={1} spacing={2} flexWrap="wrap">
-                          <Badge colorScheme="blue" borderRadius="full">Biển số: {row.vehicleLicensePlate}</Badge>
-                          <Badge colorScheme="gray" borderRadius="full">Dòng xe: {row.vehicleDescriptor || "--"}</Badge>
-                          <Badge colorScheme="purple" borderRadius="full">Tổ: {row.teamName || "--"}</Badge>
-                        </HStack>
-                      </Box>
-                    </Flex>
-                    <Divider />
-                    <SimpleGrid columns={{ base: 1, md: 4 }} spacing={2}>
-                      <Text fontSize="sm" color="#4a5568">
-                        <strong>Nhận:</strong> {formatDateTime(row.assignedAt)}
-                      </Text>
-                      <Text fontSize="sm" color="#4a5568">
-                        <strong>Bắt đầu:</strong> {formatDateTime(row.startedAt)}
-                      </Text>
-                      <Text fontSize="sm" color="#4a5568">
-                        <strong>Duyệt kỹ thuật:</strong> {formatDateTime(row.technicalApprovedAt)}
-                      </Text>
-                      <Text fontSize="sm" color="#4a5568">
-                        <strong>Duyệt cuối:</strong> {formatDateTime(row.finalApprovedAt)}
-                      </Text>
-                    </SimpleGrid>
-                    <HStack spacing={2}>
-                      <TimeIcon color="#5a6d9a" />
-                      <Text fontSize="sm" color="#2b3674">
-                        <strong>{getProcessedTimelineLabel(roleCode)}:</strong> {formatDateTime(row.completedAt)}
-                      </Text>
-                    </HStack>
-                    <HStack justify="flex-end" spacing={2} pt={1} borderTop="1px solid" borderColor="gray.100">
-                      <Button
-                        size="sm"
-                        colorScheme="blue"
-                        variant="solid"
-                        borderRadius="full"
-                        fontWeight="700"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openHistoryDiagnosis(row.serviceOrderId);
-                        }}
-                        onKeyDown={(event) => event.stopPropagation()}
+                  <VStack align="stretch" spacing={2.5}>
+                    {/* Top Row: Plate, Vehicle Name, Order Code, Status */}
+                    <Flex justify="space-between" align={{ base: "start", sm: "center" }} gap={3} wrap="wrap">
+                      <HStack spacing={2.5} align="center" wrap="wrap">
+                        {/* Official Workshop License Plate Badge */}
+                        <Box
+                          display="inline-flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          bg="#ffffff"
+                          border="2px solid #0f172a"
+                          borderRadius="md"
+                          px={2.5}
+                          py={0.5}
+                          boxShadow="0 1px 2px rgba(0,0,0,0.06)"
+                        >
+                          <Text fontSize="14px" fontWeight="900" letterSpacing="0.05em" color="#0f172a" lineHeight="1.2">
+                            {hasPlate ? row.vehicleLicensePlate : "CHƯA BIỂN"}
+                          </Text>
+                        </Box>
+
+                        {/* Vehicle Descriptor */}
+                        <Text fontSize={{ base: "md", sm: "16px" }} fontWeight="800" color="#0f172a" lineHeight="1.2">
+                          {row.vehicleDescriptor && row.vehicleDescriptor !== "Chưa rõ dòng xe"
+                            ? row.vehicleDescriptor
+                            : "Xe tiếp nhận"}
+                        </Text>
+                      </HStack>
+
+                      {/* Status Badge */}
+                      <Badge
+                        bg={statusMeta.bg}
+                        color={statusMeta.color}
+                        border={statusMeta.border}
+                        borderRadius="md"
+                        px={2.5}
+                        py={1}
+                        fontSize="xs"
+                        fontWeight="800"
+                        letterSpacing="0.02em"
                       >
-                        Xem chuẩn đoán
-                      </Button>
-                    </HStack>
-                  </Stack>
+                        {statusMeta.label}
+                      </Badge>
+                    </Flex>
+
+                    {/* Middle Row: Team info (only rendered when meaningful) */}
+                    {Boolean(row.teamName && row.teamName !== "--") && (
+                      <HStack spacing={3} wrap="wrap" fontSize="xs" color="#475569">
+                        <Text>
+                          <strong style={{ color: "#334155" }}>Tổ thực hiện:</strong> {row.teamName}
+                        </Text>
+                      </HStack>
+                    )}
+
+                    {/* Bottom Row: Relevant Timestamps and Action Buttons */}
+                    <Flex
+                      justify="space-between"
+                      align={{ base: "start", sm: "center" }}
+                      direction={{ base: "column", sm: "row" }}
+                      gap={2.5}
+                      pt={2}
+                      borderTop="1px solid #f1f5f9"
+                    >
+                      <HStack spacing={2} fontSize="xs" color="#64748b" wrap="wrap">
+                        <TimeIcon boxSize={3.5} color="#64748b" />
+                        <Text>
+                          <strong>{milestoneTitle}:</strong> {formatDateTime(row.completedAt)}
+                        </Text>
+                        {row.assignedAt && (
+                          <>
+                            <Text color="#cbd5e1">·</Text>
+                            <Text>
+                              Tiếp nhận: {formatDateTime(row.assignedAt)}
+                            </Text>
+                          </>
+                        )}
+                      </HStack>
+
+                      <HStack spacing={2} alignSelf={{ base: "flex-end", sm: "center" }}>
+                        <Button
+                          size="sm"
+                          height="34px"
+                          px={3}
+                          variant="ghost"
+                          color="#475569"
+                          fontSize="xs"
+                          fontWeight="700"
+                          borderRadius="lg"
+                          _hover={{ bg: "#f1f5f9", color: "#0f172a" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openHistoryDetail(row.serviceOrderId);
+                          }}
+                        >
+                          Lệnh điều phối
+                        </Button>
+                        <Button
+                          size="sm"
+                          height="34px"
+                          px={3.5}
+                          bg="#2563eb"
+                          color="white"
+                          fontSize="xs"
+                          fontWeight="800"
+                          borderRadius="lg"
+                          _hover={{ bg: "#1d4ed8" }}
+                          rightIcon={<ArrowForwardIcon />}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openHistoryDiagnosis(row.serviceOrderId);
+                          }}
+                        >
+                          Xem chẩn đoán
+                        </Button>
+                      </HStack>
+                    </Flex>
+                  </VStack>
                 </Box>
-              ))}
-            </VStack>
-          )}
-        </Box>
-      </Stack>
+              );
+            })}
+          </VStack>
+        )}
+      </VStack>
     </Box>
   );
 }

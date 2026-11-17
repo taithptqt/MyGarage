@@ -212,7 +212,9 @@ public sealed class EfOrderDataService(IGarageContext db) : IOrderDataService
                 i.ServiceOrder != null ? (long?)i.ServiceOrder.CustomerId : null,
                 i.RetailOrder != null ? (long?)i.RetailOrder.CustomerId : null,
                 i.ServiceOrderId,
-                i.RetailOrderId))
+                i.RetailOrderId,
+                i.PayerType,
+                i.PayerId))
             .FirstOrDefaultAsync(ct);
 
     public async Task<OrderPendingPaymentCreateResult> TryCreatePendingPaymentAsync(

@@ -3,9 +3,9 @@
 .workshop-page {
   display: flex;
   min-height: 100vh;
-  background: #f4f7fe;
-  color: #1b2559;
-  font-family: inherit;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   transition: all 0.3s ease;
   position: relative;
 }
@@ -1624,10 +1624,11 @@
 
 .header-title {
   margin: 0;
-  font-size: 34px;
-  font-weight: 700;
-  color: #1b2559;
-  letter-spacing: -0.5px;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  font-family: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .header-right {
@@ -3397,31 +3398,122 @@
 .reception-dashboard .reception-group-orders-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 980px;
+  min-width: 800px;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-alert {
+  width: 48px;
 }
 
 .reception-dashboard .reception-group-orders-table col.col-order-code {
-  width: 26%;
+  width: 36%;
 }
 
 .reception-dashboard .reception-group-orders-table col.col-plate {
-  width: 13%;
-}
-
-.reception-dashboard .reception-group-orders-table col.col-checkin {
-  width: 16%;
-}
-
-.reception-dashboard .reception-group-orders-table col.col-handover {
-  width: 16%;
+  width: 20%;
 }
 
 .reception-dashboard .reception-group-orders-table col.col-status {
-  width: 14%;
+  width: 24%;
 }
 
 .reception-dashboard .reception-group-orders-table col.col-actions {
+  width: 20%;
+}
+
+.reception-dashboard .reception-single-orders-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 900px;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-alert {
+  width: 48px;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-order-code {
+  width: 25%;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-customer-name {
+  width: 22%;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-customer-phone {
   width: 15%;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-plate {
+  width: 15%;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-status {
+  width: 13%;
+}
+
+.reception-dashboard .reception-single-orders-table col.col-actions {
+  width: 10%;
+}
+
+.reception-dashboard .th-alert,
+.reception-dashboard .td-alert {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  text-align: center;
+  padding: 12px 4px 12px 14px !important;
+}
+
+.reception-dashboard .td-alert .appointment-issue-indicator {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fee4e2;
+  color: #d92d20;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(217, 45, 32, 0.25);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.reception-dashboard .td-alert .appointment-issue-indicator:hover {
+  transform: scale(1.15);
+}
+
+.reception-dashboard .reception-single-orders-table th,
+.reception-dashboard .reception-single-orders-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 12px 14px;
+}
+
+.reception-dashboard .reception-single-orders-table td.td-id {
+  font-family: inherit;
+  font-weight: 700;
+  color: #4318ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reception-dashboard .reception-single-orders-table td.td-customer-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reception-dashboard .reception-single-orders-table td.td-customer-phone,
+.reception-dashboard .reception-single-orders-table td.td-plate,
+.reception-dashboard .reception-single-orders-table td.td-time {
+  white-space: nowrap;
 }
 
 .btn-icon {
@@ -3629,54 +3721,87 @@
 }
 
 .reception-appt-section {
-  border: 1px solid #e7edf9;
-  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
   background: #ffffff;
-  padding: 18px;
-  box-shadow: 0 8px 26px rgba(17, 38, 146, 0.05);
+  padding: 24px 26px;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.04);
   min-width: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.reception-appt-section:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
 }
 
 .reception-appt-layout {
   display: grid;
   grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
-  gap: clamp(14px, 1.2vw, 20px);
+  gap: clamp(16px, 1.4vw, 24px);
   align-items: start;
 }
 
-.reception-appt-left-column,
+@media (max-width: 980px) {
+  .reception-appt-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.reception-appt-left-column {
+  min-width: 0;
+  display: grid;
+  gap: clamp(16px, 1.4vw, 24px);
+}
+
 .reception-appt-right-column {
   min-width: 0;
   display: grid;
-  gap: clamp(14px, 1.2vw, 20px);
+  gap: clamp(16px, 1.4vw, 24px);
+}
+
+@media (min-width: 1024px) {
+  .reception-appt-right-column {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+  }
 }
 
 .reception-appt-step-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: 12px 16px;
   flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1.5px solid #f1f5f9;
 }
 
 .reception-appt-step-head-service {
   flex-wrap: nowrap;
-  margin-bottom: 4px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1.5px solid #f1f5f9;
 }
 
 .reception-step-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cfe0f7;
+  gap: 6px;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  background: #f3f8ff;
-  color: #3b66ab;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
-  letter-spacing: 0.02em;
-  padding: 6px 12px;
+  letter-spacing: 0.05em;
+  padding: 7px 16px;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
 }
 
 .reception-appt-section-title-service {
@@ -4306,10 +4431,13 @@
 }
 
 .reception-appt-section-title {
-  margin: 6px 0 0;
-  color: #1f2f54;
-  font-size: 16px;
-  font-weight: 800;
+  margin: 0 0 18px 0;
+  padding-bottom: 12px;
+  border-bottom: 1.5px solid #f1f5f9;
+  color: #1e293b;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .reception-sidebar-hint {
@@ -7533,4 +7661,165 @@
 .quoteflow-click-hint, 
 .quoteflow-part-toggle-hint {
   display: none !important;
+}
+
+/* ==========================================================================
+   SERVICE ORDER CREATE PAGE: SPACING, TYPOGRAPHY & CLUSTERING (UI/UX REFINEMENT)
+   ========================================================================== */
+.service-order-create-page .reception-appt-section {
+  padding: 24px 26px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.04);
+}
+
+/* Card Header: Step Head & Title */
+.service-order-create-page .reception-appt-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1.5px solid #f1f5f9;
+}
+
+.service-order-create-page .reception-step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+}
+
+.service-order-create-page .reception-appt-section-title {
+  margin: 0 0 22px 0 !important;
+  padding-bottom: 14px;
+  border-bottom: 1.5px solid #f1f5f9;
+  color: #1e293b !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+}
+
+/* Form Groups & Inputs Spacing */
+.service-order-create-page .form-group {
+  margin-bottom: 22px;
+}
+
+.service-order-create-page .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.service-order-create-page .form-group label {
+  display: block;
+  margin-bottom: 8px !important;
+  color: #334155 !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+.service-order-create-page .form-group input,
+.service-order-create-page .form-group select,
+.service-order-create-page .form-group textarea {
+  width: 100%;
+  height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.service-order-create-page .form-group textarea {
+  height: auto;
+  min-height: 80px;
+}
+
+.service-order-create-page .form-group input:focus,
+.service-order-create-page .form-group select:focus,
+.service-order-create-page .form-group textarea:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+/* Selected Customer Card */
+.service-order-create-page .reception-customer-selected-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%);
+  border: 1px solid #bfdbfe;
+  margin: 12px 0 24px;
+}
+
+.service-order-create-page .reception-customer-selected-main strong {
+  font-size: 15px;
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.service-order-create-page .reception-customer-selected-main span {
+  font-size: 13px;
+  color: #2563eb;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Cluster Dividers (Separating sub-groups within a step) */
+.service-order-create-page .reception-cluster-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 26px 0 20px;
+}
+
+.service-order-create-page .reception-cluster-divider::before,
+.service-order-create-page .reception-cluster-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.service-order-create-page .reception-cluster-divider span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* Timeline vertical grid in Step 3 */
+.service-order-create-page .timeline-grid-vertical {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px 18px 6px;
+  margin: 10px 0 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.service-order-create-page .timeline-grid-vertical .form-group {
+  margin-bottom: 12px;
 }

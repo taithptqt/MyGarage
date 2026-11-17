@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MyGarage.Application.CustomerPortal;
+using MyGarage.Application.Bays;
 using MyGarage.Common;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -13,16 +14,32 @@ public sealed class CustomerPortalService : ICustomerPortalService
 {
     private readonly ICustomerPortalStore _store;
     private readonly IOptions<CustomerAutomationJobsOptions> _jobOptions;
+    private readonly IVehicleLocationService _locations;
 
-    public CustomerPortalService(ICustomerPortalStore store, IOptions<CustomerAutomationJobsOptions> jobOptions)
+    public CustomerPortalService(ICustomerPortalStore store, IOptions<CustomerAutomationJobsOptions> jobOptions, IVehicleLocationService locations)
     {
         _store = store;
         _jobOptions = jobOptions;
+        _locations = locations;
     }
 
-    public Task<CustomerPortalDashboardDto> GetDashboardAsync(long customerId, CancellationToken cancellationToken = default)
+    public async Task<CustomerPortalDashboardDto> GetDashboardAsync(long customerId, CancellationToken cancellationToken = default)
     {
-        return _store.GetDashboardAsync(customerId, cancellationToken);
+        var dashboard = await _store.GetDashboardAsync(customerId, cancellationToken);
+        if (dashboard.ActiveTracks.Count == 0) return dashboard;
+        var garage = await _locations.GetCustomerGarageAsync(customerId, cancellationToken);
+        foreach (var track in dashboard.ActiveTracks)
+        {
+            var location = garage.Vehicles.FirstOrDefault(v => v.VehicleId == track.VehicleId && v.BranchId == track.BranchId);
+            track.BayCode = location?.BayCode;
+            track.BayName = location?.BayName;
+            track.BayType = location?.BayType;
+            track.ServiceArea = location?.ServiceArea;
+            track.LocationReportedAt = location?.ReportedAt;
+            track.LocationReportedBy = location?.ReportedBy;
+            track.LocationNote = location?.Note;
+        }
+        return dashboard;
     }
 
     public Task<IReadOnlyList<CustomerPortalVehicleDto>> GetVehiclesAsync(long customerId,

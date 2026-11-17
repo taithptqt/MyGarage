@@ -35,7 +35,7 @@ test("requestWithDualRoute calls v1 route first and returns result on success", 
     return { data: [{ id: 1 }] };
   };
 
-  const res = await requestWithDualRoute("/api/v1/vehicles", "/api/vehicles", { method: "GET" }, fakeRequester);
+  const res = await requestWithDualRoute("/api/v1/vehicles", "/api/v1/legacy/vehicles", { method: "GET" }, fakeRequester);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "/api/v1/vehicles");
   assert.deepEqual(res, { data: [{ id: 1 }] });
@@ -53,10 +53,10 @@ test("requestWithDualRoute falls back to legacy route when v1 returns 404", asyn
     return { data: [{ id: 2 }] };
   };
 
-  const res = await requestWithDualRoute("/api/v1/vehicles", "/api/vehicles", { method: "GET" }, fakeRequester);
+  const res = await requestWithDualRoute("/api/v1/vehicles", "/api/v1/legacy/vehicles", { method: "GET" }, fakeRequester);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "/api/v1/vehicles");
-  assert.equal(calls[1].url, "/api/vehicles");
+  assert.equal(calls[1].url, "/api/v1/legacy/vehicles");
   assert.deepEqual(res, { data: [{ id: 2 }] });
 });
 
@@ -70,7 +70,7 @@ test("requestWithDualRoute does not fallback on non-404 errors (e.g. 500)", asyn
   };
 
   await assert.rejects(
-    () => requestWithDualRoute("/api/v1/vehicles", "/api/vehicles", { method: "GET" }, fakeRequester),
+    () => requestWithDualRoute("/api/v1/vehicles", "/api/v1/legacy/vehicles", { method: "GET" }, fakeRequester),
     /Internal Server Error/
   );
   assert.equal(calls.length, 1);

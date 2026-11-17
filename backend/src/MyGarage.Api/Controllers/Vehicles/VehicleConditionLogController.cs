@@ -56,14 +56,14 @@ namespace MyGarage.Controllers
             var dtos = serviceOrderId.HasValue
                 ? await _vehicleConditionLogReadService.GetByOrderDtosAsync(serviceOrderId.Value)
                 : await _vehicleConditionLogCrudService.GetAllDtosAsync();
-            return Ok(dtos);
+            return Ok(dtos.Where(dto => !string.Equals(dto.LogType, "REPAIR_3D", StringComparison.OrdinalIgnoreCase)));
         }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<VehicleConditionLogResponseDto>> GetById(long id)
         {
             var dto = await _vehicleConditionLogCrudService.GetDtoByIdAsync(id);
-            if (dto == null)
+            if (dto == null || string.Equals(dto.LogType, "REPAIR_3D", StringComparison.OrdinalIgnoreCase))
             {
                 return NotFound();
             }
@@ -130,6 +130,8 @@ namespace MyGarage.Controllers
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
+            var dto = await _vehicleConditionLogCrudService.GetDtoByIdAsync(id);
+            if (dto == null || string.Equals(dto.LogType, "REPAIR_3D", StringComparison.OrdinalIgnoreCase)) return NotFound();
             var result = await _vehicleConditionLogCrudService.DeleteAsync(id);
             if (!result)
             {

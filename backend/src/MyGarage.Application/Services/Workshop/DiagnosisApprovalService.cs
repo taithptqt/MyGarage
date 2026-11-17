@@ -38,14 +38,14 @@ namespace MyGarage.Services
                 return;
             }
 
-            if (list.Any(x => x.Status != DiagnosisStatusAssigned))
+            if (list.Any(x => x.Status != DiagnosisStatusAssigned && x.Status != DiagnosisStatusPending))
             {
-                throw new InvalidOperationException("Chi cho phep gui huy lenh khi dang o trang thai ASSIGNED.");
+                throw new InvalidOperationException("Chỉ cho phép gửi yêu cầu hủy khi lệnh chẩn đoán đang chờ xử lý hoặc đã giao việc.");
             }
 
-            if (list.Any(x => !IsWithinGoldenCancelWindow(_store, x, now)))
+            if (list.Any(x => x.Status == DiagnosisStatusAssigned && GetTechnicianAcceptedAt(_store, x).HasValue && !IsWithinGoldenCancelWindow(_store, x, now)))
             {
-                throw new InvalidOperationException("To truong chi duoc gui huy trong 10 phut dau sau khi nhan xe.");
+                throw new InvalidOperationException("Tổ trưởng chỉ được gửi hủy trong 10 phút đầu sau khi thợ nhận việc.");
             }
 
             foreach (var diagnosis in list)

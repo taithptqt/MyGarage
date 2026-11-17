@@ -8,7 +8,7 @@ const ALL_BRANCHES_ID = 0;
 
 async function fetchBranches() {
   try {
-    const response = await request({ url: "/api/branches", method: "GET" });
+    const response = await request({ url: "/api/v1/branches", method: "GET" });
     return response || [];
   } catch {
     return [];
@@ -55,7 +55,7 @@ export function BranchProvider({ children }) {
 
   const roleCode = String(user?.roleCode || "").trim().toUpperCase();
   const userBranchId = parseBranchId(user?.branchId);
-  const isBranchLocked = roleCode === "ACCOUNTANT" && userBranchId !== null && userBranchId !== ALL_BRANCHES_ID;
+  const isBranchLocked = (roleCode === "ACCOUNTANT" || roleCode === "RECEPTIONIST") && userBranchId !== null && userBranchId !== ALL_BRANCHES_ID;
 
   const refreshBranches = useCallback(async () => {
     setLoading(true);

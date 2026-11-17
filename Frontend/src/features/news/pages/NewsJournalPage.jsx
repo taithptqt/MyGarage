@@ -29,7 +29,7 @@ const articles = [
 const NewsJournalPage = () => {
   return (
     <main className="news-page">
-      <Header />
+      <Header overlay />
 
       <section className="news-hero">
         <img
@@ -40,13 +40,13 @@ const NewsJournalPage = () => {
         <div className="news-hero__overlay" />
         <div className="container-xl news-hero__content-wrap">
           <div className="news-hero__content">
-            <p className="news-kicker">Journal Feature - Vol. 04</p>
-            <h1>The Art of the Drive</h1>
-            <p>
+            <p className="news-kicker mg-scene-fade-up mg-scene-delay-1">Journal Feature - Vol. 04</p>
+            <h1 className="mg-scene-fade-up mg-scene-delay-2">The Art of the Drive</h1>
+            <p className="mg-scene-fade-up mg-scene-delay-3">
               A deep dive into the intersection of mid-century aesthetics and automotive engineering. Why the garage has become the
               modern sanctuary.
             </p>
-            <Link to="/news" className="news-outline-btn">
+            <Link to="/news" className="news-outline-btn mg-scene-fade-up mg-scene-delay-4">
               Explore Chapter
             </Link>
           </div>

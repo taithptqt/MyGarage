@@ -5,7 +5,7 @@ export default function TeamLeaderDiagnosisApprovalPage() {
   return (
     <DiagnosisApprovalBoardPage
       mode="TEAM_LEADER"
-      title="Duyệt chuẩn đoán - Tổ trưởng"
+      title="Duyệt chẩn đoán"
       backPath="/workshop/team-leader"
       backLabel="Quay lại"
     />

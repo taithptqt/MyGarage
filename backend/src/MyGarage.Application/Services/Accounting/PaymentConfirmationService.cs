@@ -32,19 +32,34 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
     public async Task ApplyOutcomeAsync(Payment payment, decimal amountPaid, string status)
     {
+        if (payment == null || payment.Id <= 0)
+            throw new InvalidOperationException("Giao dịch thanh toán không hợp lệ.");
+
         var normalizedStatus = NormalizeStatus(status);
-        var previousStatus = (payment.Status ?? string.Empty).ToUpperInvariant();
+        var updatedBy = payment.UpdatedBy;
+        var previousStatus = string.Empty;
+        var settled = await _paymentStore.ExecuteSettlementAsync(payment.Id, async current =>
+        {
+            previousStatus = (current.Status ?? string.Empty).ToUpperInvariant();
+            current.Amount = amountPaid;
+            current.Status = normalizedStatus;
+            current.UpdatedAt = VietnamTime.Now;
+            if (updatedBy.HasValue) current.UpdatedBy = updatedBy;
+            await _paymentStore.SaveChangesInTransactionAsync();
+            await UpdateRelatedDocumentsAsync(current);
+        });
 
-        payment.Amount = amountPaid;
-        payment.Status = normalizedStatus;
-        payment.UpdatedAt = VietnamTime.Now;
-        await _paymentStore.SaveChangesInTransactionAsync();
-
-        await UpdateRelatedDocumentsAsync(payment);
+        // Keep callers holding the original instance consistent after the tracked row was reloaded.
+        payment.Amount = settled.Amount;
+        payment.Status = settled.Status;
+        payment.InvoiceId = settled.InvoiceId;
+        payment.Direction = settled.Direction;
+        payment.UpdatedAt = settled.UpdatedAt;
+        payment.UpdatedBy = settled.UpdatedBy;
 
         if (previousStatus != PaymentStatusCompleted && normalizedStatus == PaymentStatusCompleted)
         {
-            await TrySendPaymentSuccessEmailAsync(payment);
+            await TrySendPaymentSuccessEmailAsync(settled);
         }
     }
 
@@ -130,15 +145,32 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             return;
         }
 
-        var invoice = await _invoiceService.EnsureForPaymentContextAsync(
-            payment.ServiceOrderId,
-            payment.RetailOrderId,
-            payment.PayerType,
-            payment.PayerId);
-
-        if (invoice == null)
+        // Standalone payments do not have an order from which an invoice can be
+        // resolved. Preserve their existing lifecycle without inventing a link.
+        if (payment.InvoiceId is not > 0 && payment.ServiceOrderId is not > 0 && payment.RetailOrderId is not > 0)
         {
             return;
+        }
+
+        // A caller may already have selected a specific invoice. Do not replace a
+        // verified link with the latest invoice for the same order: that invoice
+        // may belong to a different payer.
+        Invoice? invoice;
+        if (payment.InvoiceId is > 0)
+        {
+            invoice = await _paymentStore.GetInvoiceForUpdateAsync(payment.InvoiceId.Value);
+            if (invoice == null || !IsVerifiedInvoiceLink(payment, invoice))
+                throw new InvalidOperationException("Hóa đơn đã chọn không khớp nguồn hoặc bên thanh toán; cần đối soát.");
+        }
+        else
+        {
+            invoice = await _invoiceService.EnsureForPaymentContextAsync(
+                payment.ServiceOrderId,
+                payment.RetailOrderId,
+                payment.PayerType,
+                payment.PayerId);
+            if (invoice == null || !IsVerifiedInvoiceLink(payment, invoice))
+                throw new InvalidOperationException("Không xác định được hóa đơn phù hợp; cần đối soát thanh toán.");
         }
 
         var changed = false;
@@ -159,6 +191,23 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             payment.UpdatedAt = VietnamTime.Now;
             await _paymentStore.SaveChangesInTransactionAsync();
         }
+    }
+
+    private static bool IsVerifiedInvoiceLink(Payment payment, Invoice? invoice)
+    {
+        if (invoice == null || payment.PayerId is not > 0 || invoice.PayerId != payment.PayerId ||
+            string.IsNullOrWhiteSpace(payment.PayerType) ||
+            !string.Equals(payment.PayerType.Trim(), invoice.PayerType?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Require a source on the payment and reject partially matching mixed sources.
+        if (payment.ServiceOrderId is not > 0 && payment.RetailOrderId is not > 0)
+            return false;
+        var paymentServiceOrder = payment.ServiceOrderId is > 0 ? payment.ServiceOrderId : null;
+        var paymentRetailOrder = payment.RetailOrderId is > 0 ? payment.RetailOrderId : null;
+        var invoiceServiceOrder = invoice.ServiceOrderId is > 0 ? invoice.ServiceOrderId : null;
+        var invoiceRetailOrder = invoice.RetailOrderId is > 0 ? invoice.RetailOrderId : null;
+        return paymentServiceOrder == invoiceServiceOrder && paymentRetailOrder == invoiceRetailOrder;
     }
 
     private async Task TrySendPaymentSuccessEmailAsync(Payment payment)

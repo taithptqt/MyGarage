@@ -28,6 +28,8 @@ public class VoucherScreenPaginationTests
         Assert.Equal(11, summary.RootElement.GetProperty("voucherCount").GetInt32());
         Assert.Empty(summary.RootElement.GetProperty("vouchers").EnumerateArray());
         using var page = JsonDocument.Parse(await client.GetStringAsync("/api/v1/voucher-campaigns/1/voucher-page?page=2&pageSize=5"));
+        using var canonical = JsonDocument.Parse(await client.GetStringAsync("/api/v1/voucher-campaigns/1/vouchers?page=2&pageSize=5"));
+        Assert.Equal(page.RootElement.GetRawText(), canonical.RootElement.GetRawText());
         Assert.Equal(11, page.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(6, page.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/voucher-campaigns/999/voucher-page")).StatusCode);

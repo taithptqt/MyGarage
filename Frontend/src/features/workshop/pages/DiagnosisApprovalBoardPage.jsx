@@ -67,6 +67,29 @@ function resolveVehiclePlateDisplay(order, vehicleById) {
   return firstNonEmptyText(vehicle?.licensePlate, vehicle?.LicensePlate, vehicle?.plateNumber, vehicle?.PlateNumber, "-");
 }
 
+function resolveVehicleModelDisplay(order, vehicleById) {
+  const directText = firstNonEmptyText(
+    readField(
+      order,
+      "vehicleModel",
+      "VehicleModel",
+      "carModel",
+      "CarModel",
+      "modelName",
+      "ModelName",
+    ),
+    order?.vehicle?.model,
+    order?.vehicle?.Model,
+    order?.customerVehicle?.model,
+    order?.customerVehicle?.Model,
+  );
+  if (directText) return directText;
+
+  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+  return firstNonEmptyText(vehicle?.model, vehicle?.Model, vehicle?.modelName, vehicle?.ModelName, "");
+}
+
 function buildRecommendationName(row, serviceLookup, productLookup) {
   const itemType = normalizeRecommendationItemType(readField(row, "itemType", "ItemType"));
   if (itemType === "SERVICE") {
@@ -267,7 +290,7 @@ export default function DiagnosisApprovalBoardPage({
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu duyệt chuẩn đoán.");
+      setError(err?.message || "Không thể tải dữ liệu duyệt chẩn đoán.");
     } finally {
       setLoading(false);
     }
@@ -441,8 +464,14 @@ export default function DiagnosisApprovalBoardPage({
 
   const customerDisplay = resolveCustomerDisplay(order, customerById);
   const plateDisplay = resolveVehiclePlateDisplay(order, vehicleById);
+  const vehicleModelDisplay = resolveVehicleModelDisplay(order, vehicleById);
+  const hasPlate = plateDisplay && plateDisplay !== "-" && plateDisplay !== "Chưa có";
   const symptom = readField(latestDiagnosis, "symptom", "Symptom") || readField(order, "symptom", "Symptom") || "-";
   const assignmentNote = readField(latestDiagnosis, "assignmentNote", "AssignmentNote") || readField(order, "assignmentNote", "AssignmentNote") || "-";
+  const canTakeAction =
+    (isTeamLeaderMode && !isTeamLeaderDecisionLocked) ||
+    (isForemanMode && !isForemanDecisionLocked) ||
+    (isManagerMode && canManagerFinancialApprove);
 
   const handleSaveRecommendation = useCallback(async (item) => {
     const recommendationId = toPositiveNumber(readField(item, "id", "Id"));
@@ -613,114 +642,237 @@ export default function DiagnosisApprovalBoardPage({
 
   return (
     <div className="workshop-table-card approval-page-shell">
-      <div className="reception-quote-head">
-        <div>
-          <h2 className="reception-quote-title">{title}</h2>
-          <p className="reception-quote-subtitle">
-            Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
-          </p>
+      <div
+        className="reception-quote-head"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+          paddingBottom: "14px",
+          borderBottom: "1px solid #e2e8f0",
+          marginBottom: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <h2 className="reception-quote-title" style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#0f172a" }}>
+            {title ? title.replace(/chuẩn đoán/gi, "chẩn đoán") : "Duyệt chẩn đoán"}
+          </h2>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#f8fafc",
+              padding: "3px 10px 3px 4px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                padding: "2px 8px",
+                background: "#fff",
+                color: "#0f172a",
+                border: "2px solid #0f172a",
+                borderRadius: "5px",
+                fontWeight: 800,
+                fontSize: "13px",
+                letterSpacing: "0.05em",
+                lineHeight: 1.2,
+              }}
+            >
+              {hasPlate ? plateDisplay : "CHƯA BIỂN"}
+            </span>
+            {vehicleModelDisplay ? (
+              <span style={{ fontWeight: 700, fontSize: "14px", color: "#1e293b" }}>
+                {vehicleModelDisplay}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <button type="button" className="btn-back" onClick={() => navigate(resolvedBackPath)}>
-          {backLabel}
+
+        <button
+          type="button"
+          className="btn-back"
+          onClick={() => navigate(resolvedBackPath)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 14px",
+            borderRadius: "8px",
+            border: "1px solid #cbd5e1",
+            background: "#fff",
+            color: "#334155",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ← {backLabel || "Quay lại"}
         </button>
       </div>
 
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Đang tải dữ liệu duyệt chuẩn đoán...</p>
+          <p>Đang tải dữ liệu duyệt chẩn đoán...</p>
         </div>
       ) : (
         <div className="reception-quote-layout">
-          <div className="approval-two-column-layout">
-          <aside className="approval-version-sidebar">
-            <div className="approval-version-sidebar-head">
-              <h3>Phiên bản chẩn đoán</h3>
-              <span>{diagnosisVersions.length}</span>
-            </div>
-            <div className="approval-version-list">
-              {diagnosisVersions.length === 0 ? (
-                <p className="reception-quote-note">Chưa có phiên bản chẩn đoán.</p>
-              ) : (
-                diagnosisVersions.map((version, index) => {
-                  const versionTechnicalStatus = normalizeStatus(readField(version.latestDiagnosis, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus")) || "PENDING";
+          {diagnosisVersions.length > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                padding: "8px 12px",
+                background: "#f8fafc",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#475569" }}>
+                Phiên bản chẩn đoán ({diagnosisVersions.length}):
+              </span>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {diagnosisVersions.map((version, index) => {
+                  const isActive = selectedVersionKey === version.key;
+                  const versionTechnicalStatus =
+                    normalizeStatus(readField(version.latestDiagnosis, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus")) || "PENDING";
                   return (
                     <button
                       type="button"
                       key={version.key}
-                      className={`approval-version-item ${selectedVersionKey === version.key ? "is-active" : ""}`}
                       onClick={() => setSelectedVersionKey(version.key)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "7px",
+                        fontSize: "12px",
+                        fontWeight: isActive ? 700 : 500,
+                        border: isActive ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                        background: isActive ? "#eff6ff" : "#fff",
+                        color: isActive ? "#1d4ed8" : "#475569",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
                     >
-                      <strong>Phiên bản {index + 1}</strong>
-                      <span>Tổ trưởng: {getStatusLabelVi(versionTechnicalStatus, versionTechnicalStatus)}</span>
+                      <span>Phiên bản {index + 1}</span>
+                      <span style={{ fontSize: "11px", opacity: 0.85 }}>({getStatusLabelVi(versionTechnicalStatus, versionTechnicalStatus)})</span>
                     </button>
                   );
-                })
-              )}
+                })}
+              </div>
             </div>
-          </aside>
+          ) : null}
 
-          <div className="reception-quote-layout">
-          <section className="reception-quote-summary-card">
-            <article>
-              <span>Khách hàng</span>
-              <strong>{customerDisplay}</strong>
-            </article>
-            <article>
-              <span>Biển số</span>
-              <strong>{plateDisplay}</strong>
-            </article>
-            <article>
-              <span>SLA chờ duyệt</span>
-              <strong><span className={slaClassName}>{slaSeverity === "RED" ? "Quá hạn > 30 phút" : slaSeverity === "YELLOW" ? "Cảnh báo > 15 phút" : "Trong SLA"}</span></strong>
-            </article>
-            <article>
-              <span>Số đề xuất</span>
-              <strong>{totalSuggestedItems.length}</strong>
-            </article>
-            <article>
-              <span>Duyệt tổ trưởng</span>
-              <strong>{getStatusLabelVi(technicalStatus, technicalStatus)}</strong>
-            </article>
-            <article>
-              <span>{isManagerMode ? "Trạng thái báo giá" : "Duyệt quản đốc"}</span>
-              <strong>{getStatusLabelVi(isManagerMode ? quotationStatus : finalStatus, isManagerMode ? quotationStatus : finalStatus)}</strong>
-            </article>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: "10px",
+            }}
+          >
+            <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
+                SLA chờ duyệt
+              </span>
+              <span className={slaClassName} style={{ fontWeight: 700, fontSize: "13px" }}>
+                {slaSeverity === "RED" ? "Quá hạn > 30 phút" : slaSeverity === "YELLOW" ? "Cảnh báo > 15 phút" : "Trong SLA"}
+              </span>
+            </div>
+
+            <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
+                Số đề xuất kỹ thuật
+              </span>
+              <strong style={{ fontSize: "15px", color: "#0f172a" }}>
+                {totalSuggestedItems.length} hạng mục
+              </strong>
+            </div>
+
+            <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
+                Duyệt kỹ thuật (Tổ trưởng)
+              </span>
+              <strong style={{ fontSize: "14px", color: technicalStatus === "APPROVED" ? "#16a34a" : technicalStatus === "REJECTED" ? "#dc2626" : "#d97706" }}>
+                {getStatusLabelVi(technicalStatus, technicalStatus)}
+              </strong>
+            </div>
+
+            <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
+                {isManagerMode ? "Trạng thái báo giá" : "Duyệt quản đốc"}
+              </span>
+              <strong style={{ fontSize: "14px", color: (isManagerMode ? quotationStatus : finalStatus) === "APPROVED" ? "#16a34a" : "#475569" }}>
+                {getStatusLabelVi(isManagerMode ? quotationStatus : finalStatus, isManagerMode ? quotationStatus : finalStatus)}
+              </strong>
+            </div>
+
             {isManagerMode ? (
-              <article>
-                <span>Duyệt tài chính</span>
-                <strong>{getStatusLabelVi(financialStatus, financialStatus)}</strong>
-              </article>
+              <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", display: "block", marginBottom: "4px" }}>
+                  Duyệt tài chính
+                </span>
+                <strong style={{ fontSize: "14px", color: financialStatus === "APPROVED" ? "#16a34a" : "#475569" }}>
+                  {getStatusLabelVi(financialStatus, financialStatus)}
+                </strong>
+              </div>
             ) : null}
-          </section>
+          </div>
 
-          <section className="reception-quote-action-card">
-            <h3>Thông tin chuẩn đoán kỹ thuật</h3>
-            <div className="approval-note-grid">
-              <article>
-                <span>Triệu chứng</span>
-                <strong>{symptom}</strong>
-              </article>
-              <article>
-                <span>Ghi chú phân công</span>
-                <strong>{assignmentNote}</strong>
-              </article>
-              <article>
-                <span>Cập nhật gần nhất</span>
-                <strong>{formatDateTime(readField(latestDiagnosis, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</strong>
-              </article>
+          <div
+            style={{
+              padding: "12px 16px",
+              background: "#fff",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: "12px",
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "2px" }}>
+                Triệu chứng khách báo:
+              </span>
+              <strong style={{ fontSize: "14px", color: "#1e293b", lineHeight: 1.4 }}>
+                {symptom}
+              </strong>
             </div>
-            {error ? <p className="reception-quote-error">{error}</p> : null}
-            {actionMessage ? <p className="reception-quote-note">{actionMessage}</p> : null}
-            {isTeamLeaderEscalated ? (
-              <p className="reception-quote-error">
-                Phiếu đã quá SLA duyệt của tổ trưởng và đã tự động chuyển lên quản đốc xử lý.
-              </p>
-            ) : null}
-          </section>
 
+            {assignmentNote && assignmentNote !== "-" ? (
+              <div>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "2px" }}>
+                  Ghi chú phân công:
+                </span>
+                <span style={{ fontSize: "13px", color: "#334155" }}>{assignmentNote}</span>
+              </div>
+            ) : null}
+
+            <div>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "2px" }}>
+                Cập nhật gần nhất:
+              </span>
+              <span style={{ fontSize: "13px", color: "#475569" }}>
+                {formatDateTime(readField(latestDiagnosis, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}
+              </span>
+            </div>
           </div>
-          </div>
+          {error ? <p className="reception-quote-error">{error}</p> : null}
+          {actionMessage ? <p className="reception-quote-note">{actionMessage}</p> : null}
+          {isTeamLeaderEscalated ? (
+            <p className="reception-quote-error">
+              Phiếu đã quá SLA duyệt của tổ trưởng và đã tự động chuyển lên quản đốc xử lý.
+            </p>
+          ) : null}
 
           <section className="reception-quote-table-card">
             <div className="reception-quote-table-head">
@@ -872,103 +1024,128 @@ export default function DiagnosisApprovalBoardPage({
             )}
           </section>
 
-          <section className="reception-quote-action-card">
-            <h3>{isManagerMode ? "Xử lý duyệt tài chính" : "Xử lý duyệt kỹ thuật"}</h3>
-            <div className="reception-quote-approval-note">
-              <div className="reception-quote-approval-note-head">
-                <span className="reception-quote-approval-note-title">Ghi chú nội bộ</span>
-                <small className="reception-quote-approval-note-hint">Nêu lý do duyệt hoặc chỉnh sửa để truy vết lịch sử.</small>
-              </div>
-              <textarea
-                className="reception-quote-approval-note-input"
-                rows={3}
-                value={approveNote}
-                onChange={(event) => setApproveNote(event.target.value)}
-                placeholder="Nhập ghi chú duyệt..."
-                disabled={saving}
-              />
-            </div>
-
-            {(isForemanMode && !isForemanDecisionLocked) || (isTeamLeaderMode && !isTeamLeaderDecisionLocked) ? (
+          {canTakeAction ? (
+            <section className="reception-quote-action-card">
+              <h3>{isManagerMode ? "Xử lý duyệt tài chính" : "Xử lý duyệt kỹ thuật"}</h3>
               <div className="reception-quote-approval-note">
                 <div className="reception-quote-approval-note-head">
-                  <span className="reception-quote-approval-note-title">Lý do từ chối (nếu trả khám lại)</span>
+                  <span className="reception-quote-approval-note-title">Ghi chú nội bộ</span>
+                  <small className="reception-quote-approval-note-hint">Nêu lý do duyệt hoặc chỉnh sửa để truy vết lịch sử.</small>
                 </div>
                 <textarea
                   className="reception-quote-approval-note-input"
-                  rows={3}
-                  value={rejectNote}
-                  onChange={(event) => setRejectNote(event.target.value)}
-                  placeholder="Nhập lý do từ chối và yêu cầu khám lại..."
+                  rows={2}
+                  value={approveNote}
+                  onChange={(event) => setApproveNote(event.target.value)}
+                  placeholder="Nhập ghi chú duyệt..."
                   disabled={saving}
                 />
               </div>
-            ) : null}
 
-            <div className="reception-quote-action-row">
-              {isTeamLeaderMode && !isTeamLeaderDecisionLocked ? (
-                <>
+              {(isForemanMode && !isForemanDecisionLocked) || (isTeamLeaderMode && !isTeamLeaderDecisionLocked) ? (
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Lý do từ chối (nếu trả khám lại)</span>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={2}
+                    value={rejectNote}
+                    onChange={(event) => setRejectNote(event.target.value)}
+                    placeholder="Nhập lý do từ chối và yêu cầu khám lại..."
+                    disabled={saving}
+                  />
+                </div>
+              ) : null}
+
+              <div className="reception-quote-action-row">
+                {isTeamLeaderMode && !isTeamLeaderDecisionLocked ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-success"
+                      onClick={handleTeamLeaderApprove}
+                      disabled={saving || !staffId || visibleRecommendations.length === 0 || isTeamLeaderDecisionLocked}
+                    >
+                      Duyệt kỹ thuật tổ trưởng
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={handleTeamLeaderReject}
+                      disabled={saving || !staffId || isTeamLeaderDecisionLocked}
+                    >
+                      Từ chối & Khám lại
+                    </button>
+                  </>
+                ) : null}
+
+                {isForemanMode && !isForemanDecisionLocked ? (
+                  <>
+                    {isForemanAwaitingTeamLeaderApproval ? (
+                      <small className="reception-quote-note">Cần tổ trưởng duyệt kỹ thuật trước khi gửi quản đốc duyệt.</small>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn-success"
+                      onClick={() => handleForemanDecision(true)}
+                      disabled={
+                        saving
+                        || !staffId
+                        || visibleRecommendations.length === 0
+                        || isForemanDecisionLocked
+                        || isForemanAwaitingTeamLeaderApproval
+                      }
+                    >
+                      Duyệt & Chuyển báo giá
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={() => handleForemanDecision(false)}
+                      disabled={saving || !staffId || isForemanDecisionLocked || isForemanAwaitingTeamLeaderApproval}
+                    >
+                      Từ chối & Khám lại
+                    </button>
+                  </>
+                ) : null}
+
+                {isManagerMode ? (
                   <button
                     type="button"
                     className="btn-success"
-                    onClick={handleTeamLeaderApprove}
-                    disabled={saving || !staffId || visibleRecommendations.length === 0 || isTeamLeaderDecisionLocked}
+                    onClick={handleManagerFinancialApprove}
+                    disabled={saving || !staffId || !canManagerFinancialApprove}
                   >
-                    Duyệt kỹ thuật tổ trưởng
+                    Duyệt tài chính
                   </button>
-                  <button
-                    type="button"
-                    className="btn-danger"
-                    onClick={handleTeamLeaderReject}
-                    disabled={saving || !staffId || isTeamLeaderDecisionLocked}
-                  >
-                    Từ chối & Khám lại
-                  </button>
-                </>
-              ) : null}
-
-              {isForemanMode && !isForemanDecisionLocked ? (
-                <>
-                  {isForemanAwaitingTeamLeaderApproval ? (
-                    <small className="reception-quote-note">Cần tổ trưởng duyệt kỹ thuật trước khi gửi quản đốc duyệt.</small>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn-success"
-                    onClick={() => handleForemanDecision(true)}
-                    disabled={
-                      saving
-                      || !staffId
-                      || visibleRecommendations.length === 0
-                      || isForemanDecisionLocked
-                      || isForemanAwaitingTeamLeaderApproval
-                    }
-                  >
-                    Duyệt & Chuyển báo giá
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-danger"
-                    onClick={() => handleForemanDecision(false)}
-                    disabled={saving || !staffId || isForemanDecisionLocked || isForemanAwaitingTeamLeaderApproval}
-                  >
-                    Từ chối & Khám lại
-                  </button>
-                </>
-              ) : null}
-
-              {isManagerMode ? (
-                <button
-                  type="button"
-                  className="btn-success"
-                  onClick={handleManagerFinancialApprove}
-                  disabled={saving || !staffId || !canManagerFinancialApprove}
-                >
-                  Duyệt tài chính
-                </button>
-              ) : null}
-            </div>
-          </section>
+                ) : null}
+              </div>
+            </section>
+          ) : (
+            <section
+              style={{
+                padding: "14px 18px",
+                background: "#f8fafc",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <span style={{ fontSize: "16px", color: "#16a34a" }}>✓</span>
+              <div>
+                <strong style={{ color: "#334155", fontSize: "13px" }}>
+                  {isTeamLeaderMode
+                    ? "Phiếu chẩn đoán đã hoàn tất duyệt kỹ thuật của tổ trưởng."
+                    : isForemanMode
+                      ? "Phiếu chẩn đoán đã hoàn tất duyệt của quản đốc."
+                      : "Trạng thái báo giá đã được cập nhật hoặc không cần thao tác thêm."}
+                </strong>
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

@@ -593,8 +593,53 @@ public class PaymentAndAccountingModuleTests
             paymentApp.TransitionStatusAsync(createdPayment.Id, invalidInput, staffActor));
     }
 
+    [Fact]
+    public async Task DashboardV2_DoesNotReportUnimplementedMetricsAsZero()
+    {
+        var service = new AccountingFinanceWorkflowService(new FakeAccountingCrudService());
+        var result = await service.GetDashboardV2Async(null, null, 30, 1);
+        var payload = JsonSerializer.SerializeToElement(result.Payload);
+        Assert.False(payload.GetProperty("detailsAvailable").GetBoolean());
+        var summary = payload.GetProperty("summary");
+        foreach (var field in new[] { "totalOutstandingAr", "totalOutstandingAp", "overdueArCount", "overdueApAmount", "pendingApprovalCount" })
+            Assert.Equal(JsonValueKind.Null, summary.GetProperty(field).ValueKind);
+
+        var file = await service.ExportDashboardV2CsvAsync(null, null, 30, 1);
+        var csv = System.Text.Encoding.UTF8.GetString(file.Content);
+        Assert.Contains("meta,detailsAvailable,false", csv);
+        Assert.Contains("summary,totalOutstandingAr," + Environment.NewLine, csv);
+        Assert.DoesNotContain("summary,totalOutstandingAr,0", csv);
+    }
+
+    [Theory]
+    [InlineData("trial")]
+    [InlineData("payable")]
+    [InlineData("payroll")]
+    public async Task AccountingReports_RequireBranchColumnForScopedView(string report)
+    {
+        var crud = new FakeAccountingCrudService();
+        var service = new AccountingFinanceWorkflowService(crud);
+        Task<AccountingCommandResult> GetReport(long? branchId) => report switch
+        {
+            "trial" => service.GetTrialBalanceAsync(branchId),
+            "payable" => service.GetSupplierPayableSummaryAsync(branchId),
+            _ => service.GetPayrollRunSummaryAsync(branchId)
+        };
+
+        Assert.Equal(503, (await GetReport(5)).StatusCode);
+        Assert.Null(crud.LastQuery);
+        Assert.Equal(200, (await GetReport(null)).StatusCode);
+        Assert.DoesNotContain("branch_id=@branchId", crud.LastQuery);
+        crud.HasBranchColumn = true;
+        Assert.Equal(200, (await GetReport(5)).StatusCode);
+        Assert.Contains("@branchId IS NULL OR branch_id=@branchId", crud.LastQuery);
+        Assert.Equal(200, (await GetReport(null)).StatusCode);
+    }
+
     private sealed class FakeAccountingCrudService : IAccountingCrudService
     {
+        public bool HasBranchColumn { get; set; }
+        public string? LastQuery { get; private set; }
         public readonly Dictionary<long, Dictionary<string, object?>> JournalEntries = new();
         public readonly List<Dictionary<string, object?>> JournalLines = new();
 
@@ -628,6 +673,7 @@ public class PaymentAndAccountingModuleTests
 
         public Task<IReadOnlyList<Dictionary<string, object?>>> QueryAsync(string sql, IEnumerable<QueryParam>? parameters = null)
         {
+            LastQuery = sql;
             var pList = parameters?.ToList() ?? new List<QueryParam>();
             var idParam = pList.FirstOrDefault(p => p.Name == "@id");
             long id = idParam?.Value != null ? Convert.ToInt64(idParam.Value) : 0;
@@ -674,7 +720,8 @@ public class PaymentAndAccountingModuleTests
             return Task.FromResult(0);
         }
 
-        public Task<T?> ScalarAsync<T>(string sql, IEnumerable<QueryParam>? parameters = null) => Task.FromResult<T?>(default);
+        public Task<T?> ScalarAsync<T>(string sql, IEnumerable<QueryParam>? parameters = null) =>
+            Task.FromResult(sql.Contains("COL_LENGTH") ? (T?)(object)(HasBranchColumn ? 1 : 0) : default);
     }
 
     [Fact]

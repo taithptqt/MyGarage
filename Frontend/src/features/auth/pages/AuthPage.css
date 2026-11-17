@@ -10,14 +10,14 @@
   --auth-muted: #63728f;
 
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  padding: 28px;
-  overflow: hidden;
+  gap: 12px;
+  padding: 16px;
+  overflow-x: hidden;
   background:
     radial-gradient(1200px 680px at -12% 14%, rgba(36, 103, 214, 0.3), transparent 62%),
     radial-gradient(920px 560px at 112% 86%, rgba(199, 163, 90, 0.26), transparent 64%),
@@ -47,7 +47,7 @@
     radial-gradient(circle at 1px 1px, rgba(78, 104, 145, 0.16) 1px, transparent 0),
     linear-gradient(140deg, rgba(10, 26, 49, 0.08), transparent 46%);
   background-size: 26px 26px, cover;
-  opacity: 0.34;
+  opacity: 0.14;
   pointer-events: none;
 }
 
@@ -55,20 +55,21 @@
   position: absolute;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .auth-scene::before {
   content: "";
   position: absolute;
-  inset: -6% -2%;
+  inset: -4px;
   background:
-    linear-gradient(112deg, rgba(6, 16, 31, 0.72) 0%, rgba(11, 33, 63, 0.54) 38%, rgba(244, 235, 223, 0.32) 100%),
+    linear-gradient(112deg, rgba(6, 16, 31, 0.44) 0%, rgba(11, 33, 63, 0.28) 45%, rgba(6, 16, 31, 0.28) 100%),
     url("https://garagestore.blob.core.windows.net/uploads/vehicle-condition/20260331082022594_ff6e2fd72b7549808f7de7b3e68575d9.jpg")
       center center / cover no-repeat;
-  filter: saturate(1.15) blur(1.8px);
-  transform: scale(1.04);
-  opacity: 0.64;
+  filter: saturate(1.1) blur(0.8px);
+  transform: none;
+  opacity: 0.84;
 }
 
 .auth-scene::after {
@@ -76,9 +77,9 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 12% 84%, rgba(44, 106, 221, 0.36), transparent 45%),
-    radial-gradient(circle at 86% 12%, rgba(199, 163, 90, 0.32), transparent 36%),
-    linear-gradient(180deg, rgba(4, 13, 26, 0.24) 0%, rgba(4, 13, 26, 0.08) 42%, rgba(4, 13, 26, 0.28) 100%);
+    radial-gradient(circle at 12% 84%, rgba(44, 106, 221, 0.16), transparent 45%),
+    radial-gradient(circle at 86% 12%, rgba(199, 163, 90, 0.14), transparent 36%),
+    linear-gradient(180deg, rgba(4, 13, 26, 0.1) 0%, rgba(4, 13, 26, 0.03) 45%, rgba(4, 13, 26, 0.16) 100%);
 }
 
 .auth-floating-tag {
@@ -119,15 +120,15 @@
 .auth-shell {
   position: relative;
   z-index: 1;
-  width: min(660px, 100%);
-  min-height: 660px;
+  width: min(440px, 100%);
+  min-height: auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(219, 228, 241, 0.92);
-  border-radius: 26px;
+  border-radius: 22px;
   overflow: hidden;
-  box-shadow: 0 26px 54px rgba(15, 24, 45, 0.2);
+  box-shadow: 0 22px 48px rgba(15, 24, 45, 0.22);
   backdrop-filter: blur(6px);
 }
 
@@ -249,26 +250,16 @@
   position: relative;
   z-index: 1;
   background:
-    radial-gradient(circle at 100% 0%, rgba(199, 163, 90, 0.16), transparent 38%),
-    radial-gradient(circle at 0% 100%, rgba(36, 103, 214, 0.14), transparent 42%),
+    radial-gradient(circle at 100% 0%, rgba(199, 163, 90, 0.14), transparent 38%),
+    radial-gradient(circle at 0% 100%, rgba(36, 103, 214, 0.12), transparent 42%),
     linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.96));
   width: 100%;
-  padding: clamp(34px, 4.4vw, 52px);
+  max-width: none;
+  padding: 32px 28px 30px;
   text-align: left;
   display: grid;
   align-content: start;
-  gap: 12px;
-}
-
-.card::before {
-  content: "";
-  position: absolute;
-  top: 18px;
-  left: clamp(28px, 3.8vw, 42px);
-  width: 110px;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(36, 103, 214, 0.9), rgba(199, 163, 90, 0.9));
+  gap: 11px;
 }
 
 .card::after {
@@ -310,30 +301,31 @@
 }
 
 .card h1 {
-  margin: 4px 0 4px;
+  margin: 2px 0 0;
   color: var(--auth-ink);
-  font-size: clamp(34px, 4.4vw, 44px);
+  font-size: clamp(28px, 3vw, 34px);
+  line-height: 1.1;
   font-family: "Cormorant Garamond", serif;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
 .subtitle {
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   max-width: 100%;
   color: #4f6180;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid #d7e2f2;
-  border-radius: 18px;
-  padding: 18px;
+  border-radius: 16px;
+  padding: 16px;
 }
 
 .form label {
@@ -346,13 +338,13 @@
 .form input {
   width: 100%;
   box-sizing: border-box;
-  min-height: 52px;
-  padding: 0 14px;
-  border-radius: 12px;
+  min-height: 45px;
+  padding: 0 12px;
+  border-radius: 10px;
   border: 1px solid #d9e3f3;
   background: #f4f8ff;
   color: #17203a;
-  font-size: 15px;
+  font-size: 14px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
@@ -368,19 +360,19 @@
 }
 
 .form button[type="submit"] {
-  margin-top: 10px;
+  margin-top: 8px;
   width: 100%;
-  min-height: 52px;
+  min-height: 46px;
   border: none;
   border-radius: 999px;
   background: linear-gradient(90deg, #225bc4 0%, #2f78ee 100%);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.03em;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-  box-shadow: 0 12px 26px rgba(35, 92, 195, 0.26);
+  box-shadow: 0 10px 22px rgba(35, 92, 195, 0.24);
 }
 
 .form button[type="submit"]:hover:not(:disabled) {
@@ -417,7 +409,7 @@
 }
 
 .footer-switcher {
-  margin-top: 12px;
+  margin-top: 4px;
   color: #52607a;
   font-size: 13px;
   text-align: center;
@@ -437,7 +429,7 @@
 .divider {
   display: flex;
   align-items: center;
-  margin: 10px 0 8px;
+  margin: 6px 0;
   color: #93a0b8;
   font-size: 12px;
 }
@@ -450,17 +442,23 @@
   background: #dde6f6;
 }
 
+.card .divider span,
+.page .divider span,
 .divider span {
+  background: transparent !important;
   padding: 0 12px;
 }
 
 .google-login-btn-container {
   display: flex;
   justify-content: center;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid #d7e2f2;
-  background: rgba(255, 255, 255, 0.88);
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .google-button {
@@ -564,11 +562,11 @@
 
 @media (max-width: 1080px) {
   .page {
-    padding: 20px;
+    padding: 16px;
   }
 
   .auth-scene::before {
-    opacity: 0.56;
+    opacity: 0.8;
   }
 
   .auth-floating-tag {
@@ -584,7 +582,7 @@
   }
 
   .auth-shell {
-    max-width: 660px;
+    max-width: 440px;
   }
 }
 
@@ -594,7 +592,7 @@
   }
 
   .auth-scene::before {
-    opacity: 0.48;
+    opacity: 0.76;
   }
 
   .auth-floating-tag {
@@ -636,11 +634,7 @@
   }
 
   .card {
-    padding: 28px 20px 22px;
-  }
-
-  .card::before {
-    left: 16px;
+    padding: 26px 20px 24px;
   }
 
   .mygarage-wordmark {
@@ -648,11 +642,11 @@
   }
 
   .card h1 {
-    font-size: 34px;
+    font-size: 28px;
   }
 
   .subtitle {
-    margin-bottom: 18px;
+    margin-bottom: 6px;
   }
 
   .api-hint {

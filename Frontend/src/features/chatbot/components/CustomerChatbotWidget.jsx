@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Bot, Expand, Minimize2, Minus, SendHorizontal } from "lucide-react";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
@@ -150,8 +151,11 @@ function formatHoldCountdown(expiresAt, nowTick) {
 
 export default function CustomerChatbotWidget() {
   const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
+  const isStaffRoute = location.pathname.startsWith("/admin") || location.pathname.startsWith("/workshop");
+  const isPublicQuotationRoute = location.pathname.startsWith("/quote-access");
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
-  const isCustomer = isAuthenticated && roleCode === "CUSTOMER";
+  const isCustomer = !isStaffRoute && !isPublicQuotationRoute;
   const userId = String(user?.id ?? user?.Id ?? user?.userId ?? user?.UserId ?? "guest");
   const messageListRef = useRef(null);
 
@@ -166,6 +170,7 @@ export default function CustomerChatbotWidget() {
   const [messages, setMessages] = useState([]);
   const [composeText, setComposeText] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  const isSendingRef = useRef(false);
 
   const canSend = useMemo(
     () => !initializing && !sending && !resumeCandidate && composeText.trim().length > 0,
@@ -346,8 +351,9 @@ export default function CustomerChatbotWidget() {
   const sendMessageContent = useCallback(
     async (content) => {
       const trimmed = String(content || "").trim();
-      if (!trimmed) return;
+      if (!trimmed || isSendingRef.current) return;
 
+      isSendingRef.current = true;
       setSending(true);
       setError("");
       setComposeText("");
@@ -394,12 +400,19 @@ export default function CustomerChatbotWidget() {
           }
         } else {
           setError(errorMessage);
-          setMessages((prev) => [
-            ...prev,
-            createLocalMessage("ASSISTANT", "Có lỗi xảy ra. Vui lòng thử lại sau."),
-          ]);
+          const isSpamOrDuplicate =
+            errorMessage.includes("trung lap") ||
+            errorMessage.includes("dang duoc xu ly") ||
+            errorMessage.includes("Vui long cho");
+          if (!isSpamOrDuplicate) {
+            setMessages((prev) => [
+              ...prev,
+              createLocalMessage("ASSISTANT", "Có lỗi xảy ra. Vui lòng thử lại sau."),
+            ]);
+          }
         }
       } finally {
+        isSendingRef.current = false;
         setSending(false);
       }
     },
@@ -407,12 +420,13 @@ export default function CustomerChatbotWidget() {
   );
 
   function handleSendMessage(event) {
-    event.preventDefault();
+    event?.preventDefault?.();
+    if (sending || initializing || isSendingRef.current) return;
     void sendMessageContent(composeText);
   }
 
   function handleQuickReplyClick(value) {
-    if (sending || initializing) return;
+    if (sending || initializing || isSendingRef.current) return;
     void sendMessageContent(value);
   }
 

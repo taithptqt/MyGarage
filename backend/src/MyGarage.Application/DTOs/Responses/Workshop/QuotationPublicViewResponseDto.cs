@@ -33,6 +33,10 @@ public sealed class QuotationPublicDetailResponseDto
     public string ItemName { get; set; } = null!;
     public decimal Quantity { get; set; }
     public decimal UnitPriceAtTime { get; set; }
+    public decimal SubTotal { get; set; }
+    public decimal DiscountValue { get; set; }
+    public decimal TaxRate { get; set; }
+    public decimal TaxAmount { get; set; }
     public decimal FinalAmount { get; set; }
     public bool IsMandatory { get; set; }
     public string Status { get; set; } = "ACTIVE";

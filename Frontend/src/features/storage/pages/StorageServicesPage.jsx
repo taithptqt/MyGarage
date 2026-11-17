@@ -41,7 +41,7 @@ const standards = [
 const StorageServicesPage = () => {
   return (
     <main className="storage-page">
-      <Header />
+      <Header overlay />
 
       <header className="storage-hero">
         <div className="storage-hero__overlay" />
@@ -51,12 +51,12 @@ const StorageServicesPage = () => {
           src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZO_wUvoCfqzL0eHg496AZJnIrDUKkMT7y9nckwjd4pj_C-RSTXJcS9PKEJBgsi7XOzp1yerfZ3GdRii-Y5jGeqVweeDkwZiHSxlOFItN647rHd5MtUlSkPzKIxnGtpMsjCB9lITnPASGXoS2cbCOrTFibybp-qxxrC4r_YppSb-WKWn2y-acDon6KXBnaf7RiIswVJi9U_arnQWf4g_cTsyn6ZuZpNFC4Kiy5w8j_gVjsnP-6eVJsEem7yyyhLXmlGVcTEgVHuMgV"
         />
         <div className="storage-hero__content">
-          <h1 className="storage-hero__title">PRIVATE AUTOMOTIVE STORAGE</h1>
-          <p className="storage-hero__subtitle">WHERE YOUR COLLECTION IS TREATED AS TREASURE</p>
+          <h1 className="storage-hero__title mg-scene-fade-up mg-scene-delay-1">PRIVATE AUTOMOTIVE STORAGE</h1>
+          <p className="storage-hero__subtitle mg-scene-fade-up mg-scene-delay-2">WHERE YOUR COLLECTION IS TREATED AS TREASURE</p>
         </div>
       </header>
 
-      <section className="storage-intro container-xl">
+      <section className="storage-intro container-xl mg-scene-fade-up mg-scene-delay-3">
         <div className="storage-intro__title-wrap">
           <h2 className="storage-intro__title">A HOME WORTHY OF YOUR COLLECTION</h2>
         </div>

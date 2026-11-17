@@ -28,7 +28,7 @@ public sealed class QuotationCustomerPortalService : IQuotationCustomerPortalSer
         IQuotationWorkflowStore store,
         IEmailService emailService,
         IQuotationRealtimeNotifier realtimeNotifier)
-        : this(store, new QuotationPortalNotificationService(store, emailService, realtimeNotifier))
+        : this(store, new QuotationPortalNotificationService(store, store, store, store, emailService, realtimeNotifier))
     {
     }
 
@@ -268,6 +268,9 @@ public sealed class QuotationCustomerPortalService : IQuotationCustomerPortalSer
 
     public async Task MarkPublicDecisionLinkUsedAsync(QuotationAccessLink accessLink, long quotationId, long? customerId, bool approved)
     {
+        // Applying a decision may clear the change tracker; reload before marking the link.
+        accessLink = await _store.GetAccessLinkByTokenHashForUpdateAsync(accessLink.TokenHash)
+            ?? throw new InvalidOperationException("Không tìm thấy liên kết báo giá.");
         var now = VietnamTime.Now;
         accessLink.DecidedAt = now;
         accessLink.DecisionCode = approved ? "APPROVED" : "REJECTED";

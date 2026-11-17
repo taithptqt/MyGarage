@@ -1,37 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Badge,
   Box,
-  Button,
-  Divider,
   Flex,
-  FormControl,
-  FormLabel,
-  Input,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Select,
-  SimpleGrid,
-  Textarea,
   Spinner,
-  Table,
-  Tbody,
-  Td,
   Text,
-  Th,
-  Thead,
-  Tr,
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
-import MiniStatistics from "components/card/MiniStatistics";
-import TablePagination from "@shared/components/TablePagination";
 import { getAllStaff } from "../../../../../features/admin/api/staffApi";
 import { getInitialSalaryRequests } from "../../../../../features/admin/api/salaryAdminApi";
 import { useBranch } from "../../../../../context/BranchContext";
@@ -60,264 +36,29 @@ import {
   sumBy,
   toNumber,
 } from "../utils/accountingHelpers";
-
-function pick(item, ...keys) {
-  for (const key of keys) {
-    if (item && item[key] !== undefined && item[key] !== null) return item[key];
-  }
-  return null;
-}
-
-function toId(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
-}
-
-function derivePayrollAmounts(item) {
-  const readAmount = (...keys) => {
-    const raw = pick(item, ...keys);
-    return {
-      present: raw !== undefined && raw !== null,
-      value: raw !== undefined && raw !== null ? toNumber(raw) : 0,
-    };
-  };
-
-  const explicitGrossPay = pick(item, "grossPay", "GrossPay");
-  const explicitTotalDeduction = pick(item, "totalDeduction", "TotalDeduction");
-  const explicitNetPay = pick(item, "netPay", "NetPay");
-
-  const baseSalary = readAmount("baseSalary", "BaseSalary");
-  const overtimeAmount = readAmount("overtimeAmount", "OvertimeAmount");
-  const allowanceAmount = readAmount("allowanceAmount", "AllowanceAmount");
-  const commissionAmount = readAmount("commissionAmount", "CommissionAmount");
-  const bonusAmount = readAmount("bonusAmount", "BonusAmount");
-
-  const attendanceDeduction = readAmount("attendanceDeduction", "AttendanceDeduction");
-  const penaltyAmount = readAmount("penaltyAmount", "PenaltyAmount");
-  const advanceDeduction = readAmount("advanceDeduction", "AdvanceDeduction");
-  const loanDeduction = readAmount("loanDeduction", "LoanDeduction");
-  const insuranceEmployeeAmount = readAmount("insuranceEmployeeAmount", "InsuranceEmployeeAmount");
-  const pitAmount = readAmount("pitAmount", "PitAmount");
-  const otherDeduction = readAmount("otherDeduction", "OtherDeduction");
-
-  const hasIncomeComponents = [baseSalary, overtimeAmount, allowanceAmount, commissionAmount, bonusAmount].some(
-    (part) => part.present,
-  );
-  const hasDeductionComponents = [
-    attendanceDeduction,
-    penaltyAmount,
-    advanceDeduction,
-    loanDeduction,
-    insuranceEmployeeAmount,
-    pitAmount,
-    otherDeduction,
-  ].some((part) => part.present);
-
-  const derivedGrossPay = hasIncomeComponents
-    ? baseSalary.value + overtimeAmount.value + allowanceAmount.value + commissionAmount.value + bonusAmount.value
-    : null;
-  const derivedTotalDeduction = hasDeductionComponents
-    ? attendanceDeduction.value +
-      penaltyAmount.value +
-      advanceDeduction.value +
-      loanDeduction.value +
-      insuranceEmployeeAmount.value +
-      pitAmount.value +
-      otherDeduction.value
-    : null;
-
-  const hasOfficialGrossPay = explicitGrossPay !== undefined && explicitGrossPay !== null;
-  const hasOfficialTotalDeduction = explicitTotalDeduction !== undefined && explicitTotalDeduction !== null;
-  const hasOfficialNetPay = explicitNetPay !== undefined && explicitNetPay !== null;
-
-  const grossPay = hasOfficialGrossPay ? toNumber(explicitGrossPay) : derivedGrossPay;
-  const totalDeduction = hasOfficialTotalDeduction ? toNumber(explicitTotalDeduction) : derivedTotalDeduction;
-  const netPay = hasOfficialNetPay
-    ? toNumber(explicitNetPay)
-    : grossPay != null && totalDeduction != null
-    ? grossPay - totalDeduction
-    : null;
-
-  const amountsSource =
-    hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay
-      ? "SERVER"
-      : grossPay != null && totalDeduction != null && netPay != null
-      ? "DERIVED"
-      : "INCOMPLETE";
-
-  return {
-    grossPay,
-    totalDeduction,
-    netPay,
-    hasOfficialGrossPay,
-    hasOfficialTotalDeduction,
-    hasOfficialNetPay,
-    amountsSource,
-  };
-}
-
-function toDateInputValue(value) {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseDateValue(value) {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-}
-
-function toFriendlyError(error, fallback) {
-  const raw = String(error?.message || "").trim();
-  const lower = raw.toLowerCase();
-
-  if (lower.includes("chk_payroll_periods_dates")) {
-    return "Ngày kỳ lương không hợp lệ. Quy tắc: Từ ngày <= Đến ngày và Ngày trả lương phải bằng hoặc sau ngày kết thúc kỳ.";
-  }
-
-  if (lower.includes("microsoft.data.sqlclient.sqlexception") || lower.includes(" at microsoft.")) {
-    return fallback;
-  }
-
-  if (raw.length > 280) {
-    return fallback;
-  }
-
-  return raw || fallback;
-}
-
-function createDefaultPeriodForm() {
-  const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const payroll = new Date(last);
-  payroll.setDate(payroll.getDate() + 1);
-  return {
-    periodCode: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-    startDate: toDateInputValue(first),
-    endDate: toDateInputValue(last),
-    payrollDate: toDateInputValue(payroll),
-    status: "OPEN",
-  };
-}
-
-function statusColor(status) {
-  const code = String(status || "").toUpperCase();
-  if (code === "PAID") return "green";
-  if (code === "APPROVED") return "blue";
-  if (code === "CANCELED") return "red";
-  if (code === "OPEN") return "green";
-  if (code === "CLOSED") return "gray";
-  if (code === "LOCKED") return "purple";
-  return "orange";
-}
-
-function statusLabel(status) {
-  const code = String(status || "").toUpperCase();
-  if (code === "DRAFT") return "Nháp";
-  if (code === "APPROVED") return "Đã duyệt";
-  if (code === "PAID") return "Đã chi";
-  if (code === "CANCELED") return "Đã huỷ";
-  if (code === "OPEN") return "Đang mở";
-  if (code === "LOCKED") return "Tạm khóa";
-  if (code === "CLOSED") return "Đã đóng";
-  if (!code) return "--";
-  return code;
-}
-
-function resolveEffectivePeriodStatus(rawStatus, runStatuses) {
-  const normalizedRawStatus = String(rawStatus || "").toUpperCase();
-  if (normalizedRawStatus === "LOCKED" || normalizedRawStatus === "CLOSED") {
-    return normalizedRawStatus;
-  }
-
-  const normalizedRunStatuses = (runStatuses || [])
-    .map((status) => String(status || "").toUpperCase())
-    .filter(Boolean);
-  if (!normalizedRunStatuses.length) return normalizedRawStatus || "OPEN";
-
-  if (normalizedRunStatuses.some((status) => status === "DRAFT" || status === "CALCULATED")) {
-    return "OPEN";
-  }
-
-  const nonCanceledStatuses = normalizedRunStatuses.filter((status) => status !== "CANCELED");
-  if (!nonCanceledStatuses.length) return normalizedRawStatus || "OPEN";
-
-  if (nonCanceledStatuses.every((status) => status === "PAID" || status === "LOCKED")) {
-    return "PAID";
-  }
-
-  if (nonCanceledStatuses.some((status) => status === "APPROVED")) {
-    return "APPROVED";
-  }
-
-  if (nonCanceledStatuses.some((status) => status === "PAID" || status === "LOCKED")) {
-    return "PAID";
-  }
-
-  return normalizedRawStatus || "OPEN";
-}
-
-function resolveEffectivePayrollItemStatus(rawItemStatus, runStatus) {
-  const normalizedItemStatus = String(rawItemStatus || "").toUpperCase();
-  const normalizedRunStatus = String(runStatus || "").toUpperCase();
-
-  if (normalizedRunStatus === "PAID" || normalizedRunStatus === "LOCKED") {
-    return "PAID";
-  }
-
-  if (
-    normalizedRunStatus === "APPROVED" &&
-    (!normalizedItemStatus || normalizedItemStatus === "DRAFT" || normalizedItemStatus === "CALCULATED")
-  ) {
-    return "APPROVED";
-  }
-
-  if (normalizedItemStatus) return normalizedItemStatus;
-  if (normalizedRunStatus === "APPROVED") return "APPROVED";
-  if (normalizedRunStatus === "PAID" || normalizedRunStatus === "LOCKED") return "PAID";
-  return "DRAFT";
-}
-
-function safeTime(value) {
-  const ts = Date.parse(String(value || ""));
-  return Number.isNaN(ts) ? 0 : ts;
-}
-
-function normalizePeriodCode(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "")
-    .trim()
-    .toUpperCase();
-}
-
-const TENURE_BRACKETS = [
-  { minYears: 0, label: "Dưới 5 năm" },
-  { minYears: 5, label: "5 đến dưới 10 năm" },
-  { minYears: 10, label: "10 đến dưới 15 năm" },
-  { minYears: 15, label: "15 đến dưới 20 năm" },
-  { minYears: 20, label: "20 đến dưới 25 năm" },
-  { minYears: 25, label: "Từ 25 năm trở lên" },
-];
-
-const PAYROLL_EXCLUDED_STAFF_STATUSES = new Set(["TERMINATED", "SUSPENDED", "INACTIVE"]);
-
-function tenureRangeLabel(yearsOfService) {
-  const years = toNumber(yearsOfService);
-  if (years < 0) return "--";
-  let matched = TENURE_BRACKETS[0];
-  TENURE_BRACKETS.forEach((bracket) => {
-    if (years >= bracket.minYears) matched = bracket;
-  });
-  return matched?.label || "--";
-}
+import {
+  PAYROLL_EXCLUDED_STAFF_STATUSES,
+  createDefaultPeriodForm,
+  derivePayrollAmounts,
+  normalizePeriodCode,
+  parseDateValue,
+  pick,
+  resolveEffectivePayrollItemStatus,
+  resolveEffectivePeriodStatus,
+  safeTime,
+  statusLabel,
+  tenureRangeLabel,
+  toDateInputValue,
+  toFriendlyError,
+  toId,
+} from "./payrollPageHelpers";
+import {
+  InitialSalaryDecisionsCard,
+  MissingBaseSalaryCard,
+  PayrollSummaryAndPeriodControls,
+} from "./PayrollTopPanels";
+import { PayrollItemsCard, PayrollPeriodsAndRunsGrid } from "./PayrollTablesSection";
+import { InitialSalaryRequestModal, PayrollDetailModal } from "./PayrollModals";
 
 export default function PayrollPage() {
   const { selectedBranchId, isBranchLocked } = useBranch();
@@ -1499,714 +1240,109 @@ export default function PayrollPage() {
         </Card>
       ) : null}
 
-      <SimpleGrid columns={{ base: 1, md: 2, xl: 5 }} gap='20px' mb='20px'>
-        <MiniStatistics
-          name='Kỳ đang mở'
-          value={String(pick(openPeriod, "periodCode", "PeriodCode") || "Chua có")}
-        />
-        <MiniStatistics name='Kỳ tính lương' value={String(runRows.length)} />
-        <MiniStatistics name='Dòng lương' value={String(itemRows.length)} />
-        <MiniStatistics name='Tổng thực nhận (server)' value={formatCurrency(officialPayrollTotal)} />
-        <MiniStatistics name='Dòng thiếu payroll facts' value={String(missingPayrollFactsCount)} />
-      </SimpleGrid>
+      <PayrollSummaryAndPeriodControls
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        openPeriod={openPeriod}
+        runRows={runRows}
+        itemRows={itemRows}
+        officialPayrollTotal={officialPayrollTotal}
+        missingPayrollFactsCount={missingPayrollFactsCount}
+        periods={periods}
+        runs={runs}
+        items={items}
+        payslips={payslips}
+        staffs={staffs}
+        periodForm={periodForm}
+        setPeriodForm={setPeriodForm}
+        updatePeriodEndDate={updatePeriodEndDate}
+        handleCreatePeriod={handleCreatePeriod}
+        savingPeriod={savingPeriod}
+        autoRunLabel={autoRunLabel}
+        targetBranchId={targetBranchId}
+        selectedPeriodIdForBatch={selectedPeriodIdForBatch}
+        selectedPeriodStatusForBatch={selectedPeriodStatusForBatch}
+        handleCalculateAllStaffPayroll={handleCalculateAllStaffPayroll}
+        calculatingBatchPayroll={calculatingBatchPayroll}
+      />
 
-      <Card p='16px' mb='20px'>
-        <Flex wrap='wrap' gap='10px' align='center'>
-          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Chưa có"}</Badge>
-          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Chưa có"}</Badge>
-          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chưa có"}</Badge>
-          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chưa có"}</Badge>
-          <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
-        </Flex>
-      </Card>
+      <MissingBaseSalaryCard
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        missingBaseSalaryRows={missingBaseSalaryRows}
+        loading={loading}
+        loadingMissingBaseSalary={loadingMissingBaseSalary}
+        handleReloadMissingBaseSalary={handleReloadMissingBaseSalary}
+        handleOpenInitialSalaryRequest={handleOpenInitialSalaryRequest}
+      />
 
-      <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
-        <Card p='16px'>
-          <Text color={textColor} fontWeight='700' mb='10px'>Mở kỳ lương</Text>
-          <SimpleGrid columns={1} gap='10px'>
-            <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Mã kỳ lương</FormLabel>
-              <Input
-                value={periodForm.periodCode}
-                onChange={(e) => setPeriodForm((prev) => ({ ...prev, periodCode: e.target.value }))}
-                placeholder='VD: 2026-03'
-              />
-            </FormControl>
-            <SimpleGrid columns={2} gap='10px'>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Từ ngày</FormLabel>
-                <Input
-                  type='date'
-                  value={periodForm.startDate}
-                  onChange={(e) => setPeriodForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Đến ngày</FormLabel>
-                <Input
-                  type='date'
-                  value={periodForm.endDate}
-                  onChange={(e) => updatePeriodEndDate(e.target.value)}
-                />
-              </FormControl>
-            </SimpleGrid>
-            <SimpleGrid columns={2} gap='10px'>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Ngày trả lương</FormLabel>
-                <Input
-                  type='date'
-                  value={periodForm.payrollDate}
-                  onChange={(e) => setPeriodForm((prev) => ({ ...prev, payrollDate: e.target.value }))}
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Trạng thái</FormLabel>
-                <Select
-                  value={periodForm.status}
-                  onChange={(e) => setPeriodForm((prev) => ({ ...prev, status: e.target.value }))}>
-                  <option value='OPEN'>Đang mở</option>
-                </Select>
-              </FormControl>
-            </SimpleGrid>
-            <Text color={textColorSecondary} fontSize='xs'>
-              Luu ý: Ngày trả lương phải bằng hoặc sau ngày kết thúc kỳ.
-            </Text>
-            <Button size='sm' colorScheme='blue' onClick={handleCreatePeriod} isLoading={savingPeriod}>
-              Tạo kỳ lương
-            </Button>
-          </SimpleGrid>
-        </Card>
+      <InitialSalaryDecisionsCard
+        title='Kết quả duyệt lương khởi tạo'
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        initialSalaryDecisionSummary={initialSalaryDecisionSummary}
+        pollInitialSalaryRequestUpdates={pollInitialSalaryRequestUpdates}
+        initialSalaryDecisionRows={initialSalaryDecisionRows}
+        pagedDecisionRows={pagedDecisionRows}
+        decisionPage={decisionPage}
+        decisionPageSize={decisionPageSize}
+        setDecisionPage={setDecisionPage}
+        setDecisionPageSize={setDecisionPageSize}
+      />
 
-        <Card p='16px'>
-          <Text color={textColor} fontWeight='700' mb='10px'>Tính lương toàn bộ nhân sự</Text>
-          <SimpleGrid columns={1} gap='10px'>
-            <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Kỳ lương (tự động)</FormLabel>
-              <Input value={autoRunLabel} isReadOnly />
-            </FormControl>
-            <Text color={textColorSecondary} fontSize='sm'>
-              Hệ thống sẽ tự lấy dữ liệu lương và chỉ tính cho nhân sự thuộc chi nhánh đang chọn.
-            </Text>
-            {!targetBranchId ? (
-              <Text color='orange.400' fontSize='xs'>
-                Cần chọn chi nhánh trước khi tính lương.
-              </Text>
-            ) : null}
-            {!selectedPeriodIdForBatch ? (
-              <Text color='orange.400' fontSize='xs'>
-                Cần có kỳ lương đang mở trước khi tính lương hàng loạt.
-              </Text>
-            ) : null}
-            {selectedPeriodIdForBatch && selectedPeriodStatusForBatch !== "OPEN" ? (
-              <Text color='orange.400' fontSize='xs'>
-                Kỳ đã chọn chưa ở trạng thái ĐANG MỞ.
-              </Text>
-            ) : null}
-            <Button
-              size='sm'
-              colorScheme='teal'
-              variant='outline'
-              onClick={handleCalculateAllStaffPayroll}
-              isLoading={calculatingBatchPayroll}
-              isDisabled={!targetBranchId || !selectedPeriodIdForBatch || selectedPeriodStatusForBatch !== "OPEN"}>
-              Tính lương toàn bộ nhân sự
-            </Button>
-          </SimpleGrid>
-        </Card>
-      </SimpleGrid>
+      <PayrollPeriodsAndRunsGrid
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        periodRows={periodRows}
+        runSummary={runSummary}
+        runRows={runRows}
+        busyRunId={busyRunId}
+        handleApprove={handleApprove}
+        handleMarkPaid={handleMarkPaid}
+        handleCancelRun={handleCancelRun}
+      />
 
-      <Card p='20px' mb='20px'>
-        <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
-          <Text color={textColor} fontWeight='700'>
-            Nhân sự chưa có lương cơ bản
-          </Text>
-          <Flex align='center' gap='8px'>
-            <Badge colorScheme={missingBaseSalaryRows.length ? "orange" : "green"}>
-              Cần duyệt: {missingBaseSalaryRows.length}
-            </Badge>
-            <Button
-              size='xs'
-              variant='outline'
-              onClick={handleReloadMissingBaseSalary}
-              isLoading={loading || loadingMissingBaseSalary}>
-              Tải lại
-            </Button>
-          </Flex>
-        </Flex>
+      <PayrollItemsCard
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        runFilter={runFilter}
+        setRunFilter={setRunFilter}
+        periodFilterOptions={periodFilterOptions}
+        search={search}
+        setSearch={setSearch}
+        handleIssueAllPayslips={handleIssueAllPayslips}
+        issuingAllPayslips={issuingAllPayslips}
+        issuablePayslipCount={issuablePayslipCount}
+        filteredItems={filteredItems}
+        pagedItems={pagedItems}
+        handleOpenPayrollDetail={handleOpenPayrollDetail}
+        busyItemId={busyItemId}
+        handleIssuePayslip={handleIssuePayslip}
+        itemPage={itemPage}
+        itemPageSize={itemPageSize}
+        setItemPage={setItemPage}
+        setItemPageSize={setItemPageSize}
+      />
 
-        {loadingMissingBaseSalary ? (
-          <Flex align='center' gap='8px'>
-            <Spinner size='sm' />
-            <Text color={textColorSecondary} fontSize='sm'>
-              Đang quét lương cơ bản...
-            </Text>
-          </Flex>
-        ) : missingBaseSalaryRows.length ? (
-          <Box maxH='320px' overflowY='auto' overflowX='auto'>
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Nhân sự</Th>
-                  <Th>Trạng thái</Th>
-                  <Th>Ngày vào</Th>
-                  <Th isNumeric>Lương cơ bản</Th>
-                  <Th textAlign='right'>Xử lý</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {missingBaseSalaryRows.map((row) => (
-                  <Tr key={row.staffId}>
-                    <Td color={textColor} fontWeight='600'>
-                      {row.staffName}
-                      {row.checkError ? (
-                        <Text color='orange.400' fontSize='xs'>
-                          {row.checkError}
-                        </Text>
-                      ) : null}
-                    </Td>
-                    <Td>
-                      <Badge colorScheme='gray'>{row.status || "--"}</Badge>
-                    </Td>
-                    <Td color={textColorSecondary}>{formatDate(row.hireDate)}</Td>
-                    <Td isNumeric color={textColor}>
-                      {row.baseSalary > 0 ? formatCurrency(row.baseSalary) : "--"}
-                    </Td>
-                    <Td textAlign='right'>
-                      <Button
-                        size='xs'
-                        colorScheme='orange'
-                        variant='outline'
-                        onClick={() => handleOpenInitialSalaryRequest(row)}>
-                        Gửi duyệt lương
-                      </Button>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </Box>
-        ) : (
-          <Text color={textColorSecondary}>Không có nhân sự nào thiếu lương cơ bản.</Text>
-        )}
-      </Card>
+      <PayrollDetailModal
+        textColor={textColor}
+        textColorSecondary={textColorSecondary}
+        selectedPayrollItem={selectedPayrollItem}
+        handleClosePayrollDetail={handleClosePayrollDetail}
+        selectedPayrollBreakdown={selectedPayrollBreakdown}
+        loadingPayrollDetail={loadingPayrollDetail}
+        payrollDetailError={payrollDetailError}
+      />
 
-      <Card p='20px' mb='20px'>
-        <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
-          <Text color={textColor} fontWeight='700'>
-            Kết quả duyệt lương khởi tạo
-          </Text>
-          <Flex align='center' gap='8px'>
-            <Badge colorScheme='green'>Được duyệt: {initialSalaryDecisionSummary.approved}</Badge>
-            <Badge colorScheme='red'>Bị từ chối: {initialSalaryDecisionSummary.rejected}</Badge>
-            <Button size='xs' variant='outline' onClick={pollInitialSalaryRequestUpdates}>
-              Tải lại
-            </Button>
-          </Flex>
-        </Flex>
-
-        {initialSalaryDecisionRows.length ? (
-          <Box overflowX='auto'>
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Nhân sự</Th>
-                  <Th>Kết quả</Th>
-                  <Th>Admin xử lý</Th>
-                  <Th>Thời gian</Th>
-                  <Th>Ghi chú</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {pagedDecisionRows.map((row) => (
-                  <Tr key={row.requestId}>
-                    <Td color={textColor} fontWeight='600'>
-                      {row.staffName}
-                    </Td>
-                    <Td>
-                      <Badge colorScheme={row.status === "APPROVED" ? "green" : "red"}>
-                        {row.status === "APPROVED" ? "Đã duyệt" : "Từ chối"}
-                      </Badge>
-                    </Td>
-                    <Td color={textColorSecondary}>{row.approverName || "--"}</Td>
-                    <Td color={textColorSecondary}>{formatDateTime(row.updatedAt)}</Td>
-                    <Td color={textColorSecondary}>
-                      {row.status === "REJECTED" ? row.rejectReason || "--" : "--"}
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-            <TablePagination
-              totalItems={initialSalaryDecisionRows.length}
-              currentPage={decisionPage}
-              pageSize={decisionPageSize}
-              onPageChange={setDecisionPage}
-              onPageSizeChange={(newSize) => {
-                setDecisionPageSize(newSize);
-                setDecisionPage(1);
-              }}
-              pageSizeOptions={[10, 20, 50, 100]}
-            />
-          </Box>
-        ) : (
-          <Text color={textColorSecondary}>Chưa có kết quả duyệt/từ chối.</Text>
-        )}
-      </Card>
-
-      <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
-        <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='10px'>Danh sách kỳ lương</Text>
-          {periodRows.length ? (
-            <Box maxH='420px' overflowY='auto' overflowX='auto'>
-              <Table size='sm'>
-                <Thead>
-                  <Tr>
-                    <Th>Mã kỳ</Th>
-                    <Th>Từ ngày</Th>
-                    <Th>Đến ngày</Th>
-                    <Th>Ngày trả lương</Th>
-                    <Th>Trạng thái</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {periodRows.map((period, idx) => {
-                    const status = String(period.status || "").toUpperCase();
-                    return (
-                      <Tr key={period.id || idx}>
-                        <Td color={textColor} fontWeight='600'>
-                          {period.periodCode || `PERIOD-${idx + 1}`}
-                        </Td>
-                        <Td color={textColorSecondary}>{formatDate(period.startDate)}</Td>
-                        <Td color={textColorSecondary}>{formatDate(period.endDate)}</Td>
-                        <Td color={textColorSecondary}>{formatDate(period.payrollDate)}</Td>
-                        <Td>
-                          <Badge colorScheme={statusColor(status)}>{statusLabel(status)}</Badge>
-                        </Td>
-                      </Tr>
-                    );
-                  })}
-                </Tbody>
-              </Table>
-            </Box>
-          ) : (
-            <Text color={textColorSecondary}>Chưa có dữ liệu kỳ lương.</Text>
-          )}
-        </Card>
-
-        <Card p='20px'>
-          <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
-            <Text color={textColor} fontWeight='700'>Danh sách kỳ lương</Text>
-            <Flex gap='6px'>
-              <Badge colorScheme='orange'>Nháp: {runSummary.draft}</Badge>
-              <Badge colorScheme='blue'>Đã duyệt: {runSummary.approved}</Badge>
-              <Badge colorScheme='green'>Đã chi: {runSummary.paid}</Badge>
-            </Flex>
-          </Flex>
-          {runRows.length ? (
-            <Box maxH='420px' overflowY='auto' overflowX='auto'>
-              <Table size='sm'>
-                <Thead>
-                  <Tr>
-                    <Th>Mã kỳ</Th>
-                    <Th>Chi nhánh</Th>
-                    <Th>Ngày tạo</Th>
-                    <Th>Status</Th>
-                    <Th textAlign='right'>Thao tác</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {runRows.map((run) => (
-                    <Tr key={run.id}>
-                      <Td color={textColor} fontWeight='600'>{run.periodCode}</Td>
-                      <Td color={textColorSecondary}>{run.branchName}</Td>
-                      <Td color={textColorSecondary}>{formatDateTime(run.createdAt)}</Td>
-                      <Td>
-                        <Badge colorScheme={statusColor(run.status)}>
-                          {statusLabel(run.status)}
-                        </Badge>
-                      </Td>
-                      <Td textAlign='right'>
-                        <Flex justify='flex-end' gap='8px'>
-                          <Button
-                            size='xs'
-                            colorScheme='blue'
-                            variant='outline'
-                            isDisabled={run.status === "APPROVED" || run.status === "PAID"}
-                            isLoading={busyRunId === run.id}
-                            onClick={() => handleApprove(run.id)}>
-                            Duyệt
-                          </Button>
-                          <Button
-                            size='xs'
-                            colorScheme='green'
-                            variant='solid'
-                            isDisabled={run.status !== "APPROVED"}
-                            isLoading={busyRunId === run.id}
-                            onClick={() => handleMarkPaid(run.id)}
-                            _disabled={
-                              run.status === "PAID"
-                                ? {
-                                  opacity: 1,
-                                  bg: "green.400",
-                                  color: "white",
-                                  cursor: "not-allowed",
-                                  pointerEvents: "none",
-                                }
-                                : undefined
-                            }>
-                            {run.status === "PAID" ? "Đã chi" : "Xác nhận đã chi"}
-                          </Button>
-                          <Button
-                            size='xs'
-                            colorScheme='red'
-                            variant='outline'
-                            isDisabled={!(run.status === "DRAFT" || run.status === "CALCULATED")}
-                            isLoading={busyRunId === run.id}
-                            onClick={() => handleCancelRun(run.id)}>
-                            Huỷ mã kỳ
-                          </Button>
-                        </Flex>
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            </Box>
-          ) : (
-            <Text color={textColorSecondary}>Chưa có kỳ lương.</Text>
-          )}
-        </Card>
-      </SimpleGrid>
-
-      <Card p='20px' mb='20px'>
-        <Flex wrap='wrap' gap='10px' mb='10px'>
-          <Select value={runFilter} onChange={(e) => setRunFilter(e.target.value)} maxW='220px'>
-            <option value='ALL'>Tất cả kỳ lương</option>
-            {periodFilterOptions.map((periodCode) => (
-              <option value={periodCode} key={periodCode}>{periodCode}</option>
-            ))}
-          </Select>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder='Tìm theo nhân sự / kỳ / trạng thái'
-            maxW='320px'
-          />
-          <Button
-            size='sm'
-            colorScheme='purple'
-            variant='outline'
-            onClick={handleIssueAllPayslips}
-            isLoading={issuingAllPayslips}
-            isDisabled={issuingAllPayslips || issuablePayslipCount <= 0}>
-            Phát hành toàn bộ phiếu lương ({issuablePayslipCount})
-          </Button>
-        </Flex>
-
-        {filteredItems.length ? (
-          <>
-            <Table size='sm'>
-            <Thead>
-              <Tr>
-                <Th>Nhân sự</Th>
-                <Th>Mã kỳ</Th>
-                <Th isNumeric>Tổng thu nhập*</Th>
-                <Th isNumeric>Tổng khấu trừ*</Th>
-                <Th isNumeric>Thực nhận*</Th>
-                <Th>Status</Th>
-                <Th>Phiếu lương</Th>
-                <Th textAlign='right'>Thao tác</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {pagedItems.map((item) => (
-                <Tr key={item.id}>
-                  <Td color={textColor} fontWeight='600'>
-                    <Button
-                      variant='link'
-                      colorScheme='blue'
-                      fontSize='sm'
-                      fontWeight='700'
-                      onClick={() => handleOpenPayrollDetail(item)}>
-                      {item.staffName}
-                    </Button>
-                  </Td>
-                  <Td color={textColorSecondary}>{item.periodCode || "--"}</Td>
-                  <Td color={textColor} isNumeric>{item.grossPay == null ? "--" : formatCurrency(item.grossPay)}</Td>
-                  <Td color={textColor} isNumeric>{item.totalDeduction == null ? "--" : formatCurrency(item.totalDeduction)}</Td>
-                  <Td color={textColor} isNumeric>{item.netPay == null ? "--" : formatCurrency(item.netPay)}</Td>
-                  <Td>
-                    <Badge colorScheme={statusColor(item.status)}>
-                      {statusLabel(item.status)}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    <Badge colorScheme={item.hasPayslip ? "green" : "gray"}>
-                      {item.hasPayslip ? "Đã phát hành" : "Chưa phát hành"}
-                    </Badge>
-                    <Text color={textColorSecondary} fontSize='xs'>
-                      {item.amountsSource === "SERVER"
-                        ? "Server"
-                        : item.amountsSource === "DERIVED"
-                        ? "Suy diễn"
-                        : "Thiếu totals"}
-                    </Text>
-                    {!item.canIssuePayslip ? (
-                      <Text color={textColorSecondary} fontSize='xs'>
-                        Chờ duyệt đợt
-                      </Text>
-                    ) : null}
-                  </Td>
-                  <Td textAlign='right'>
-                    <Button
-                      size='xs'
-                      colorScheme='purple'
-                      variant='outline'
-                      isDisabled={item.hasPayslip || !item.canIssuePayslip}
-                      isLoading={busyItemId === item.id}
-                      onClick={() => handleIssuePayslip(item.id)}>
-                      Phát hành phiếu lương
-                    </Button>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-          <TablePagination
-            totalItems={filteredItems.length}
-            currentPage={itemPage}
-            pageSize={itemPageSize}
-            onPageChange={setItemPage}
-            onPageSizeChange={(newSize) => {
-              setItemPageSize(newSize);
-              setItemPage(1);
-            }}
-            pageSizeOptions={[10, 20, 50]}
-          />
-        </>
-      ) : (
-          <Text color={textColorSecondary}>Chưa có dòng lương phù hợp bộ lọc.</Text>
-        )}
-        <Text color={textColorSecondary} fontSize='xs' mt='10px'>
-          * Ưu tiên hiển thị totals backend. Nếu backend chưa trả explicit totals, frontend sẽ suy diễn từ các thành phần lương/khấu trừ.
-        </Text>
-      </Card>
-
-      <Modal
-        isOpen={Boolean(selectedPayrollItem)}
-        onClose={handleClosePayrollDetail}
-        size='3xl'
-        isCentered
-        scrollBehavior='inside'>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            Chi tiết lương: {selectedPayrollItem?.staffName || "--"}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <SimpleGrid columns={{ base: 1, md: 3 }} gap='10px' mb='12px'>
-              <Box borderWidth='1px' borderRadius='10px' p='10px'>
-                <Text color={textColorSecondary} fontSize='xs'>Kỳ lương</Text>
-                <Text color={textColor} fontWeight='700'>
-                  {selectedPayrollItem?.periodCode || "--"}
-                </Text>
-              </Box>
-              <Box borderWidth='1px' borderRadius='10px' p='10px'>
-                <Text color={textColorSecondary} fontSize='xs'>Đợt lương</Text>
-                <Text color={textColor} fontWeight='700'>
-                  {selectedPayrollItem?.runNo || "--"}
-                </Text>
-              </Box>
-              <Box borderWidth='1px' borderRadius='10px' p='10px'>
-                <Text color={textColorSecondary} fontSize='xs'>Mốc tính</Text>
-                <Text color={textColor} fontWeight='700'>
-                  {formatDate(selectedPayrollBreakdown?.policyAsOfDate)}
-                </Text>
-              </Box>
-            </SimpleGrid>
-
-            {loadingPayrollDetail ? (
-              <Flex align='center' gap='8px' mb='10px'>
-                <Spinner size='sm' />
-                <Text color={textColorSecondary} fontSize='sm'>Đang tải hệ số lương...</Text>
-              </Flex>
-            ) : null}
-
-            {payrollDetailError ? (
-              <Text color='orange.400' fontSize='sm' mb='10px'>
-                {payrollDetailError}
-              </Text>
-            ) : null}
-
-            {selectedPayrollBreakdown?.amountsSource === "INCOMPLETE" ? (
-              <Text color='orange.400' fontSize='sm' mb='10px'>
-                Backend chưa trả đủ breakdown canonical cho dòng lương này. Popup chỉ hiển thị các số server đã cung cấp.
-              </Text>
-            ) : null}
-
-            {selectedPayrollBreakdown ? (
-              <>
-                <SimpleGrid columns={{ base: 1, md: 2 }} gap='10px' mb='12px'>
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Lương cơ bản (gốc)</Text>
-                    <Text color={textColor} fontWeight='700'>
-                      {selectedPayrollBreakdown.hasOriginalBaseSalary
-                        ? formatCurrency(selectedPayrollBreakdown.originalBaseSalary)
-                        : "Chưa thiết lập"}
-                    </Text>
-                  </Box>
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Hệ số lương</Text>
-                    <Text color={textColor} fontWeight='700'>
-                      {Number(selectedPayrollBreakdown.coefficient || 1).toFixed(4)}
-                    </Text>
-                    <Text color={textColorSecondary} fontSize='xs'>
-                      Thâm niên: {selectedPayrollBreakdown.yearsOfService} năm ({selectedPayrollBreakdown.tenureRange})
-                    </Text>
-                  </Box>
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Lương áp dụng sau hệ số</Text>
-                    <Text color={textColor} fontWeight='700'>
-                      {formatCurrency(selectedPayrollItem.baseSalary)}
-                    </Text>
-                  </Box>
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Phụ cấp</Text>
-                    <Text color={textColor} fontWeight='700'>
-                      {formatCurrency(selectedPayrollItem.allowanceAmount)}
-                    </Text>
-                  </Box>
-                </SimpleGrid>
-
-                <SimpleGrid columns={{ base: 1, md: 2 }} gap='10px' mb='12px'>
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Tổng BH NLĐ</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.employeeInsuranceTotal)}</Text>
-                    <Text color={textColorSecondary} fontSize='xs' mt='6px'>
-                      Trang này không còn tách BHXH/BHYT/BHTN ở frontend nếu backend chưa trả breakdown chi tiết.
-                    </Text>
-                  </Box>
-
-                  <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>Thuế TNCN (PIT)</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.pitAmount)}</Text>
-                    <Divider my='8px' />
-                    <Text color={textColorSecondary} fontSize='xs'>Khấu trừ công thiếu</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollItem.attendanceDeduction)}</Text>
-                    <Text color={textColorSecondary} fontSize='xs' mt='6px'>Tạm ứng + Khoản vay + Khác</Text>
-                    <Text color={textColor} fontWeight='700'>
-                      {formatCurrency(
-                        selectedPayrollItem.advanceDeduction +
-                        selectedPayrollItem.loanDeduction +
-                        selectedPayrollItem.otherDeduction +
-                        selectedPayrollItem.penaltyAmount,
-                      )}
-                    </Text>
-                  </Box>
-                </SimpleGrid>
-
-                <Box borderWidth='1px' borderColor='green.300' bg='green.50' borderRadius='12px' p='12px'>
-                  <SimpleGrid columns={{ base: 1, md: 3 }} gap='10px'>
-                    <Box>
-                      <Text color='green.700' fontSize='xs'>Tổng thu nhập</Text>
-                      <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {selectedPayrollBreakdown.totalIncome == null ? "--" : formatCurrency(selectedPayrollBreakdown.totalIncome)}
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Text color='green.700' fontSize='xs'>Tổng khấu trừ</Text>
-                      <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {selectedPayrollBreakdown.totalDeduction == null ? "--" : formatCurrency(selectedPayrollBreakdown.totalDeduction)}
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Text color='green.700' fontSize='xs'>Tổng tiền nhận được</Text>
-                      <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {selectedPayrollBreakdown.netPay == null ? "--" : formatCurrency(selectedPayrollBreakdown.netPay)}
-                      </Text>
-                    </Box>
-                  </SimpleGrid>
-                </Box>
-              </>
-            ) : (
-              <Text color={textColorSecondary}>Chưa có dữ liệu chi tiết để hiển thị.</Text>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={handleClosePayrollDetail}>Đóng</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      <Modal isOpen={Boolean(initialSalaryTarget)} onClose={handleCloseInitialSalaryRequest} isCentered size='lg'>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Gửi duyệt lương khởi tạo</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <SimpleGrid columns={1} gap='10px'>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Nhân sự
-                </FormLabel>
-                <Input value={initialSalaryTarget?.staffName || "--"} isReadOnly />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Hiệu lực từ ngày
-                </FormLabel>
-                <Input type='date' value={salaryCheckAsOfDate} isReadOnly />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Lương cơ bản đề xuất
-                </FormLabel>
-                <Input
-                  type='number'
-                  min='0'
-                  step='1000'
-                  value={initialSalaryForm.baseSalary}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, baseSalary: e.target.value }))}
-                  placeholder='VD: 12.000.000'
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Lý do
-                </FormLabel>
-                <Input
-                  value={initialSalaryForm.reason}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, reason: e.target.value }))}
-                  placeholder='Lý do đề xuất'
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Ghi chú
-                </FormLabel>
-                <Textarea
-                  value={initialSalaryForm.note}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, note: e.target.value }))}
-                  placeholder='Thông tin bổ sung'
-                  rows={3}
-                />
-              </FormControl>
-            </SimpleGrid>
-          </ModalBody>
-          <ModalFooter gap='8px'>
-            <Button variant='ghost' onClick={handleCloseInitialSalaryRequest}>
-              Hủy
-            </Button>
-            <Button
-              colorScheme='orange'
-              onClick={handleSubmitInitialSalaryRequest}
-              isLoading={sendingInitialSalaryRequest}>
-              Gửi duyệt
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <InitialSalaryRequestModal
+        initialSalaryTarget={initialSalaryTarget}
+        handleCloseInitialSalaryRequest={handleCloseInitialSalaryRequest}
+        salaryCheckAsOfDate={salaryCheckAsOfDate}
+        initialSalaryForm={initialSalaryForm}
+        setInitialSalaryForm={setInitialSalaryForm}
+        handleSubmitInitialSalaryRequest={handleSubmitInitialSalaryRequest}
+        sendingInitialSalaryRequest={sendingInitialSalaryRequest}
+      />
 
     </Box>
   );

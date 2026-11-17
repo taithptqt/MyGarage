@@ -28,18 +28,18 @@ export async function requestSafeWithDualRoute(v1Url, legacyUrl, options = {}) {
 }
 
 export async function getProducts() {
-  return requestWithDualRoute("/api/v1/products", "/api/products", { method: "GET" });
+  return requestWithDualRoute("/api/v1/products", "/api/v1/products", { method: "GET" });
 }
 
 export async function getRetailCatalog(params) {
-  return requestWithDualRoute("/api/v1/products/retail-catalog", "/api/products/retail-catalog", {
+  return requestWithDualRoute("/api/v1/products/retail-catalog", "/api/v1/products/retail-catalog", {
     method: "GET",
     params,
   });
 }
 
 export async function getProductById(productId) {
-  return requestWithDualRoute(`/api/v1/products/${productId}`, `/api/products/${productId}`, {
+  return requestWithDualRoute(`/api/v1/products/${productId}`, `/api/v1/products/${productId}`, {
     method: "GET",
   });
 }
@@ -50,7 +50,7 @@ export async function getProductStockAvailability({ productIds, branchId } = {})
     if (branchId != null && branchId !== "") params.branchId = branchId;
     const data = await requestWithDualRoute(
       "/api/v1/products/stock-availability",
-      "/api/products/stock-availability",
+      "/api/v1/products/stock-availability",
       { method: "GET", params }
     );
     return { ok: true, data };
@@ -65,7 +65,7 @@ export async function getProductStockAvailabilitySafe({ productIds, branchId } =
     if (branchId != null && branchId !== "") params.branchId = branchId;
     return requestSafeWithDualRoute(
       "/api/v1/products/stock-availability",
-      "/api/products/stock-availability",
+      "/api/v1/products/stock-availability",
       { method: "GET", params }
     );
   });
@@ -79,7 +79,7 @@ export async function getProductRetailStockByBranches(productId) {
 
   return requestWithDualRoute(
     `/api/v1/products/${id}/retail-stock-by-branches`,
-    `/api/products/${id}/retail-stock-by-branches`,
+    `/api/v1/products/${id}/retail-stock-by-branches`,
     {
       method: "GET",
     }
@@ -87,11 +87,11 @@ export async function getProductRetailStockByBranches(productId) {
 }
 
 export async function getCategories() {
-  return requestWithDualRoute("/api/v1/categories", "/api/categories", { method: "GET" });
+  return requestWithDualRoute("/api/v1/categories", "/api/v1/categories", { method: "GET" });
 }
 
 export async function getBranches() {
-  return requestWithDualRoute("/api/v1/branches", "/api/branches", { method: "GET" });
+  return requestWithDualRoute("/api/v1/branches", "/api/v1/branches", { method: "GET" });
 }
 
 export async function getProductImages(options = {}) {
@@ -100,28 +100,28 @@ export async function getProductImages(options = {}) {
     query.productId = options.productId;
   }
 
-  return requestWithDualRoute("/api/v1/product-images", "/api/product-images", {
+  return requestWithDualRoute("/api/v1/product-images", "/api/v1/product-images", {
     method: "GET",
     params: query,
   });
 }
 
 export async function createRetailOrder(payload) {
-  return requestWithDualRoute("/api/v1/retail-orders", "/api/retail-orders", {
+  return requestWithDualRoute("/api/v1/retail-orders", "/api/v1/retail-orders", {
     method: "POST",
     data: payload,
   });
 }
 
 export async function createRetailOrderItem(payload) {
-  return requestWithDualRoute("/api/v1/retail-order-items", "/api/retail-order-items", {
+  return requestWithDualRoute("/api/v1/retail-order-items", "/api/v1/retail-order-items", {
     method: "POST",
     data: payload,
   });
 }
 
 export async function checkoutRetailOrder(payload) {
-  return requestWithDualRoute("/api/v1/retail-orders/checkout", "/api/retail-orders/checkout", {
+  return requestWithDualRoute("/api/v1/retail-orders/checkouts", "/api/v1/retail-orders/checkouts", {
     method: "POST",
     data: payload,
   });
@@ -129,8 +129,8 @@ export async function checkoutRetailOrder(payload) {
 
 export async function getMyRetailOrders() {
   return requestWithDualRoute(
+    "/api/v1/customers/current/retail-orders",
     "/api/v1/retail-orders/customers/current",
-    "/api/retail-orders/customers/current",
     { method: "GET" }
   );
 }
@@ -138,7 +138,18 @@ export async function getMyRetailOrders() {
 export async function getRetailOrderById(retailOrderId) {
   return requestWithDualRoute(
     `/api/v1/retail-orders/${retailOrderId}`,
-    `/api/retail-orders/${retailOrderId}`,
+    `/api/v1/retail-orders/${retailOrderId}`,
     { method: "GET" }
+  );
+}
+
+export async function cancelRetailOrder(retailOrderId, reason) {
+  return requestWithDualRoute(
+    `/api/v1/retail-orders/${retailOrderId}/cancel`,
+    `/api/v1/retail-orders/${retailOrderId}/cancel`,
+    {
+      method: "POST",
+      data: { reason },
+    }
   );
 }

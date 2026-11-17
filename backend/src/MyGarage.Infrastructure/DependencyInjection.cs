@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddSingleton<IAuthRateLimitHook, InMemoryAuthRateLimitHook>();
         services.AddSingleton<IWriteRequestSpamGuard, InMemoryWriteRequestSpamGuard>();
         services.AddSingleton<IPersistenceExceptionClassifier, MyGarage.Infrastructure.Persistence.Common.EfPersistenceExceptionClassifier>();
+        services.AddSingleton<MyGarage.Application.Interfaces.Stores.Common.IAppConfigFileStore, MyGarage.Infrastructure.Persistence.Stores.Common.FileAppConfigFileStore>();
         services.AddPayOsIntegration();
 
         // Query readers
@@ -104,6 +105,14 @@ public static class DependencyInjection
 
         // EF query & data services
         services.AddScoped<IODataQueryService, ODataQueryService>();
+        services.AddScoped<IAppointmentODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IAuditLogODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<ICustomerODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IInventoryODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IQuotationODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IServiceOrderODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IStaffODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
+        services.AddScoped<IVehicleODataQuery>(sp => sp.GetRequiredService<IODataQueryService>());
         services.AddScoped<ICustomerVoucherQueryService, EfCustomerVoucherQueryService>();
         services.AddScoped<ICustomerVehicleQueryService, EfCustomerVehicleQueryService>();
         services.AddScoped<ICustomerFeedbackQueryService, EfCustomerFeedbackQueryService>();
@@ -151,6 +160,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceStaffAssignmentLifecycleDataService>(sp => sp.GetRequiredService<IServiceStaffAssignmentDataService>());
         services.AddScoped<IServiceOrderDataService, EfServiceOrderDataService>();
         services.AddScoped<IBayAdminDataService, EfBayAdminDataService>();
+        services.AddScoped<MyGarage.Application.Bays.IVehicleLocationService, MyGarage.Services.VehicleLocationService>();
         services.AddScoped<IBayVehicleLookupDataService>(sp => sp.GetRequiredService<IBayAdminDataService>());
         services.AddScoped<IBayAdminReadDataService>(sp => sp.GetRequiredService<IBayAdminDataService>());
         services.AddScoped<IBayAdminWriteDataService>(sp => sp.GetRequiredService<IBayAdminDataService>());
@@ -304,6 +314,7 @@ public static class DependencyInjection
         services.AddScoped<MyGarage.Application.Interfaces.Stores.Chat.IChatMessageStore>(sp => sp.GetRequiredService<MyGarage.Application.Interfaces.Stores.Chat.IChatStore>());
         services.AddScoped<MyGarage.Application.Interfaces.Stores.Chat.IChatReadStateStore>(sp => sp.GetRequiredService<MyGarage.Application.Interfaces.Stores.Chat.IChatStore>());
         services.AddScoped<MyGarage.Application.Interfaces.Stores.Chat.IChatContextStore>(sp => sp.GetRequiredService<MyGarage.Application.Interfaces.Stores.Chat.IChatStore>());
+        services.AddScoped<MyGarage.Interfaces.IChatCallerCustomerResolver, MyGarage.Infrastructure.Services.Application.Chat.ChatCallerCustomerResolver>();
         services.AddScoped<IBayAuthorizationStore, MyGarage.Infrastructure.Persistence.Stores.StaffAndBranches.EfBayAuthorizationStore>();
         services.AddScoped<IStaffStore, MyGarage.Infrastructure.Persistence.Stores.StaffAndBranches.EfStaffStore>();
         services.AddScoped<IAuditLogStore, MyGarage.Infrastructure.Persistence.Stores.Common.EfAuditLogStore>();
@@ -406,11 +417,15 @@ public static class DependencyInjection
         services.AddScoped<IPayOsGateway, MyGarage.Infrastructure.Services.Payments.PayOsGateway>();
 
         // Background services
-        services.AddHostedService<AppointmentDispatchBackgroundService>();
-        services.AddHostedService<AppointmentReminderBackgroundService>();
-        services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
-        services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
-        services.AddHostedService<CustomerAutomationJobsBackgroundService>();
+        if (!configuration.GetValue<bool>("Diagnostics:DisableBackgroundJobs"))
+        {
+            services.AddHostedService<AppointmentDispatchBackgroundService>();
+            services.AddHostedService<AppointmentReminderBackgroundService>();
+            services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
+            services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
+            services.AddHostedService<CustomerAutomationJobsBackgroundService>();
+            services.AddHostedService<RetailOrderTimeoutBackgroundService>();
+        }
 
         return services;
     }

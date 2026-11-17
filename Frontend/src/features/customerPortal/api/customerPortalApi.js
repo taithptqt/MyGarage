@@ -36,7 +36,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 }
 
 const V1_BASE = "/api/v1/customers/me";
-const LEGACY_BASE = "/api/customers/me";
+const LEGACY_BASE = "/api/v1/customers/me";
 
 export function getCustomerDashboard(requester) {
   return requestWithDualRoute(
@@ -109,8 +109,8 @@ export function getCustomerNotifications(paramsOrRequester = {}, maybeRequester)
 
 export function markNotificationRead(id, requester) {
   return requestWithDualRoute(
-    `${V1_BASE}/notifications/${id}/read`,
-    `${LEGACY_BASE}/notifications/${id}/read`,
+    `${V1_BASE}/notifications/${id}/reads`,
+    `${LEGACY_BASE}/notifications/${id}/reads`,
     { method: "POST" },
     requester
   );
@@ -118,8 +118,8 @@ export function markNotificationRead(id, requester) {
 
 export function markAllNotificationsRead(requester) {
   return requestWithDualRoute(
-    `${V1_BASE}/notifications/read-all`,
-    `${LEGACY_BASE}/notifications/read-all`,
+    `${V1_BASE}/notifications/bulk-reads`,
+    `${LEGACY_BASE}/notifications/bulk-reads`,
     { method: "POST" },
     requester
   );

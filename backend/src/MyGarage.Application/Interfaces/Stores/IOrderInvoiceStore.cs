@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using MyGarage.Models;
+using MyGarage.Application.Payments.DTOs;
 
 namespace MyGarage.Interfaces
 {

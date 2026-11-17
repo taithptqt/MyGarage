@@ -234,9 +234,9 @@ export default function ForemanBoardPage() {
     setError("");
     try {
       const [ordersRes, assignmentsRes, baysRes] = await Promise.all([
-        request({ url: "/api/service-orders", method: "GET" }),
-        request({ url: "/api/service-staff-assignments", method: "GET" }),
-        request({ url: "/api/bays", method: "GET" }),
+        request({ url: "/api/v1/service-orders", method: "GET" }),
+        request({ url: "/api/v1/service-staff-assignments", method: "GET" }),
+        request({ url: "/api/v1/bays", method: "GET" }),
       ]);
 
       const raw      = Array.isArray(ordersRes)      ? ordersRes      : (ordersRes?.items  || []);

@@ -11,7 +11,7 @@ namespace MyGarage.Controllers.OData;
 [Route("odata/Quotations")]
 [Route("api/v1/odata/Quotations")]
 [EnableRateLimiting("odata")]
-public sealed class QuotationsODataController(IODataQueryService queries) : ODataController
+public sealed class QuotationsODataController(IQuotationODataQuery queries) : ODataController
 {
     [HttpGet]
     [SafeEnableQuery]

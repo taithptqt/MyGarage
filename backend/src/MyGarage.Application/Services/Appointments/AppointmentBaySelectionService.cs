@@ -103,7 +103,8 @@ namespace MyGarage.Services
             DateTime requestedStartAt,
             DateTime requestedEndAt,
             ServiceCluster requestedCluster,
-            string? excludeHoldToken = null)
+            string? excludeHoldToken = null,
+            IReadOnlyCollection<string>? processedHoldTokens = null)
         {
             var activeBays = await _store.GetActiveBaysAsync(branchId);
             var capacity = ComputeCapacity(activeBays);
@@ -122,7 +123,8 @@ namespace MyGarage.Services
                 requestedEndAt,
                 AppointmentBookingFlows.Flexible,
                 excludeHoldToken);
-            overlapping.AddRange(_slotHoldOperations.BuildSyntheticAppointmentsFromHolds(activeHolds.Concat(flexibleHolds).ToList()));
+            var processed = processedHoldTokens?.ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>(StringComparer.Ordinal);
+            overlapping.AddRange(_slotHoldOperations.BuildSyntheticAppointmentsFromHolds(activeHolds.Concat(flexibleHolds).Where(hold => !processed.Contains(hold.Token)).ToList()));
 
             var overnightLocks = await _store.GetOvernightLockSlotsAsync(branchId, requestedStartAt, requestedEndAt);
 
@@ -157,7 +159,8 @@ namespace MyGarage.Services
             long branchId,
             DateTime requestedStartAt,
             DateTime requestedEndAt,
-            string? excludeHoldToken = null)
+            string? excludeHoldToken = null,
+            IReadOnlyCollection<string>? processedHoldTokens = null)
         {
             var windowMinutes = Math.Max(
                 StandardCheckInSetupMinutes,
@@ -188,8 +191,10 @@ namespace MyGarage.Services
                 requestedStartAt,
                 requestedEndAt,
                 FlexibleQueueLoadStatuses);
+            var processed = processedHoldTokens?.ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>(StringComparer.Ordinal);
             var heldCount = _slotHoldService
                 .GetActiveHolds(branchId, requestedStartAt, requestedEndAt, AppointmentBookingFlows.Flexible, excludeHoldToken)
+                .Where(hold => !processed.Contains(hold.Token))
                 .Sum(h => Math.Max(1, h.VehicleCount));
 
             if (queueLimit <= 0 || (queueLoad + heldCount) >= queueLimit)

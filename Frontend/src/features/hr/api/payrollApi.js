@@ -39,7 +39,7 @@ export async function getPayrollRuns(params = {}, requester) {
   const boundedParams = buildBoundedPaginationParams(params, 10, 100);
   return requestWithDualRoute(
     "/api/v1/payroll-runs",
-    "/api/payroll-runs",
+    "/api/v1/payroll-runs",
     { method: "GET", params: boundedParams },
     requester
   );
@@ -47,8 +47,8 @@ export async function getPayrollRuns(params = {}, requester) {
 
 export async function getPayrollPreview(params = {}, requester) {
   return requestWithDualRoute(
-    "/api/v1/payroll-runs/preview",
-    "/api/payroll-runs/preview",
+    "/api/v1/payroll-runs/previews",
+    "/api/v1/payroll-runs/previews",
     { method: "GET", params },
     requester
   );
@@ -57,7 +57,7 @@ export async function getPayrollPreview(params = {}, requester) {
 export async function createPayrollRun(data = {}, requester) {
   return requestWithDualRoute(
     "/api/v1/payroll-runs",
-    "/api/payroll-runs",
+    "/api/v1/payroll-runs",
     { method: "POST", data },
     requester
   );
@@ -65,9 +65,9 @@ export async function createPayrollRun(data = {}, requester) {
 
 export async function approvePayrollRun(id, data = {}, requester) {
   return requestWithDualRoute(
-    `/api/v1/payroll-runs/${id}/approve`,
-    `/api/payroll-runs/${id}/approve`,
-    { method: "PUT", data },
+    `/api/v1/payroll-runs/${id}/approvals`,
+    `/api/v1/payroll-runs/${id}/approvals`,
+    { method: "POST", data },
     requester
   );
 }

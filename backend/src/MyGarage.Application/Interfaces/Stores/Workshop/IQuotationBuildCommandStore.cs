@@ -10,6 +10,7 @@ public interface IQuotationBuildCommandStore
     Task SaveChangesInTransactionAsync();
     Task<T> ExecuteTransactionalAsync<T>(Func<Task<T>> action);
     Task<T> ExecuteCreateQuotationTransactionalAsync<T>(long serviceOrderId, Func<Task<T>> action);
+    Task<T> ExecuteDiagnosisApprovalTransactionalAsync<T>(long serviceOrderId, Func<Task<T>> action);
 
     Task<QuotationServiceOrderAdvisorInfo?> GetServiceOrderAdvisorInfoAsync(long serviceOrderId);
     Task<int> GetMaxQuotationVersionNoAsync(long serviceOrderId);

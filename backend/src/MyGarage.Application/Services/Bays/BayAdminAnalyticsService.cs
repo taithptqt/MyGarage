@@ -1,22 +1,24 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 
 namespace MyGarage.Application.Bays;
 
 public sealed class BayAdminAnalyticsService : IBayAdminAnalyticsService
 {
     private readonly IBayAdminReadDataService _dataService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public BayAdminAnalyticsService(IBayAdminReadDataService dataService)
+    public BayAdminAnalyticsService(IBayAdminReadDataService dataService, IAppConfigFileStore configStore)
     {
         _dataService = dataService;
+        _configStore = configStore;
     }
 
     public async Task<BayAdminCommandResult> GetUsageAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: false, contentRootPath: contentRootPath, ct: ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: false, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -60,10 +62,9 @@ public sealed class BayAdminAnalyticsService : IBayAdminAnalyticsService
 
     public async Task<BayAdminCommandResult> GetLayoutAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: false, contentRootPath: contentRootPath, ct: ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: false, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -121,12 +122,11 @@ public sealed class BayAdminAnalyticsService : IBayAdminAnalyticsService
 
     public async Task<BayAdminCommandResult> GetAlertsAsync(
         long? branchId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         var now = VietnamTime.Now;
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: false, contentRootPath: contentRootPath, settings: settings, nowUtc: now, ct: ct);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: false, settings: settings, nowUtc: now, ct: ct);
         if (branchId.HasValue)
         {
             rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
@@ -240,11 +240,10 @@ public sealed class BayAdminAnalyticsService : IBayAdminAnalyticsService
         string? preferredArea,
         long? sourceBayId,
         string? serviceStatus,
-        string contentRootPath,
         CancellationToken ct = default)
     {
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
-        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, includeHidden: false, contentRootPath: contentRootPath, settings: settings, ct: ct);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
+        var rows = await BayAdminRowBuilder.BuildBayRowsAsync(_dataService, _configStore, includeHidden: false, settings: settings, ct: ct);
 
         BayVehicleDescriptor? vehicle = null;
         var normalizedSegment = "";

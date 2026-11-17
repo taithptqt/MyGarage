@@ -13,15 +13,14 @@ namespace MyGarage.Repositories
         {
         }
 
+        private IQueryable<StandardService> VisibleServices() =>
+            _context.StandardServices.AsNoTracking().Where(service =>
+                service.IsDeleted != true && service.IsActive != false && !service.Code.StartsWith("PKG-"));
+
         public override async Task<IEnumerable<StandardService>> GetAllAsync()
-        {
-            return await _context.StandardServices
-                .AsNoTracking()
-                .Where(service =>
-                    service.IsDeleted != true &&
-                    service.IsActive != false &&
-                    !service.Code.StartsWith("PKG-"))
-                .ToListAsync();
-        }
+            => await VisibleServices().ToListAsync();
+
+        public override Task<(IReadOnlyList<StandardService> Items, int Total)> GetPageByIdAsync(int page, int pageSize)
+            => GetOrderedPageAsync(VisibleServices().OrderBy(service => service.Id), page, pageSize);
     }
 }

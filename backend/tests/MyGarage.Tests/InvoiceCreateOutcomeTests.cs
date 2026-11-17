@@ -19,7 +19,7 @@ public sealed class InvoiceCreateOutcomeTests
             db.RetailOrders.AddRange(
                 new RetailOrder { Id = 6101, BranchId = 1, CustomerId = 100, OrderCode = "PREEXISTING" },
                 new RetailOrder { Id = 6102, BranchId = 1, CustomerId = 100, OrderCode = "NEW" });
-            db.Invoices.Add(new Invoice { Id = 6201, RetailOrderId = 6101, PayerType = "CUSTOMER" });
+            db.Invoices.Add(new Invoice { Id = 6201, RetailOrderId = 6101, PayerType = "CUSTOMER", PayerId = 100 });
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();

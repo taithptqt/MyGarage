@@ -74,8 +74,8 @@ export default function PurchaseOrderPage() {
     if (!isNew) loadPos();
     else {
       // load form dictionaries
-      request({ url: "/api/suppliers", method: "GET" }).then(res => setSuppliers(res?.items ?? res ?? []));
-      request({ url: "/api/products", method: "GET", params: { branchId: user?.branchId } }).then(res => setProducts(res?.items ?? res ?? []));
+      request({ url: "/api/v1/suppliers", method: "GET" }).then(res => setSuppliers(res?.items ?? res ?? []));
+      request({ url: "/api/v1/products", method: "GET", params: { branchId: user?.branchId } }).then(res => setProducts(res?.items ?? res ?? []));
     }
     return () => { listSequence.current += 1; };
   }, [isNew, loadPos, user]);

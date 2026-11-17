@@ -8,6 +8,7 @@ namespace MyGarage.Controllers
     public partial class DiagnosisController : ControllerBase
     {
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/support-requests")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/support-requests")]
         public async Task<IActionResult> RequestSupport(
             long serviceOrderId,
             [FromBody] DiagnosisSupportRequestDto request)
@@ -16,6 +17,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/cancel-requests")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/cancel-requests")]
         public async Task<IActionResult> RequestCancelAssignment(
             long serviceOrderId,
             [FromBody] DiagnosisCancelRequestDto request)
@@ -24,6 +26,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/cancel-requests/decisions")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/cancel-requests/decisions")]
         public async Task<IActionResult> DecideCancelAssignment(
             long serviceOrderId,
             [FromBody] DiagnosisCancelDecisionDto request)
@@ -32,6 +35,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/manager-overrides")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/manager-overrides")]
         public async Task<ActionResult<DiagnosisResponseDto>> ManagerOverrideAssignment(
             long serviceOrderId,
             [FromBody] DiagnosisManagerOverrideDto request)
@@ -40,6 +44,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/supporting-team-selections")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/supporting-team-selections")]
         public async Task<ActionResult<DiagnosisResponseDto>> SelectSupportingTeamAssignment(
             long serviceOrderId,
             [FromBody] DiagnosisSupportingTeamSelectionRequestDto request)

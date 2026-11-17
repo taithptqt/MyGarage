@@ -16,19 +16,19 @@ async function requestWithDualRoute(v1Url, legacyUrl, options = {}) {
 }
 
 export const getVoucherPage = (params) =>
-  requestWithDualRoute("/api/v1/vouchers/admin-list", "/api/vouchers/admin-list", { method: "GET", params });
+  requestWithDualRoute("/api/v1/vouchers/admin-list", "/api/v1/vouchers/admin-list", { method: "GET", params });
 
 export const getRedemptionPage = (params) =>
-  requestWithDualRoute("/api/v1/voucher-redemptions/admin-page", "/api/voucher-redemptions/admin-page", { method: "GET", params });
+  requestWithDualRoute("/api/v1/voucher-redemptions/admin-page", "/api/v1/voucher-redemptions/admin-page", { method: "GET", params });
 
 export const getApprovalPage = (params) =>
-  requestWithDualRoute("/api/v1/voucher-approval-requests/admin-page", "/api/voucher-approval-requests/admin-page", { method: "GET", params });
+  requestWithDualRoute("/api/v1/voucher-approval-requests/admin-page", "/api/v1/voucher-approval-requests/admin-page", { method: "GET", params });
 
 export const getVoucherReportPage = (params) =>
-  requestWithDualRoute("/api/v1/vouchers/report-page", "/api/vouchers/report-page", { method: "GET", params });
+  requestWithDualRoute("/api/v1/vouchers/report-page", "/api/v1/vouchers/report-page", { method: "GET", params });
 
 export const getCampaignPage = (params) =>
-  requestWithDualRoute("/api/v1/voucher-campaigns/admin-page", "/api/voucher-campaigns/admin-page", { method: "GET", params });
+  requestWithDualRoute("/api/v1/voucher-campaigns/admin-page", "/api/v1/voucher-campaigns/admin-page", { method: "GET", params });
 
 export const getVoucherDashboard = () =>
-  requestWithDualRoute("/api/v1/vouchers/dashboard", "/api/vouchers/dashboard", { method: "GET" });
+  requestWithDualRoute("/api/v1/vouchers/dashboard", "/api/v1/vouchers/dashboard", { method: "GET" });

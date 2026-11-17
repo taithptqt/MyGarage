@@ -1,0 +1,152 @@
+.mg-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(197, 160, 89, 0.08), transparent 58%),
+    linear-gradient(165deg, #132517 0%, #0d1b10 100%);
+  border-top: 1px solid rgba(197, 160, 89, 0.32);
+  border-bottom: 1px solid rgba(197, 160, 89, 0.32);
+  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7), 0 -2px 18px rgba(197, 160, 89, 0.3);
+  transform: translateY(100%);
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.mg-curtain--entering {
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition: transform 380ms cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+.mg-curtain--covered {
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.mg-curtain--leaving {
+  visibility: visible;
+  pointer-events: none;
+  transform: translateY(-100%);
+  transition: transform 440ms cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+.mg-curtain__inner {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 240ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mg-curtain--entering .mg-curtain__inner,
+.mg-curtain--covered .mg-curtain__inner {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 110ms;
+}
+
+.mg-curtain--leaving .mg-curtain__inner {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition-delay: 0ms;
+  transition-duration: 200ms;
+}
+
+.mg-curtain__brand {
+  color: #f6efe0;
+  font-family: "Oswald", "Space Grotesk", "Segoe UI", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+}
+
+.mg-curtain__line {
+  width: 54px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c5a059, transparent);
+}
+
+.mg-curtain__label {
+  color: #c5a059;
+  font-family: "Oswald", "Space Grotesk", "Segoe UI", sans-serif;
+  font-size: clamp(1.35rem, 2.6vw, 2.1rem);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+:root {
+  --mg-scene-play-state: running;
+}
+
+html[data-scene-covering="true"] {
+  --mg-scene-play-state: paused;
+}
+
+@keyframes mgSceneFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mg-scene-fade-up {
+  opacity: 0;
+  transform: translateY(28px);
+  animation-name: mgSceneFadeUp;
+  animation-duration: 720ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  animation-delay: var(--mg-scene-delay, 80ms);
+  animation-play-state: var(--mg-scene-play-state, running);
+  will-change: opacity, transform;
+}
+
+.mg-scene-delay-1 {
+  --mg-scene-delay: 80ms;
+}
+
+.mg-scene-delay-2 {
+  --mg-scene-delay: 180ms;
+}
+
+.mg-scene-delay-3 {
+  --mg-scene-delay: 280ms;
+}
+
+.mg-scene-delay-4 {
+  --mg-scene-delay: 380ms;
+}
+
+.mg-scene-delay-5 {
+  --mg-scene-delay: 480ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-curtain {
+    display: none !important;
+  }
+
+  .mg-scene-fade-up,
+  .mg-scene-animated {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Camera } from "lucide-react";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import { getCustomerVehicles, getVehicleHistory } from "@features/customerPortal/api/customerPortalApi";
@@ -329,6 +330,13 @@ export default function VehicleDetailPage() {
                                 Mở hóa đơn
                               </a>
                             ) : null}
+                            <Link
+                              className="cp-btn cp-btn-ghost"
+                              to={`/my-vehicles/${idNum}/condition-report?serviceOrderId=${row.serviceOrderId}`}
+                            >
+                              <Camera size={14} style={{ marginRight: 6 }} />
+                              Ảnh & biên bản hiện trạng
+                            </Link>
                           </div>
 
                           {row.conditionLogs?.length > 0 ? (
@@ -388,6 +396,16 @@ export default function VehicleDetailPage() {
                                   </li>
                                 ))}
                               </ul>
+                              <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                                <Link
+                                  className="cp-btn cp-btn-ghost"
+                                  to={`/my-vehicles/${idNum}/condition-report?serviceOrderId=${row.serviceOrderId}`}
+                                  style={{ fontSize: 13, minHeight: 36, padding: "0 14px" }}
+                                >
+                                  <Camera size={14} style={{ marginRight: 6 }} />
+                                  <span>Xem toàn bộ ảnh & biên bản chi tiết</span>
+                                </Link>
+                              </div>
                             </details>
                           ) : null}
                         </article>

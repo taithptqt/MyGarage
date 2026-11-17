@@ -118,7 +118,7 @@ public sealed class PaymentWebhookService(
             else if (order.RetailOrderId.HasValue)
             {
                 // Không có Payment row (CHK constraint skip) → fallback gửi email qua RetailOrder
-                Console.WriteLine($"[Webhook] No Payment row for RetailOrderId={order.RetailOrderId}. Using direct fallback with BuyerEmail={order.BuyerEmail ?? "(null)"}.");
+                Console.WriteLine($"[Webhook] No Payment row for RetailOrderId={order.RetailOrderId}. Using direct fallback.");
                 await _webhookDataService.UpdateRetailOrderStatusDirectlyAsync(
                     order.RetailOrderId.Value,
                     order.AmountRemaining <= 0,
@@ -136,27 +136,27 @@ public sealed class PaymentWebhookService(
         }
         else
         {
-            // In-memory order not found (e.g. backend restarted). Match deterministically by verified PayOS PaymentLinkId/Reference.
-            try
-            {
-                var amountPaid = (decimal)webhookData.Amount;
-                var linkId = webhookData.PaymentLinkId?.Trim();
-                var reference = webhookData.Reference?.Trim();
+            // After a restart, one webhook amount is not necessarily the cumulative amount.
+            // Recover only by the verified link id and ask PayOS for its current totals.
+            var linkId = webhookData.PaymentLinkId?.Trim();
+            if (string.IsNullOrWhiteSpace(linkId))
+                throw new InvalidOperationException("Thiếu mã liên kết để đối soát thanh toán.");
 
-                var paymentFromDb = await _webhookDataService.FindPendingPaymentByLinkOrReferenceAsync(
-                    linkId,
-                    reference,
-                    ct);
+            var paymentFromDb = await _webhookDataService.FindRecoverablePaymentByLinkAsync(linkId, ct)
+                ?? throw new InvalidOperationException("Không tìm thấy giao dịch thanh toán để đối soát.");
+            var snapshot = await _payOsGateway.GetPaymentLinkAsync(linkId, ct);
+            if (snapshot.Amount <= 0 || snapshot.AmountPaid < 0 || snapshot.AmountRemaining < 0 ||
+                snapshot.AmountPaid + snapshot.AmountRemaining != snapshot.Amount ||
+                snapshot.Status is not (PayOsLinkStatus.Paid or PayOsLinkStatus.Underpaid or PayOsLinkStatus.Pending or PayOsLinkStatus.Processing))
+                throw new InvalidOperationException("Trạng thái liên kết thanh toán cần được đối soát.");
 
-                if (paymentFromDb is not null)
-                {
-                    await _paymentConfirmationService.ApplyOutcomeAsync(paymentFromDb, amountPaid, nameof(PaymentStatusCode.COMPLETED));
-                }
-            }
-            catch
-            {
-                // Webhook must always return 200 to prevent uncontrolled retries on non-transient errors.
-            }
+            var targetStatus = snapshot.Status == PayOsLinkStatus.Paid && snapshot.AmountRemaining == 0
+                ? PaymentStatusCompleted : PaymentStatusPending;
+            if (snapshot.Status == PayOsLinkStatus.Paid && snapshot.AmountRemaining != 0 ||
+                string.Equals(paymentFromDb.Status, PaymentStatusCompleted, StringComparison.OrdinalIgnoreCase) && targetStatus != PaymentStatusCompleted)
+                throw new InvalidOperationException("Trạng thái thanh toán không nhất quán.");
+
+            await _paymentConfirmationService.ApplyOutcomeAsync(paymentFromDb, snapshot.AmountPaid, targetStatus);
         }
     }
 }

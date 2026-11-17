@@ -171,7 +171,7 @@ test("requestWithDualRoute prioritizes /api/v1/..., falls back to /api/... on 40
   });
   const res1 = await requestWithDualRoute(
     "/api/v1/service-orders/page",
-    "/api/service-orders/page",
+    "/api/v1/legacy/service-orders/page",
     { method: "GET", params: { page: 1, pageSize: 25 } },
     v1Success.requester
   );
@@ -179,21 +179,21 @@ test("requestWithDualRoute prioritizes /api/v1/..., falls back to /api/... on 40
   assert.equal(v1Success.calls[0].url, "/api/v1/service-orders/page");
   assert.equal(res1.url, "/api/v1/service-orders/page");
 
-  // 2. Fallback to /api/... when /api/v1/... returns 404
+  // 2. Fallback to secondary route when primary /api/v1/... returns 404
   const fallback404 = createMockRequester({
-    shouldFail404: (url) => url.startsWith("/api/v1/"),
+    shouldFail404: (url) => url === "/api/v1/service-orders/page",
     handle: (config) => ({ ok: true, url: config.url }),
   });
   const res2 = await requestWithDualRoute(
     "/api/v1/service-orders/page",
-    "/api/service-orders/page",
+    "/api/v1/legacy/service-orders/page",
     { method: "GET", params: { page: 1, pageSize: 25 } },
     fallback404.requester
   );
   assert.equal(fallback404.calls.length, 2);
   assert.equal(fallback404.calls[0].url, "/api/v1/service-orders/page");
-  assert.equal(fallback404.calls[1].url, "/api/service-orders/page");
-  assert.equal(res2.url, "/api/service-orders/page");
+  assert.equal(fallback404.calls[1].url, "/api/v1/legacy/service-orders/page");
+  assert.equal(res2.url, "/api/v1/legacy/service-orders/page");
 
   // 3. Do NOT fallback on 500 Server Error
   const error500 = createMockRequester({
@@ -203,7 +203,7 @@ test("requestWithDualRoute prioritizes /api/v1/..., falls back to /api/... on 40
     async () => {
       await requestWithDualRoute(
         "/api/v1/service-orders/page",
-        "/api/service-orders/page",
+        "/api/v1/legacy/service-orders/page",
         { method: "GET" },
         error500.requester
       );

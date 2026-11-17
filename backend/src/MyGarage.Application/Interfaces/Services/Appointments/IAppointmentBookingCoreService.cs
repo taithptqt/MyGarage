@@ -12,6 +12,14 @@ namespace MyGarage.Interfaces
             BookAppointmentRequestDto dto,
             long? groupSessionId);
 
+        Task<Appointment> BookCoreDeferredHoldAsync(
+            long authUserId,
+            BookAppointmentRequestDto dto,
+            long? groupSessionId,
+            IReadOnlyCollection<string> processedHoldTokens);
+
+        void ConsumeSlotHold(string? holdToken);
+
         Task EnsureBatchFixedLeadTimesAsync(
             long branchId,
             IReadOnlyCollection<BookAppointmentRequestDto> items);

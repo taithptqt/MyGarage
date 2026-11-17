@@ -31,13 +31,15 @@ namespace MyGarage.Interfaces
             DateTime requestedStartAt,
             DateTime requestedEndAt,
             ServiceCluster requestedCluster,
-            string? excludeHoldToken = null);
+            string? excludeHoldToken = null,
+            IReadOnlyCollection<string>? processedHoldTokens = null);
 
         Task EnsureFlexibleQueueCapacityAsync(
             long branchId,
             DateTime requestedStartAt,
             DateTime requestedEndAt,
-            string? excludeHoldToken = null);
+            string? excludeHoldToken = null,
+            IReadOnlyCollection<string>? processedHoldTokens = null);
 
         Task ApplyBookingReservationArtifactsAsync(
             Appointment appointment,

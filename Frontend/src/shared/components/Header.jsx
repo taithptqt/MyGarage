@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { useSceneTransition } from "@shared/core/context/SceneTransitionContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
 import { Bell } from "lucide-react";
@@ -25,6 +26,7 @@ function resolveAvatarUrl(avatarUrl) {
 
 function Header({ overlay = false }) {
   const { isAuthenticated, user, logout } = useAuth();
+  const sceneTransition = useSceneTransition();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,7 +41,6 @@ function Header({ overlay = false }) {
   const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode);
   const customerPortalLinks = useMemo(
     () => [
-      { label: "Garage", path: "/my-garage-dashboard" },
       { label: "Xe của tôi", path: "/my-vehicles" },
       { label: "Lịch hẹn", path: "/my-appointments" },
       { label: "Đơn phụ tùng", path: "/my-retail-orders" },
@@ -85,6 +86,27 @@ function Header({ overlay = false }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [menuOpen]);
 
+  const isTabActive = (path) => {
+    if (path === "/services") {
+      return (
+        location.pathname === "/services" ||
+        location.pathname.startsWith("/services/") ||
+        location.pathname === "/storage" ||
+        location.pathname.startsWith("/storage/")
+      );
+    }
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
+
+  const handleTabNavigate = (path, label) => {
+    setMenuOpen(false);
+    if (sceneTransition?.navigateWithTransition) {
+      sceneTransition.navigateWithTransition(path, label);
+      return;
+    }
+    handleNavigate(path);
+  };
+
   const handleNavigate = (path) => {
     setMenuOpen(false);
     if (location.pathname === path) {
@@ -110,25 +132,80 @@ function Header({ overlay = false }) {
         <span className="mg-header-hotline">1900 0000</span>
 
         <div className="mg-header-side">
-          <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
-          <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
-          <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
+          <a
+            href="/home"
+            className={isTabActive("/home") ? "is-active" : undefined}
+            aria-current={isTabActive("/home") ? "page" : undefined}
+            onClick={(event) => { event.preventDefault(); handleTabNavigate("/home", "TRANG CHỦ"); }}
+          >
+            TRANG CHỦ
+          </a>
+          <a
+            href="/booking"
+            className={isTabActive("/booking") ? "is-active" : undefined}
+            aria-current={isTabActive("/booking") ? "page" : undefined}
+            onClick={(event) => { event.preventDefault(); handleTabNavigate("/booking", "ĐẶT LỊCH"); }}
+          >
+            ĐẶT LỊCH
+          </a>
+          <a
+            href="/parts-shop"
+            className={isTabActive("/parts-shop") ? "is-active" : undefined}
+            aria-current={isTabActive("/parts-shop") ? "page" : undefined}
+            onClick={(event) => { event.preventDefault(); handleTabNavigate("/parts-shop", "PART SHOP"); }}
+          >
+            PART SHOP
+          </a>
         </div>
 
         <div
           className="mg-header-logo cursor-pointer"
           role="button"
           aria-label="MY GARAGE"
-          onClick={() => handleNavigate("/home")}
+          onClick={() => handleTabNavigate("/home", "MY GARAGE")}
         >
           <span>MY</span>
           <small>GARAGE</small>
         </div>
 
         <div className="mg-header-side right">
-          <a href="/storage" onClick={(event) => { event.preventDefault(); handleNavigate("/storage"); }}>STORAGE</a>
-          <a href="/news" onClick={(event) => { event.preventDefault(); handleNavigate("/news"); }}>TIN TỨC</a>
-          <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
+          <a
+            href="/services"
+            className={isTabActive("/services") ? "is-active" : undefined}
+            aria-current={isTabActive("/services") ? "page" : undefined}
+            onClick={(event) => { event.preventDefault(); handleTabNavigate("/services", "DỊCH VỤ"); }}
+          >
+            DỊCH VỤ
+          </a>
+          <a
+            href="/my-garage-dashboard"
+            className={isTabActive("/my-garage-dashboard") ? "is-active" : undefined}
+            aria-current={isTabActive("/my-garage-dashboard") ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (!isAuthenticated) {
+                setMenuOpen(false);
+                navigate("/login", {
+                  state: {
+                    from: { pathname: "/my-garage-dashboard" },
+                    message: "Đăng nhập để xem tiến độ xe của bạn tại xưởng",
+                  },
+                });
+                return;
+              }
+              handleTabNavigate("/my-garage-dashboard", "TIẾN ĐỘ SỬA XE");
+            }}
+          >
+            TIẾN ĐỘ SỬA XE
+          </a>
+          <a
+            href="/contact"
+            className={isTabActive("/contact") ? "is-active" : undefined}
+            aria-current={isTabActive("/contact") ? "page" : undefined}
+            onClick={(event) => { event.preventDefault(); handleTabNavigate("/contact", "LIÊN HỆ"); }}
+          >
+            LIÊN HỆ
+          </a>
         </div>
 
         {isAuthenticated ? (
@@ -197,7 +274,9 @@ function Header({ overlay = false }) {
             )}
           </div>
         ) : (
-          <a className="mg-header-login-btn" href="/login">ĐĂNG NHẬP</a>
+          <a className="mg-header-login-btn" href="/login">
+            ĐĂNG NHẬP
+          </a>
         )}
       </div>
 

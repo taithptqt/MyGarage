@@ -12,6 +12,28 @@ namespace MyGarage.Tests;
 public sealed class PurchaseOrderItemScopeTests
 {
     [Fact]
+    public async Task GoodsReceiptCollection_AndLegacyHistory_ReturnSameRepresentation()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        await factory.SeedAsync(db =>
+        {
+            TestWebApplicationFactory.SeedBasicBranchAndUsers(db);
+            db.Suppliers.Add(new Supplier { Id = 11, SupplierName = "Supplier" });
+            db.Warehouses.Add(new Warehouse { Id = 12, BranchId = 1, Code = "W1", Name = "W1", Type = "GENERAL" });
+            db.PurchaseOrders.Add(new PurchaseOrder { Id = 1, BranchId = 1, DestinationWarehouseId = 12, SupplierId = 11, Status = "APPROVED" });
+            return Task.CompletedTask;
+        });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
+        using var canonical = await client.GetAsync("/api/v1/purchase-orders/1/goods-receipts");
+        using var legacy = await client.GetAsync("/api/v1/purchase-orders/1/receive-history");
+        var canonicalBody = await canonical.Content.ReadAsStringAsync();
+        Assert.True(canonical.StatusCode == HttpStatusCode.OK, canonicalBody);
+        Assert.Equal(canonical.StatusCode, legacy.StatusCode);
+        Assert.Equal(canonicalBody, await legacy.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task PagedRoute_ScopesBeforeCountAndUsesStableOrder()
     {
         await using var factory = new TestWebApplicationFactory();

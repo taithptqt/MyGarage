@@ -60,13 +60,31 @@ namespace MyGarage.Services
             }
         }
 
-        public async Task<Appointment> BookCoreAsync(
+        public Task<Appointment> BookCoreAsync(long authUserId, BookAppointmentRequestDto dto, long? groupSessionId)
+            => BookCoreInternalAsync(authUserId, dto, groupSessionId, false, Array.Empty<string>());
+
+        public Task<Appointment> BookCoreDeferredHoldAsync(long authUserId, BookAppointmentRequestDto dto, long? groupSessionId, IReadOnlyCollection<string> processedHoldTokens)
+            => BookCoreInternalAsync(authUserId, dto, groupSessionId, true, processedHoldTokens);
+
+        public void ConsumeSlotHold(string? holdToken) => _availabilityService.ConsumeSlotHold(holdToken);
+
+        private async Task<Appointment> BookCoreInternalAsync(
             long authUserId,
             BookAppointmentRequestDto dto,
-            long? groupSessionId)
+            long? groupSessionId,
+            bool deferHoldConsumption,
+            IReadOnlyCollection<string> processedHoldTokens)
         {
             var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
+            var rawServiceIds = (dto.RequestedServiceIds ?? string.Empty)
+                .Split(new[] { ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (rawServiceIds.Any(value => !long.TryParse(value, out var id) || id <= 0))
+                throw new InvalidOperationException("Mã dịch vụ không hợp lệ.");
+
             var requestedServiceIdList = ParseIds(dto.RequestedServiceIds).Distinct().ToList();
+            if (requestedServiceIdList.Count > 0 &&
+                (await _store.GetActiveStandardServiceMapAsync(requestedServiceIdList)).Count != requestedServiceIdList.Count)
+                throw new InvalidOperationException("Dịch vụ không tồn tại hoặc đã ngừng áp dụng.");
             var requestedPackageIdList = ParseIds(dto.RequestedPackageIds).Distinct().ToList();
             var flow = await _availabilityService.ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds, dto.RequestedPackageIds);
             var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
@@ -145,11 +163,11 @@ namespace MyGarage.Services
             var requestedCluster = await _availabilityService.ResolveServiceClusterAsync(effectiveRequestedServiceIds, effectiveRequestedPackageIds, dto.CustomerNotes);
             if (flow == BookingFlowType.Flexible)
             {
-                await _baySelectionService.EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, dto.SlotHoldToken);
+                await _baySelectionService.EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, dto.SlotHoldToken, processedHoldTokens);
             }
             else
             {
-                await _baySelectionService.EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
+                await _baySelectionService.EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken, processedHoldTokens);
             }
 
             var created = await PersistBookingAsync(
@@ -168,7 +186,8 @@ namespace MyGarage.Services
                 slotStepMinutes,
                 partAvailability);
 
-            _availabilityService.ConsumeSlotHold(dto.SlotHoldToken);
+            if (!deferHoldConsumption)
+                _availabilityService.ConsumeSlotHold(dto.SlotHoldToken);
 
             return created;
         }

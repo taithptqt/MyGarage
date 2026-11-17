@@ -135,6 +135,7 @@ namespace MyGarage.Controllers
 
         [Authorize]
         [HttpGet("customers/current")]
+        [HttpGet("~/api/v1/customers/current/appointments")]
         public async Task<ActionResult> GetMine(
             [FromQuery] int? page = null,
             [FromQuery] int? pageSize = null)
@@ -147,6 +148,7 @@ namespace MyGarage.Controllers
 
         [Authorize(Roles = "Staff")]
         [HttpGet("branches/{branchId:long}")]
+        [HttpGet("~/api/v1/branches/{branchId:long}/appointments")]
         public async Task<ActionResult> GetByBranch(
             long branchId,
             [FromQuery] string? status = null,

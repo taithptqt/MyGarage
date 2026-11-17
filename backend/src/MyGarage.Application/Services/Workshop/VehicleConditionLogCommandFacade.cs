@@ -79,6 +79,8 @@ namespace MyGarage.Services
             }
 
             var logType = VehicleConditionLogCommandHelper.NormalizeLogType(itemDto.LogType);
+            if (logType == "REPAIR_3D")
+                return VehicleConditionLogCommandResult<VehicleConditionLogResponseDto>.BadRequest("Báo cáo sửa chữa 3D phải được tạo qua chức năng báo sửa chữa.");
             if (logType == VehicleConditionLogCommandHelper.LogTypeCheckOut)
             {
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
@@ -152,6 +154,8 @@ namespace MyGarage.Services
             }
 
             var existingType = VehicleConditionLogCommandHelper.NormalizeLogType(existingItem.LogType);
+            if (existingType == "REPAIR_3D")
+                return VehicleConditionLogCommandResult<VehicleConditionLogResponseDto>.BadRequest("Không thể chỉnh sửa trực tiếp báo cáo sửa chữa 3D.");
             if (existingType == VehicleConditionLogCommandHelper.LogTypeCheckIn &&
                 !string.IsNullOrWhiteSpace(existingItem.CustomerSignatureUrl))
             {
@@ -159,6 +163,8 @@ namespace MyGarage.Services
             }
 
             var targetType = VehicleConditionLogCommandHelper.NormalizeLogType(itemDto.LogType);
+            if (targetType == "REPAIR_3D")
+                return VehicleConditionLogCommandResult<VehicleConditionLogResponseDto>.BadRequest("Không thể đổi biên bản thành báo cáo sửa chữa 3D.");
             if (string.IsNullOrWhiteSpace(targetType))
             {
                 targetType = existingType;

@@ -65,6 +65,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("service-orders/{serviceOrderId:long}/dispatch-suggestions")]
+        [HttpGet("~/api/v1/service-orders/{serviceOrderId:long}/dispatch-suggestions")]
         public async Task<ActionResult<DiagnosisDispatchSuggestionDto>> GetDispatchSuggestion(
             long serviceOrderId,
             [FromQuery] long teamId)
@@ -85,6 +86,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("service-orders/{serviceOrderId:long}/intake-suggestions")]
+        [HttpGet("~/api/v1/service-orders/{serviceOrderId:long}/intake-suggestions")]
         public async Task<ActionResult<DiagnosisIntakeSuggestionDto>> GetIntakeSuggestion(
             long serviceOrderId,
             [FromQuery] string? dispatchTag = null,
@@ -114,6 +116,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/handover-snapshots")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/handover-snapshots")]
         public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> CreateHandoverSnapshot(
             long serviceOrderId,
             [FromBody] DiagnosisHandoverSnapshotCreateDto? request)
@@ -134,6 +137,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("service-orders/{serviceOrderId:long}/handover-snapshots/latest")]
+        [HttpGet("~/api/v1/service-orders/{serviceOrderId:long}/handover-snapshots/latest")]
         public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> GetLatestHandoverSnapshot(long serviceOrderId)
         {
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
@@ -152,6 +156,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/handover-snapshots/{snapshotId:long}/customer-decisions")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/handover-snapshots/{snapshotId:long}/customer-decisions")]
         public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> ApplyHandoverCustomerDecision(
             long serviceOrderId,
             long snapshotId,

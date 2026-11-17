@@ -24,7 +24,7 @@ export default function StockHistoryPage() {
     setError("");
     try {
       const res = await request({ 
-        url: "/api/inventory/history", 
+        url: "/api/v1/inventory/history", 
         method: "GET",
         params: { search, page, pageSize: PAGE_SIZE }
       });

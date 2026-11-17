@@ -88,6 +88,12 @@ public partial class ServiceOrder
 
     public DateTime? ActualHandover { get; set; }
 
+    public string? HandoverReceiverName { get; set; }
+
+    public string? HandoverReceiverPhone { get; set; }
+
+    public string? HandoverNotes { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public long? CreatedBy { get; set; }

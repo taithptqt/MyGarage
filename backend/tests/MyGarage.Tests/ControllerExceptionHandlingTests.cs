@@ -8,12 +8,15 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MyGarage.Controllers;
+using MyGarage.DTOs.Responses;
+using MyGarage.Infrastructure.Persistence.Stores.Common;
 using MyGarage.Interfaces;
+using MyGarage.Services;
 using Xunit;
 
 namespace MyGarage.Tests;
@@ -31,17 +34,19 @@ public class ControllerExceptionHandlingTests
 
         try
         {
-            var logger = new RecordingLogger<InventoryAdminController>();
+            var logger = new RecordingLogger<FileAppConfigFileStore>();
+            var settingsService = new InventoryAdminSettingsService(
+                new FileAppConfigFileStore(new StubHostEnvironment(tempRoot), logger));
             var controller = new InventoryAdminController(
                 NoOpProxy<IInventoryAdminService>.Create(),
                 NoOpProxy<MyGarage.Application.Authorization.IInventoryAuthorizationService>.Create(),
-                new StubWebHostEnvironment(tempRoot),
-                logger);
+                settingsService);
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
             var result = await controller.GetSettings();
 
             var ok = Assert.IsType<OkObjectResult>(result);
-            var settings = Assert.IsType<InventoryAdminController.InventoryAdminSettings>(ok.Value);
+            var settings = Assert.IsType<InventoryAdminSettings>(ok.Value);
             Assert.True(settings.DefaultWarehouseByItemType.ContainsKey("SELLABLE"));
             Assert.Equal(0, settings.DefaultWarehouseByItemType["SELLABLE"]);
             Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning);
@@ -154,18 +159,14 @@ public class ControllerExceptionHandlingTests
         public static T Create() => Create<T, NoOpProxy<T>>();
     }
 
-    private sealed class StubWebHostEnvironment : IWebHostEnvironment
+    private sealed class StubHostEnvironment : IHostEnvironment
     {
-        public StubWebHostEnvironment(string contentRootPath)
+        public StubHostEnvironment(string contentRootPath)
         {
             ContentRootPath = contentRootPath;
-            WebRootPath = contentRootPath;
             ContentRootFileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(contentRootPath);
-            WebRootFileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(contentRootPath);
         }
 
-        public string WebRootPath { get; set; }
-        public Microsoft.Extensions.FileProviders.IFileProvider WebRootFileProvider { get; set; }
         public string ApplicationName { get; set; } = "MyGarage.Tests";
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; }
         public string ContentRootPath { get; set; }

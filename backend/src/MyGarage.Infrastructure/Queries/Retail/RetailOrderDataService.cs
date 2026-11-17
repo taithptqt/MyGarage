@@ -63,6 +63,26 @@ public sealed class EfRetailOrderDataService(IGarageContext db) : IRetailOrderDa
         long? anchorId,
         CancellationToken ct = default)
     {
+        try
+        {
+            var nowThreshold = VietnamTime.Now.AddMinutes(-15);
+            var expiredOrderIds = await db.RetailOrders
+                .Where(order => order.CustomerId == customerId &&
+                                (order.Status == null || order.Status == "" || order.Status.ToUpper() == "DRAFT") &&
+                                (order.CreatedAt ?? DateTime.MinValue) < nowThreshold)
+                .Select(order => order.Id)
+                .ToListAsync(ct);
+
+            foreach (var expId in expiredOrderIds)
+            {
+                await CancelOrderAsync(expId, customerId, isStaff: false, "Tự động hủy do hết hạn thanh toán 15 phút.", ct);
+            }
+        }
+        catch
+        {
+            // Non-critical lazy-cancel suppression to preserve page load
+        }
+
         var query = db.RetailOrders.AsNoTracking().Where(order => order.CustomerId == customerId);
 
         var summary = await query.GroupBy(_ => 1).Select(group => new
@@ -373,6 +393,139 @@ public sealed class EfRetailOrderDataService(IGarageContext db) : IRetailOrderDa
         });
 
         return new RetailCheckoutResult(true, null, null, result);
+    }
+
+    public async Task<RetailCancelResult> CancelOrderAsync(
+        long orderId,
+        long? customerId,
+        bool isStaff,
+        string? reason,
+        CancellationToken ct = default)
+    {
+        var order = await db.RetailOrders
+            .Include(o => o.RetailOrderItems)
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct);
+
+        if (order == null)
+        {
+            return new RetailCancelResult(false, "Không tìm thấy đơn bán lẻ.", null);
+        }
+
+        if (!isStaff)
+        {
+            if (!customerId.HasValue || order.CustomerId != customerId.Value)
+            {
+                return new RetailCancelResult(false, "Bạn không có quyền hủy đơn hàng này.", null);
+            }
+        }
+
+        var currentStatus = RetailOrderLifecycleRules.NormalizeStatus(order.Status);
+        if (string.Equals(currentStatus, "CANCELED", StringComparison.OrdinalIgnoreCase))
+        {
+            return new RetailCancelResult(true, null, order);
+        }
+
+        if (!string.Equals(currentStatus, "DRAFT", StringComparison.OrdinalIgnoreCase) && !isStaff)
+        {
+            return new RetailCancelResult(false, $"Không thể hủy đơn hàng đang ở trạng thái {order.Status}.", null);
+        }
+
+        if (string.Equals(currentStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(currentStatus, "DELIVERED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(currentStatus, "SHIPPING", StringComparison.OrdinalIgnoreCase))
+        {
+            return new RetailCancelResult(false, $"Không thể hủy đơn hàng đã hoàn tất hoặc đang giao ({order.Status}).", null);
+        }
+
+        var now = VietnamTime.Now;
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await TryBeginTransactionAsync(ct);
+            try
+            {
+                order.Status = nameof(RetailOrderStatus.CANCELED);
+                order.UpdatedAt = now;
+
+                var redemptions = await db.VoucherRedemptions
+                    .Include(r => r.Voucher)
+                    .Where(r => r.RetailOrderId == order.Id && r.RedemptionStatus == "REDEEMED")
+                    .ToListAsync(ct);
+
+                foreach (var redemption in redemptions)
+                {
+                    redemption.RedemptionStatus = nameof(VoucherRedemptionStatusCode.REVERSED);
+                    redemption.ReversedAt = now;
+                    redemption.ReverseReason = string.IsNullOrWhiteSpace(reason)
+                        ? "Đơn bán lẻ đã bị hủy."
+                        : reason.Trim();
+
+                    if (redemption.Voucher != null)
+                    {
+                        var voucher = redemption.Voucher;
+                        voucher.UsedCount = Math.Max(0, (voucher.UsedCount ?? 0) - 1);
+                        voucher.RedeemedCount = Math.Max(0, voucher.RedeemedCount - 1);
+                        voucher.BudgetUsed = Math.Max(0m, voucher.BudgetUsed - redemption.DiscountAmount);
+                        voucher.UpdatedAt = now;
+
+                        if (string.Equals(voucher.Status, "EXHAUSTED", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var exhaustedByUsage = voucher.UsageLimit.HasValue && voucher.UsageLimit.Value > 0 && voucher.UsedCount >= voucher.UsageLimit.Value;
+                            var exhaustedByBudget = voucher.BudgetLimit.HasValue && voucher.BudgetUsed >= voucher.BudgetLimit.Value;
+                            if (!exhaustedByUsage && !exhaustedByBudget && now <= voucher.EndDate)
+                            {
+                                voucher.Status = "ACTIVE";
+                            }
+                        }
+                    }
+                }
+
+                var pendingPayments = await db.Payments
+                    .Where(p => p.RetailOrderId == order.Id && p.Status == "PENDING")
+                    .ToListAsync(ct);
+
+                foreach (var payment in pendingPayments)
+                {
+                    payment.Status = "CANCELLED";
+                    payment.UpdatedAt = now;
+                }
+
+                await db.SaveChangesAsync(ct);
+                if (transaction != null) await transaction.CommitAsync(ct);
+            }
+            catch
+            {
+                if (transaction != null) await transaction.RollbackAsync(ct);
+                throw;
+            }
+        });
+
+        return new RetailCancelResult(true, null, order);
+    }
+
+    public async Task<int> CancelExpiredDraftOrdersAsync(
+        TimeSpan timeout,
+        CancellationToken ct = default)
+    {
+        var now = VietnamTime.Now;
+        var threshold = now.Subtract(timeout);
+
+        var expiredOrderIds = await db.RetailOrders
+            .Where(o => (o.Status == null || o.Status == "" || o.Status.ToUpper() == "DRAFT") &&
+                        (o.CreatedAt ?? DateTime.MinValue) < threshold)
+            .Select(o => o.Id)
+            .ToListAsync(ct);
+
+        if (expiredOrderIds.Count == 0) return 0;
+
+        int cancelledCount = 0;
+        foreach (var id in expiredOrderIds)
+        {
+            var result = await CancelOrderAsync(id, null, isStaff: true, "Tự động hủy do quá hạn thanh toán (timeout).", ct);
+            if (result.Success) cancelledCount++;
+        }
+
+        return cancelledCount;
     }
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken ct = default)

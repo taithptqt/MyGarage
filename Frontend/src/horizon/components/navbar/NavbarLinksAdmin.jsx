@@ -65,7 +65,7 @@ export default function HeaderLinks(props) {
   const { colorMode, toggleColorMode } = useColorMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { branches, selectedBranchId, selectedBranch, selectBranch } = useBranch();
+  const { branches, selectedBranchId, selectedBranch, selectBranch, isBranchLocked } = useBranch();
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const displayName = getDisplayName(user);
   const avatarInitials = getAvatarInitials(displayName);
@@ -142,48 +142,65 @@ export default function HeaderLinks(props) {
           </Text>
         </Text>
       </Flex>
-      <SidebarResponsive routes={routes} />
-      <Menu>
-        <MenuButton
-          as={Button}
+      <SidebarResponsive routes={props.routes || routes} />
+      {isBranchLocked ? (
+        <Button
           size="sm"
           variant="outline"
           borderRadius="20px"
           me="10px"
           borderColor={borderColor}
+          cursor="default"
+          _hover={{ bg: "transparent" }}
+          _active={{ bg: "transparent" }}
+          title={`Chi nhánh: ${selectedBranch?.name || `Chi nhánh #${selectedBranchId}`}`}
         >
-          {selectedBranchId === 0 ? "Tất cả chi nhánh" : (selectedBranch?.name || "Chọn chi nhánh")}
-        </MenuButton>
-        <MenuList
-          boxShadow={shadow}
-          border="none"
-          borderRadius="14px"
-          p="6px"
-          minW="220px"
-        >
-          <MenuItem
-            borderRadius="10px"
-            bg={selectedBranchId === 0 ? "gray.100" : "transparent"}
-            onClick={() => selectBranch(0)}
+          {selectedBranch?.name || `Chi nhánh #${selectedBranchId}`}
+        </Button>
+      ) : (
+        <Menu>
+          <MenuButton
+            as={Button}
+            size="sm"
+            variant="outline"
+            borderRadius="20px"
+            me="10px"
+            borderColor={borderColor}
           >
-            <Text fontSize="sm" fontWeight={selectedBranchId === 0 ? "700" : "500"}>
-              Tất cả chi nhánh
-            </Text>
-          </MenuItem>
-          {branches.map((branch) => (
+            {selectedBranchId === 0 ? "Tất cả chi nhánh" : (selectedBranch?.name || "Chọn chi nhánh")}
+          </MenuButton>
+          <MenuList
+            zIndex={10000}
+            boxShadow={shadow}
+            border="none"
+            borderRadius="14px"
+            p="6px"
+            minW="220px"
+          >
             <MenuItem
-              key={branch.id}
               borderRadius="10px"
-              bg={selectedBranchId === Number(branch.id) ? "gray.100" : "transparent"}
-              onClick={() => selectBranch(branch.id)}
+              bg={selectedBranchId === 0 ? "gray.100" : "transparent"}
+              onClick={() => selectBranch(0)}
             >
-              <Text fontSize="sm" fontWeight={selectedBranchId === Number(branch.id) ? "700" : "500"}>
-                {branch.name || `Branch #${branch.id}`}
+              <Text fontSize="sm" fontWeight={selectedBranchId === 0 ? "700" : "500"}>
+                Tất cả chi nhánh
               </Text>
             </MenuItem>
-          ))}
-        </MenuList>
-      </Menu>
+            {branches.map((branch) => (
+              <MenuItem
+                key={branch.id}
+                borderRadius="10px"
+                bg={selectedBranchId === Number(branch.id) ? "gray.100" : "transparent"}
+                onClick={() => selectBranch(branch.id)}
+              >
+                <Text fontSize="sm" fontWeight={selectedBranchId === Number(branch.id) ? "700" : "500"}>
+                  {branch.name || `Branch #${branch.id}`}
+                </Text>
+              </MenuItem>
+            ))}
+          </MenuList>
+        </Menu>
+      )}
       <Menu>
         <MenuButton p="0px">
           <Icon
@@ -196,6 +213,7 @@ export default function HeaderLinks(props) {
           />
         </MenuButton>
         <MenuList
+          zIndex={10000}
           boxShadow={shadow}
           p="20px"
           borderRadius="20px"
@@ -275,6 +293,7 @@ export default function HeaderLinks(props) {
           />
         </MenuButton>
         <MenuList
+          zIndex={10000}
           boxShadow={shadow}
           p="0px"
           mt="10px"

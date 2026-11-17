@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import RetailOrderStatusBadge from "@features/retail/components/RetailOrderStatusBadge";
 import { createPayosOrder, syncOrder } from "@features/payment/api/payosApi";
 import {
+  cancelRetailOrder,
   getBranches,
   getRetailOrderById,
 } from "@features/retail/api/retailApi";
@@ -15,7 +16,30 @@ import {
   getBranchLabel,
   getDisplayText,
   getRetailOrderStatusMeta,
+  RETAIL_CART_STORAGE_KEY,
 } from "@features/retail/utils/retailFormat";
+import {
+  Package,
+  Clock,
+  CheckCircle2,
+  ShieldCheck,
+  CreditCard,
+  Eye,
+  Calendar,
+  MapPin,
+  Receipt,
+  Search,
+  X,
+  ArrowRight,
+  ShoppingBag,
+  Sparkles,
+  RefreshCw,
+  AlertCircle,
+  ChevronRight,
+  Lock,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import "./RetailShared.css";
 import "./MyRetailOrdersPage.css";
 
@@ -67,6 +91,21 @@ function formatQuantity(value) {
   return quantity.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
 }
 
+function isOrderTimeout(createdAt) {
+  if (!createdAt) return false;
+  const createdTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdTime)) return false;
+  return Date.now() - createdTime > 15 * 60 * 1000;
+}
+
+function resolveEffectiveOrderStatus(order) {
+  const rawStatus = String(order?.status || "DRAFT").toUpperCase();
+  if (rawStatus === "DRAFT" && isOrderTimeout(order?.createdAt)) {
+    return "CANCELED";
+  }
+  return rawStatus;
+}
+
 function formatRate(value) {
   const rate = Number(value);
   if (!Number.isFinite(rate)) return "0%";
@@ -75,10 +114,11 @@ function formatRate(value) {
 
 export default function MyRetailOrdersPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [page, setPage] = useState(1);
-  const [summary, setSummary] = useState({ total: 0, draftCount: 0, confirmedCount: 0, totalValue: 0 });
+  const [summary, setSummary] = useState({ total: 0, draftCount: 0, confirmedCount: 0, canceledCount: 0, totalValue: 0 });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const anchorOrderId = Number(searchParams.get("orderId")) || 0;
   const [branches, setBranches] = useState([]);
@@ -89,6 +129,11 @@ export default function MyRetailOrdersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [payingOrderId, setPayingOrderId] = useState(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null);
+
+  // Filter and Search states
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | DRAFT | CONFIRMED | CANCELED
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     let ignore = false;
@@ -108,9 +153,19 @@ export default function MyRetailOrdersPage() {
         const nextOrders = Array.isArray(orderData?.items) ? orderData.items : [];
         const nextBranches = Array.isArray(branchData) ? branchData : [];
 
+        const canceledCount = nextOrders.filter((o) => {
+          const st = resolveEffectiveOrderStatus(o);
+          return st === "CANCELED" || st === "CANCELLED";
+        }).length;
+
         setOrders(nextOrders);
-        setSummary({ total: Number(orderData?.total) || 0, draftCount: Number(orderData?.draftCount) || 0,
-          confirmedCount: Number(orderData?.confirmedCount) || 0, totalValue: Number(orderData?.totalValue) || 0 });
+        setSummary({
+          total: Number(orderData?.total) || 0,
+          draftCount: Number(orderData?.draftCount) || 0,
+          confirmedCount: Number(orderData?.confirmedCount) || 0,
+          canceledCount,
+          totalValue: Number(orderData?.totalValue) || 0,
+        });
         setPage(Number(orderData?.page) || 1);
         setBranches(nextBranches);
       } catch (loadError) {
@@ -138,14 +193,119 @@ export default function MyRetailOrdersPage() {
     [branches]
   );
 
-  const orderStats = useMemo(() => {
-    return [
-      { value: `${summary.total}`, label: "đơn phụ tùng đã tạo" },
-      { value: `${summary.draftCount}`, label: "đơn đang chờ thanh toán" },
-      { value: `${summary.confirmedCount}`, label: "đơn đã xác nhận" },
-      { value: formatVnd(summary.totalValue), label: "tổng giá trị hiển thị" },
-    ];
-  }, [summary]);
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const normalizedStatus = resolveEffectiveOrderStatus(order);
+      if (statusFilter !== "ALL") {
+        if (statusFilter === "CANCELED") {
+          if (normalizedStatus !== "CANCELED" && normalizedStatus !== "CANCELLED") return false;
+        } else if (normalizedStatus !== statusFilter) {
+          return false;
+        }
+      }
+
+      if (searchTerm.trim()) {
+        const query = searchTerm.trim().toLowerCase();
+        const code = String(order.orderCode || `RO-${order.id}`).toLowerCase();
+        const branch = branchById.get(String(order?.branchId));
+        const branchName = branch ? getBranchLabel(branch).toLowerCase() : "";
+        const notes = String(order.customerNotes || "").toLowerCase();
+
+        if (!code.includes(query) && !branchName.includes(query) && !notes.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, statusFilter, searchTerm, branchById]);
+
+  const handleCancelOrder = async (order, event) => {
+    if (event) event.stopPropagation();
+    const orderId = Number(order?.id);
+    if (!Number.isFinite(orderId) || orderId <= 0) return;
+
+    const code = order.orderCode || `RO-${orderId}`;
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${code} không? Lượt voucher (nếu có) sẽ được hoàn trả lại.`)) {
+      return;
+    }
+
+    setCancellingOrderId(orderId);
+    try {
+      await cancelRetailOrder(orderId, "Khách hàng chủ động hủy trên danh sách đơn");
+      setRefreshVersion((v) => v + 1);
+      if (detailOrder?.id === orderId) {
+        setDetailOrder((prev) => (prev ? { ...prev, status: "CANCELED" } : null));
+      }
+    } catch (cancelErr) {
+      alert(cancelErr?.message || "Không thể hủy đơn hàng lúc này.");
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+
+  const handleReorder = async (order, event) => {
+    if (event) event.stopPropagation();
+    const orderId = Number(order?.id);
+    if (!Number.isFinite(orderId) || orderId <= 0) return;
+
+    try {
+      let items = order.items || [];
+      if (!items.length) {
+        const detail = await getRetailOrderById(orderId);
+        items = getOrderItems(detail);
+      }
+
+      if (!items.length) {
+        alert("Đơn hàng không có sản phẩm nào để mua lại.");
+        return;
+      }
+
+      const raw = localStorage.getItem(RETAIL_CART_STORAGE_KEY);
+      let existingCart = [];
+      try {
+        existingCart = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(existingCart)) existingCart = [];
+      } catch {
+        existingCart = [];
+      }
+
+      const existingMap = new Map(existingCart.map((it) => [Number(it.id), it]));
+
+      items.forEach((item) => {
+        const id = Number(item.productId || item.id);
+        if (!Number.isFinite(id) || id <= 0) return;
+        const qty = Math.max(1, Number(item.quantity || item.qty || 1));
+
+        if (existingMap.has(id)) {
+          const current = existingMap.get(id);
+          existingMap.set(id, {
+            ...current,
+            qty: (current.qty || 1) + qty,
+            selected: true,
+          });
+        } else {
+          existingMap.set(id, {
+            id,
+            name: item.productName || item.name || `Phụ tùng #${id}`,
+            sku: item.productSku || item.sku || null,
+            unit: item.unit || null,
+            retailPrice: Number(item.unitPriceAtTime || item.retailPrice || 0),
+            qty,
+            selected: true,
+            categoryId: item.categoryId || null,
+            imageUrl: item.imageUrl || null,
+          });
+        }
+      });
+
+      localStorage.setItem(RETAIL_CART_STORAGE_KEY, JSON.stringify(Array.from(existingMap.values())));
+      navigate("/parts-cart");
+    } catch (reorderErr) {
+      console.error("Reorder failed:", reorderErr);
+      navigate("/parts-cart");
+    }
+  };
 
   useEffect(() => {
     if (loading || orders.length === 0) return;
@@ -162,7 +322,6 @@ export default function MyRetailOrdersPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("orderId");
     setSearchParams(nextParams, { replace: true });
-
   }, [loading, orders, searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -174,9 +333,12 @@ export default function MyRetailOrdersPage() {
   useEffect(() => {
     const queryOrderId = Number(searchParams.get("orderId") || 0);
     const storedRetailOrderId = Number(localStorage.getItem("payos_last_retail_order_id") || 0);
-    const targetOrderId = Number.isFinite(queryOrderId) && queryOrderId > 0
-      ? queryOrderId
-      : (Number.isFinite(storedRetailOrderId) && storedRetailOrderId > 0 ? storedRetailOrderId : 0);
+    const targetOrderId =
+      Number.isFinite(queryOrderId) && queryOrderId > 0
+        ? queryOrderId
+        : Number.isFinite(storedRetailOrderId) && storedRetailOrderId > 0
+        ? storedRetailOrderId
+        : 0;
     const payosOrderId = Number(localStorage.getItem("payos_last_order_id") || 0);
 
     if (targetOrderId <= 0) return;
@@ -197,7 +359,11 @@ export default function MyRetailOrdersPage() {
         try {
           const targetOrder = await getRetailOrderById(targetOrderId);
           if (disposed) return;
-          setOrders((previous) => previous.map((order) => Number(order?.id) === targetOrderId ? { ...order, ...targetOrder } : order));
+          setOrders((previous) =>
+            previous.map((order) =>
+              Number(order?.id) === targetOrderId ? { ...order, ...targetOrder } : order
+            )
+          );
           const normalizedStatus = String(targetOrder?.status || "").toUpperCase();
           if (normalizedStatus === "CONFIRMED") {
             localStorage.removeItem("payos_last_order_id");
@@ -420,282 +586,588 @@ export default function MyRetailOrdersPage() {
   const detailStatusMeta = detailOrder ? getRetailOrderStatusMeta(detailOrder.status) : null;
 
   return (
-    <div className="parts-shop-page retail-orders-page">
-      <section className="parts-shop-hero parts-shop-hero--orders">
+    <div className="retail-orders-page">
+      {/* LUXURY HERO SECTION */}
+      <section className="retail-orders-hero">
         <img
-          className="parts-shop-hero-image"
+          className="retail-orders-hero-bg"
           src="/assets/booking/showcase-1.jpg"
-          alt="Không gian premium dành cho trải nghiệm hậu mãi và phụ tùng của MyGarage"
+          alt="Không gian dịch vụ phụ tùng cao cấp MyGarage"
         />
-        <div className="parts-shop-hero-overlay" />
+        <div className="retail-orders-hero-mask" />
         <Header overlay />
-        <div className="parts-shop-hero-content">
-          <p className="parts-shop-hero-kicker">MYGARAGE RETAIL ORDERS</p>
-          <h1>Theo dõi toàn bộ đơn phụ tùng của bạn</h1>
-          <p className="parts-shop-hero-sub">
-            Trang này bám đúng workflow bán lẻ hiện có của repo: đơn được tạo từ Part Shop,
-            status hiện tại đang theo backend DRAFT hoặc CONFIRMED, và thanh toán vẫn đi qua PayOS.
-          </p>
-          <div className="parts-shop-hero-stats">
-            {orderStats.map((item) => (
-              <article key={item.label} className="parts-shop-hero-stat">
-                <strong>{item.value}</strong>
-                <span>{item.label}</span>
-              </article>
-            ))}
+
+        <div className="retail-orders-hero-container">
+          <div className="retail-orders-hero-left">
+            <span className="retail-orders-hero-badge">
+              <Sparkles size={14} /> MYGARAGE GENUINE CARE
+            </span>
+            <h1 className="retail-orders-hero-title">Lịch Sử & Quản Lý Đơn Hàng</h1>
+            <p className="retail-orders-hero-desc">
+              Theo dõi chi tiết tiến trình đặt hàng linh kiện, phụ tùng và phụ kiện chính hãng tại MyGarage.
+              Tra cứu thông tin, bảo hành và thanh toán trực tuyến an toàn, minh bạch.
+            </p>
+            <div className="retail-orders-hero-actions">
+              <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-primary">
+                <ShoppingBag size={17} /> Khám phá Part Shop
+              </Link>
+              <Link to="/booking" className="parts-shop-btn parts-shop-btn-ghost">
+                <Calendar size={17} /> Đặt lịch dịch vụ
+              </Link>
+            </div>
+          </div>
+
+          <div className="retail-orders-hero-right">
+            <div className="retail-orders-dashboard-card">
+              <div className="retail-dash-header">
+                <div className="retail-dash-title">
+                  <Package size={18} />
+                  <span>Tổng quan đơn hàng</span>
+                </div>
+                <div className="retail-dash-badge">
+                  <span className="retail-dash-dot" />
+                  <span>Trực tuyến</span>
+                </div>
+              </div>
+
+              <div className="retail-dash-grid">
+                <article className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap icon-total">
+                    <Package size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <strong>{summary.total}</strong>
+                    <span>Tổng đơn đã tạo</span>
+                  </div>
+                </article>
+
+                <article className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap icon-draft">
+                    <Clock size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <strong>{summary.draftCount}</strong>
+                    <span>Chờ thanh toán</span>
+                  </div>
+                </article>
+
+                <article className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap icon-confirmed">
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <strong>{summary.confirmedCount}</strong>
+                    <span>Đã xác nhận</span>
+                  </div>
+                </article>
+
+                <article className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap icon-value">
+                    <Receipt size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <strong className="text-gold">{formatVnd(summary.totalValue)}</strong>
+                    <span>Tổng giá trị đơn</span>
+                  </div>
+                </article>
+              </div>
+
+              <div className="retail-dash-footer">
+                <ShieldCheck size={16} />
+                <span>Thanh toán bảo mật qua PayOS & hỗ trợ bảo hành chính hãng</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <div className="parts-shop">
-        <section className="parts-shop-header">
-          <h2>Đơn phụ tùng của tôi</h2>
-          <p>
-            Mỗi đơn hiển thị theo dữ liệu backend hiện có: mã đơn, chi nhánh, trạng thái,
-            số tiền cuối cùng, ghi chú và thời gian tạo/cập nhật.
-          </p>
-        </section>
+      {/* MAIN CONTENT AREA */}
+      <main className="retail-orders-main">
+        <div className="retail-orders-container">
+          {/* TOOLBAR: FILTER TABS & SEARCH */}
+          <div className="retail-orders-toolbar">
+            <div className="retail-orders-tabs" role="tablist" aria-label="Lọc đơn hàng">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "ALL"}
+                className={`retail-tab-btn ${statusFilter === "ALL" ? "is-active" : ""}`}
+                onClick={() => setStatusFilter("ALL")}
+              >
+                <span>Tất cả</span>
+                <span className="retail-tab-count">{summary.total}</span>
+              </button>
 
-        {error ? (
-          <div className="parts-shop-card parts-shop-alert parts-shop-alert-error">{error}</div>
-        ) : null}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "DRAFT"}
+                className={`retail-tab-btn ${statusFilter === "DRAFT" ? "is-active" : ""}`}
+                onClick={() => setStatusFilter("DRAFT")}
+              >
+                <Clock size={15} />
+                <span>Chờ thanh toán</span>
+                <span className="retail-tab-count">{summary.draftCount}</span>
+              </button>
 
-        <section className="parts-shop-card retail-orders-panel">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "CONFIRMED"}
+                className={`retail-tab-btn ${statusFilter === "CONFIRMED" ? "is-active" : ""}`}
+                onClick={() => setStatusFilter("CONFIRMED")}
+              >
+                <CheckCircle2 size={15} />
+                <span>Đã xác nhận</span>
+                <span className="retail-tab-count">{summary.confirmedCount}</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "CANCELED"}
+                className={`retail-tab-btn ${statusFilter === "CANCELED" ? "is-active" : ""}`}
+                onClick={() => setStatusFilter("CANCELED")}
+              >
+                <XCircle size={15} />
+                <span>Đã hủy</span>
+                <span className="retail-tab-count">{summary.canceledCount || 0}</span>
+              </button>
+            </div>
+
+            <div className="retail-orders-search-wrap">
+              <Search size={17} className="retail-search-icon" />
+              <input
+                type="text"
+                className="retail-search-input"
+                placeholder="Tìm mã đơn, chi nhánh, ghi chú..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  className="retail-search-clear"
+                  onClick={() => setSearchTerm("")}
+                  aria-label="Xóa tìm kiếm"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <div className="retail-alert retail-alert-error">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* ORDER CARDS SECTION */}
           {loading ? (
-            <div className="parts-shop-empty">Đang tải đơn phụ tùng...</div>
-          ) : orders.length === 0 ? (
-            <div className="parts-shop-empty parts-shop-empty-panel">
-              <p>Bạn chưa có đơn phụ tùng nào.</p>
-              <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-primary">
-                Mua phụ tùng ngay
-              </Link>
+            <div className="retail-orders-loading">
+              <RefreshCw size={28} className="retail-spin" />
+              <span>Đang tải danh sách đơn phụ tùng của bạn...</span>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="retail-orders-empty-card">
+              <div className="retail-empty-icon-wrap">
+                <ShoppingBag size={42} />
+              </div>
+              <h3>Không tìm thấy đơn phụ tùng nào</h3>
+              <p>
+                {searchTerm || statusFilter !== "ALL"
+                  ? "Không có đơn hàng nào khớp với điều kiện tìm kiếm hoặc bộ lọc hiện tại."
+                  : "Bạn chưa có đơn đặt phụ tùng nào tại hệ thống MyGarage."}
+              </p>
+              <div className="retail-empty-actions">
+                {searchTerm || statusFilter !== "ALL" ? (
+                  <button
+                    type="button"
+                    className="parts-shop-btn parts-shop-btn-ghost"
+                    onClick={() => {
+                      setStatusFilter("ALL");
+                      setSearchTerm("");
+                    }}
+                  >
+                    Xóa bộ lọc
+                  </button>
+                ) : null}
+                <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-primary">
+                  Khám phá cửa hàng phụ tùng
+                </Link>
+              </div>
             </div>
           ) : (
-            <div className="retail-order-list">
-              {orders.map((order) => {
-                const normalizedStatus = String(order?.status || "DRAFT").toUpperCase();
+            <div className="retail-orders-grid">
+              {filteredOrders.map((order) => {
+                const normalizedStatus = resolveEffectiveOrderStatus(order);
+                const isCancelled = normalizedStatus === "CANCELED" || normalizedStatus === "CANCELLED";
+                const isDraft = normalizedStatus === "DRAFT";
                 const statusMeta = getRetailOrderStatusMeta(normalizedStatus);
                 const branch = branchById.get(String(order?.branchId));
                 const canRetryPayment =
-                  normalizedStatus === "DRAFT" && Number(order?.finalAmount || 0) >= 1000;
+                  isDraft && Number(order?.finalAmount || 0) >= 1000;
+                const isFocused = Number(highlightOrderId) === Number(order.id);
 
                 return (
                   <article
                     id={`retail-order-${order.id}`}
                     key={order.id}
-                    className={`retail-order-card retail-order-card--clickable ${Number(highlightOrderId) === Number(order.id) ? "retail-order-card--focus" : ""}`}
-                    role="button"
-                    tabIndex={0}
+                    className={`retail-card ${isFocused ? "is-focused" : ""}`}
                     onClick={() => openOrderDetail(order)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      openOrderDetail(order);
-                    }}
                   >
-                    <div className="retail-order-card-top">
-                      <div>
-                        <div className="retail-order-card-code">
-                          {order.orderCode || `RO-${order.id}`}
-                        </div>
-                        <p className="retail-order-card-desc">{statusMeta.description}</p>
-                        <p className="retail-order-card-hint">Nhấn vào đơn để xem chi tiết thanh toán</p>
+                    {/* CARD HEADER */}
+                    <div className="retail-card-head">
+                      <div className="retail-card-head-left">
+                        <span className="retail-card-code-badge">
+                          #{order.orderCode || `RO-${order.id}`}
+                        </span>
+                        <span className="retail-card-meta-pill">
+                          <MapPin size={13} />
+                          {branch ? getBranchLabel(branch) : `Chi nhánh #${order.branchId}`}
+                        </span>
+                        <span className="retail-card-meta-pill">
+                          <Calendar size={13} />
+                          {formatDateTime(order.createdAt)}
+                        </span>
                       </div>
                       <RetailOrderStatusBadge status={normalizedStatus} />
                     </div>
 
-                    <dl className="retail-order-grid">
-                      <div>
-                        <dt>Chi nhánh</dt>
-                        <dd>{branch ? getBranchLabel(branch) : `Chi nhánh #${order.branchId}`}</dd>
+                    {/* CARD BODY */}
+                    <div className="retail-card-body">
+                      <div className="retail-card-desc-wrap">
+                        <p className="retail-card-desc">{statusMeta.description}</p>
+                        {order.customerNotes ? (
+                          <div className="retail-card-notes">
+                            <span className="notes-tag">Ghi chú của bạn:</span>
+                            <p className="notes-content">"{order.customerNotes}"</p>
+                          </div>
+                        ) : null}
                       </div>
-                      <div>
-                        <dt>Tổng thanh toán</dt>
-                        <dd>{formatVnd(order.finalAmount)}</dd>
-                      </div>
-                      <div>
-                        <dt>Tạo lúc</dt>
-                        <dd>{formatDateTime(order.createdAt)}</dd>
-                      </div>
-                      <div>
-                        <dt>Cập nhật</dt>
-                        <dd>{formatDateTime(order.updatedAt)}</dd>
-                      </div>
-                    </dl>
 
-                    {order.customerNotes ? (
-                      <div className="retail-order-notes">
-                        <span>Ghi chú khách hàng</span>
-                        <p>{order.customerNotes}</p>
+                      <div className="retail-card-price-box">
+                        <span className="price-label">Tổng thanh toán</span>
+                        <span className="price-val">{formatVnd(order.finalAmount)}</span>
                       </div>
-                    ) : null}
+                    </div>
 
-                    <div
-                      className="retail-order-actions"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        className="parts-shop-btn parts-shop-btn-ghost"
-                        onClick={() => openOrderDetail(order)}
-                      >
-                        Xem chi tiết
-                      </button>
-                      <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost">
-                        Mua thêm phụ tùng
-                      </Link>
-                      {canRetryPayment ? (
+                    {/* CARD FOOTER */}
+                    <div className="retail-card-foot" onClick={(e) => e.stopPropagation()}>
+                      <div className="retail-card-foot-meta">
+                        <span>Cập nhật: {formatDateTime(order.updatedAt)}</span>
+                      </div>
+
+                      <div className="retail-card-foot-actions">
                         <button
                           type="button"
-                          className="parts-shop-btn parts-shop-btn-primary"
-                          onClick={() => handlePayRetailOrder(order)}
-                          disabled={payingOrderId != null}
+                          className="retail-btn-action retail-btn-detail"
+                          onClick={() => openOrderDetail(order)}
                         >
-                          Thanh toán đơn này
+                          <Eye size={15} />
+                          <span>Chi tiết</span>
                         </button>
-                      ) : null}
+
+                        {canRetryPayment && (
+                          <>
+                            <button
+                              type="button"
+                              className="retail-btn-action retail-btn-pay"
+                              onClick={() => handlePayRetailOrder(order)}
+                              disabled={payingOrderId != null || cancellingOrderId != null}
+                            >
+                              <CreditCard size={15} />
+                              <span>
+                                {payingOrderId === order.id ? "Đang xử lý..." : "Thanh toán PayOS"}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="retail-btn-action retail-btn-cancel"
+                              onClick={(e) => handleCancelOrder(order, e)}
+                              disabled={payingOrderId != null || cancellingOrderId === order.id}
+                              title="Hủy đơn hàng này"
+                            >
+                              <XCircle size={15} />
+                              <span>{cancellingOrderId === order.id ? "Đang hủy..." : "Hủy đơn"}</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isCancelled && (
+                          <button
+                            type="button"
+                            className="retail-btn-action retail-btn-reorder"
+                            onClick={(e) => handleReorder(order, e)}
+                            title="Thêm lại các sản phẩm vào giỏ để đặt lại"
+                          >
+                            <RotateCcw size={15} />
+                            <span>Mua lại</span>
+                          </button>
+                        )}
+
+                        <Link to="/parts-shop" className="retail-btn-action retail-btn-link">
+                          <span>Mua thêm</span>
+                          <ArrowRight size={14} />
+                        </Link>
+                      </div>
                     </div>
                   </article>
                 );
               })}
             </div>
           )}
+
+          {/* PAGINATION */}
           {summary.total > ORDER_PAGE_SIZE && (
-            <nav className="parts-shop-pagination" aria-label={PAGE_LABELS.page}>
-              <button type="button" className="parts-shop-page-button" disabled={loading || page <= 1}
-                onClick={() => setPage((value) => value - 1)}>{PAGE_LABELS.previous}</button>
-              <span>{PAGE_LABELS.page} {page} / {Math.ceil(summary.total / ORDER_PAGE_SIZE)}</span>
-              <button type="button" className="parts-shop-page-button" disabled={loading || page * ORDER_PAGE_SIZE >= summary.total}
-                onClick={() => setPage((value) => value + 1)}>{PAGE_LABELS.next}</button>
+            <nav className="retail-pagination" aria-label={PAGE_LABELS.page}>
+              <button
+                type="button"
+                className="retail-page-btn"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((value) => value - 1)}
+              >
+                {PAGE_LABELS.previous}
+              </button>
+              <span className="retail-page-text">
+                {PAGE_LABELS.page} <strong>{page}</strong> / {Math.ceil(summary.total / ORDER_PAGE_SIZE)}
+              </span>
+              <button
+                type="button"
+                className="retail-page-btn"
+                disabled={loading || page * ORDER_PAGE_SIZE >= summary.total}
+                onClick={() => setPage((value) => value + 1)}
+              >
+                {PAGE_LABELS.next}
+              </button>
             </nav>
           )}
-        </section>
-      </div>
+        </div>
+      </main>
 
+      {/* DETAIL MODAL */}
       {detailOrder ? (
         <div
-          className="parts-shop-modal-backdrop"
+          className="retail-modal-backdrop"
           role="presentation"
           onClick={(event) => {
             if (event.target !== event.currentTarget || detailLoading) return;
             closeOrderDetail();
           }}
         >
-          <section
-            className="parts-shop-modal retail-order-detail-modal"
+          <div
+            className="retail-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="retail-order-detail-title"
+            aria-labelledby="retail-modal-title"
           >
-            <div className="parts-shop-modal-head">
-              <span className="parts-shop-section-kicker">Chi tiết đơn phụ tùng</span>
-              <h3 id="retail-order-detail-title">{detailOrder.orderCode || `RO-${detailOrder.id}`}</h3>
-              <p>
-                Xem đầy đủ sản phẩm, số lượng, đơn giá, VAT và tổng thanh toán trước khi tiếp tục.
-              </p>
-            </div>
-
-            {detailLoading ? (
-              <div className="parts-shop-empty">Đang tải chi tiết đơn...</div>
-            ) : detailError ? (
-              <div className="parts-shop-alert parts-shop-alert-error">{detailError}</div>
-            ) : (
-              <>
-                <div className="parts-shop-modal-summary">
-                  <div className="parts-shop-modal-row">
-                    <span>Chi nhánh</span>
-                    <strong>{detailOrder.branchLabel}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Trạng thái</span>
-                    <strong>{detailStatusMeta?.label || detailOrder.status || "--"}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Tạo lúc</span>
-                    <strong>{formatDateTime(detailOrder.createdAt)}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Cập nhật</span>
-                    <strong>{formatDateTime(detailOrder.updatedAt)}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Tạm tính</span>
-                    <strong>{formatVnd(detailOrder.subTotal)}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Giảm giá</span>
-                    <strong>{formatVnd(detailOrder.totalDiscountAmount)}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row">
-                    <span>Thuế VAT</span>
-                    <strong>{formatVnd(detailOrder.taxAmount)}</strong>
-                  </div>
-                  <div className="parts-shop-modal-row parts-shop-modal-row-total">
-                    <span>Tổng thanh toán</span>
-                    <strong>{formatVnd(detailOrder.finalAmount)}</strong>
-                  </div>
+            {/* MODAL HEADER */}
+            <div className="retail-modal-header">
+              <div className="retail-modal-header-info">
+                <div className="retail-modal-tag">
+                  <Package size={14} />
+                  <span>Chi tiết đơn phụ tùng</span>
                 </div>
-
-                <div className="parts-shop-modal-items">
-                  <h4>Danh sách sản phẩm</h4>
-                  {Array.isArray(detailOrder.items) && detailOrder.items.length > 0 ? (
-                    <div className="parts-shop-modal-item-list">
-                      {detailOrder.items.map((item) => (
-                        <article key={item.id} className="parts-shop-modal-item">
-                          <div className="parts-shop-modal-item-main">
-                            <strong>{item.productName || `Sản phẩm #${item.productId ?? "?"}`}</strong>
-                            <small>{item.productSku ? `SKU ${item.productSku}` : `ID ${item.productId ?? "?"}`}</small>
-                          </div>
-                          <div className="parts-shop-modal-item-metrics">
-                            <span>SL: {formatQuantity(item.quantity)}</span>
-                            <span>x {formatVnd(item.unitPriceAtTime)}</span>
-                            <strong>{formatVnd(item.subTotal)}</strong>
-                          </div>
-                          <div className="parts-shop-modal-item-tax">
-                            <span>VAT {formatRate(item.taxRate)}: {formatVnd(item.taxAmount)}</span>
-                            <strong>Dòng tiền: {formatVnd(item.finalAmount)}</strong>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="parts-shop-empty parts-shop-empty-panel">
-                      Chưa có dòng sản phẩm cho đơn này.
-                    </div>
-                  )}
+                <div className="retail-modal-title-row">
+                  <h3 id="retail-modal-title">#{detailOrder.orderCode || `RO-${detailOrder.id}`}</h3>
+                  <RetailOrderStatusBadge status={detailOrder.status} />
                 </div>
+              </div>
 
-                {detailOrder.customerNotes ? (
-                  <div className="parts-shop-modal-note">
-                    <span>Ghi chú đơn hàng</span>
-                    <p>{detailOrder.customerNotes}</p>
-                  </div>
-                ) : null}
-              </>
-            )}
-
-            <div className="parts-shop-modal-actions">
-              {String(detailOrder?.status || "").toUpperCase() === "DRAFT" &&
-              Number(detailOrder?.finalAmount || 0) >= 1000 ? (
-                <button
-                  type="button"
-                  className="parts-shop-btn parts-shop-btn-primary"
-                  onClick={() => handlePayRetailOrder(detailOrder)}
-                  disabled={payingOrderId != null}
-                >
-                  Thanh toán đơn này
-                </button>
-              ) : null}
               <button
                 type="button"
-                className="parts-shop-btn parts-shop-btn-ghost"
+                className="retail-modal-close"
+                onClick={closeOrderDetail}
+                disabled={detailLoading || payingOrderId != null}
+                aria-label="Đóng"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="retail-modal-body">
+              {detailLoading ? (
+                <div className="retail-modal-loading">
+                  <RefreshCw size={24} className="retail-spin" />
+                  <span>Đang tải thông tin chi tiết đơn hàng...</span>
+                </div>
+              ) : detailError ? (
+                <div className="retail-alert retail-alert-error">
+                  <AlertCircle size={18} />
+                  <span>{detailError}</span>
+                </div>
+              ) : (
+                <>
+                  {/* METRIC STRIP */}
+                  <div className="retail-modal-strip">
+                    <div className="retail-modal-strip-item">
+                      <div className="strip-icon">
+                        <MapPin size={18} />
+                      </div>
+                      <div className="strip-info">
+                        <span className="strip-label">Chi nhánh nhận đơn</span>
+                        <strong className="strip-val">{detailOrder.branchLabel}</strong>
+                      </div>
+                    </div>
+
+                    <div className="retail-modal-strip-item">
+                      <div className="strip-icon">
+                        <Calendar size={18} />
+                      </div>
+                      <div className="strip-info">
+                        <span className="strip-label">Thời gian tạo đơn</span>
+                        <strong className="strip-val">{formatDateTime(detailOrder.createdAt)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="retail-modal-strip-item">
+                      <div className="strip-icon">
+                        <ShieldCheck size={18} />
+                      </div>
+                      <div className="strip-info">
+                        <span className="strip-label">Tình trạng đơn</span>
+                        <strong className="strip-val">
+                          {detailStatusMeta?.label || detailOrder.status || "--"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ITEM LIST */}
+                  <div className="retail-modal-items-section">
+                    <h4 className="retail-modal-section-title">
+                      Danh sách sản phẩm ({detailOrder.items?.length || 0})
+                    </h4>
+
+                    {Array.isArray(detailOrder.items) && detailOrder.items.length > 0 ? (
+                      <div className="retail-modal-item-list">
+                        {detailOrder.items.map((item) => (
+                          <div key={item.id} className="retail-modal-item-card">
+                            <div className="item-card-left">
+                              <h5 className="item-name">
+                                {item.productName || `Sản phẩm #${item.productId ?? "?"}`}
+                              </h5>
+                              <div className="item-tags">
+                                {item.productSku && (
+                                  <span className="item-sku">SKU: {item.productSku}</span>
+                                )}
+                                <span className="item-unit-price">
+                                  Đơn giá: {formatVnd(item.unitPriceAtTime)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="item-card-right">
+                              <div className="item-qty-tag">x{formatQuantity(item.quantity)}</div>
+                              <div className="item-price-calc">
+                                <span className="item-sub">Tạm tính: {formatVnd(item.subTotal)}</span>
+                                <span className="item-tax">
+                                  VAT ({formatRate(item.taxRate)}): {formatVnd(item.taxAmount)}
+                                </span>
+                                <strong className="item-final">{formatVnd(item.finalAmount)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="retail-modal-no-items">
+                        <p>Chưa có danh sách sản phẩm hiển thị cho đơn này.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CUSTOMER NOTE IF PRESENT */}
+                  {detailOrder.customerNotes && (
+                    <div className="retail-modal-note-box">
+                      <span className="note-title">Ghi chú của bạn:</span>
+                      <p className="note-desc">{detailOrder.customerNotes}</p>
+                    </div>
+                  )}
+
+                  {/* FINANCIAL BREAKDOWN */}
+                  <div className="retail-modal-financials">
+                    <div className="financial-row">
+                      <span>Tiền hàng tạm tính</span>
+                      <strong>{formatVnd(detailOrder.subTotal)}</strong>
+                    </div>
+
+                    {Number(detailOrder.totalDiscountAmount) > 0 && (
+                      <div className="financial-row text-success">
+                        <span>Giảm giá & ưu đãi</span>
+                        <strong>-{formatVnd(detailOrder.totalDiscountAmount)}</strong>
+                      </div>
+                    )}
+
+                    <div className="financial-row">
+                      <span>Thuế VAT</span>
+                      <strong>{formatVnd(detailOrder.taxAmount)}</strong>
+                    </div>
+
+                    <div className="financial-row financial-total">
+                      <span>Tổng thanh toán</span>
+                      <strong className="total-highlight">{formatVnd(detailOrder.finalAmount)}</strong>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div className="retail-modal-footer">
+              {resolveEffectiveOrderStatus(detailOrder) === "DRAFT" &&
+              Number(detailOrder?.finalAmount || 0) >= 1000 ? (
+                <>
+                  <button
+                    type="button"
+                    className="parts-shop-btn parts-shop-btn-primary modal-pay-btn"
+                    onClick={() => handlePayRetailOrder(detailOrder)}
+                    disabled={payingOrderId != null || cancellingOrderId != null}
+                  >
+                    <Lock size={16} />
+                    <span>
+                      {payingOrderId === detailOrder.id ? "Đang xử lý..." : "Thanh toán ngay qua PayOS"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="parts-shop-btn modal-cancel-btn"
+                    onClick={(e) => handleCancelOrder(detailOrder, e)}
+                    disabled={payingOrderId != null || cancellingOrderId != null}
+                  >
+                    <XCircle size={16} />
+                    <span>
+                      {cancellingOrderId === detailOrder.id ? "Đang hủy..." : "Hủy đơn hàng"}
+                    </span>
+                  </button>
+                </>
+              ) : null}
+
+              {(resolveEffectiveOrderStatus(detailOrder) === "CANCELED" ||
+                resolveEffectiveOrderStatus(detailOrder) === "CANCELLED") ? (
+                <button
+                  type="button"
+                  className="parts-shop-btn parts-shop-btn-primary modal-pay-btn"
+                  onClick={(e) => handleReorder(detailOrder, e)}
+                >
+                  <RotateCcw size={16} />
+                  <span>Mua lại đơn này</span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-ghost modal-close-btn"
                 onClick={closeOrderDetail}
                 disabled={detailLoading || payingOrderId != null}
               >
-                Đóng
+                Đóng cửa sổ
               </button>
             </div>
-          </section>
+          </div>
         </div>
       ) : null}
 

@@ -49,247 +49,34 @@ import {
   CreditCard
 } from "lucide-react";
 
-const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
-const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
-const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
-
-const DISCOUNT_MODE_AMOUNT = "AMOUNT";
-const DISCOUNT_MODE_PERCENT = "PERCENT";
-const SERVICE_QTY_WARNING_MESSAGE = "Số lượng dịch vụ vượt 5. Vui lòng kiểm tra lại.";
-const PART_QTY_WARNING_MESSAGE = "Số lượng phụ tùng vượt 20. Vui lòng kiểm tra lại.";
-
-function getQuantityWarningMessage(quantityValue, isServiceRow) {
-  const quantity = Number(quantityValue);
-  if (!Number.isFinite(quantity) || quantity <= 0) return "";
-  if (isServiceRow && quantity > 5) return SERVICE_QTY_WARNING_MESSAGE;
-  if (!isServiceRow && quantity > 20) return PART_QTY_WARNING_MESSAGE;
-  return "";
-}
-
-const EXCEL_UI_TEXT = {
-  exportButton: "Xuất Excel",
-  importButton: "Nhập Excel",
-  exportTitle: "Xuất file Excel báo giá theo trạng thái hiện tại",
-  importTitle: "Nhập lại file Excel báo giá để cập nhật cột bảo hiểm",
-  noQuotationImport: "Chưa có báo giá để nhập Excel.",
-  noQuotationExport: "Chưa có báo giá để xuất Excel.",
-  processing: "Hệ thống đang xử lý, vui lòng chờ.",
-  noStaff: "Không xác định được nhân viên thao tác.",
-  orderCanceledImport: "Lệnh sửa chữa đã hủy, không thể nhập Excel.",
-  orderCanceledExport: "Lệnh sửa chữa đã hủy, không thể xuất Excel.",
-  quotationCanceledImport: "Báo giá đã hủy, không thể nhập Excel.",
-  quotationCanceledExport: "Báo giá đã hủy, không thể xuất Excel.",
-  splitLocked: "Báo giá đã khóa tách bill theo trạng thái hiện tại.",
-};
-
-// Sub-components for better organization
-function QuoteStepper({ status }) {
-  const steps = [
-    { id: "DRAFT", label: "Bản nháp", icon: <FileText size={18} /> },
-    { id: "PENDING_INSURANCE", label: "Chờ BH duyệt", icon: <ShieldCheck size={18} /> },
-    { id: "INSURANCE_APPROVED", label: "BH đã duyệt", icon: <Check size={18} /> },
-    { id: "PENDING_CUSTOMER", label: "Đợi khách chốt", icon: <User size={18} /> },
-    { id: "CUSTOMER_APPROVED", label: "Hoàn tất", icon: <Check size={18} /> },
-  ];
-
-  const currentIdx = steps.findIndex(s => s.id === status);
-
-  return (
-    <div className="quote-stepper">
-      {steps.map((step, idx) => {
-        let state = "pending";
-        if (idx < currentIdx) state = "completed";
-        else if (idx === currentIdx) state = "active";
-        if (status === "CUSTOMER_APPROVED") state = "completed";
-
-        return (
-          <div key={step.id} className={`step-item ${state}`}>
-            <div className="step-icon">{state === "completed" ? <Check size={18} /> : step.icon}</div>
-            <div className="step-label">{step.label}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-
-function QuoteInfoCard({ icon, label, value, subValue }) {
-  return (
-    <div className="info-card-premium">
-      <div className="info-card-icon">{icon}</div>
-      <div className="info-card-content">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        {subValue && <small className="info-card-sub">{subValue}</small>}
-      </div>
-    </div>
-  );
-}
-
-
-function extractServiceId(service) {
-  return toPositiveNumber(readField(service, "id", "Id"));
-}
-
-function extractServiceName(service) {
-  return String(readField(service, "name", "Name", "serviceName", "ServiceName") || "").trim();
-}
-
-function extractServicePrice(service) {
-  const val = Number(readField(service, "basePrice", "BasePrice", "unitPrice", "UnitPrice", "price", "Price") || 0);
-  return Number.isFinite(val) && val > 0 ? val : 0;
-}
-
-function extractServiceTax(service) {
-  const val = Number(readField(service, "taxRate", "TaxRate") || 0);
-  return Number.isFinite(val) && val >= 0 ? val : 0;
-}
-
-function extractProductId(product) {
-  return toPositiveNumber(readField(product, "id", "Id", "productId", "ProductId"));
-}
-
-function extractProductName(product) {
-  return String(readField(product, "name", "Name", "productName", "ProductName") || "").trim();
-}
-
-function extractProductPrice(product) {
-  const val = Number(
-    readField(product, "salePrice", "SalePrice", "retailPrice", "RetailPrice", "unitPrice", "UnitPrice", "sellingPrice", "SellingPrice") || 0,
-  );
-  return Number.isFinite(val) && val > 0 ? val : 0;
-}
-
-function extractProductTax(product) {
-  const val = Number(readField(product, "taxRate", "TaxRate") || 0);
-  return Number.isFinite(val) && val >= 0 ? val : 0;
-}
-
-function normalizeOrderDetailType(rawType) {
-  const normalized = String(rawType || "").trim().toUpperCase();
-  if (["LABOR", "SERVICE", "SERVICES", "WORK"].includes(normalized)) return "SERVICE";
-  if (["PART", "PARTS", "PRODUCT", "MATERIAL", "INVENTORY"].includes(normalized)) return "PART";
-  return normalized;
-}
-
-function isValidHttpUrl(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return false;
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function normalizeBooleanLike(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes";
-}
-
-function pickPreferredActiveQuotationId(quotationRows) {
-  const rows = Array.isArray(quotationRows) ? quotationRows : [];
-  if (rows.length === 0) return null;
-  // Rows are already sorted by VersionNo desc, so pick latest version directly.
-  return Number(readField(rows[0], "id", "Id")) || null;
-}
-
-function toCsvCell(value) {
-  const normalized = String(value ?? "").replace(/"/g, "\"\"");
-  return `"${normalized}"`;
-}
-
-function resolveCustomerDisplay(order, customerById) {
-  const directText = firstNonEmptyText(
-    readField(order, "customerName", "CustomerName", "customerFullName", "CustomerFullName", "guestName", "GuestName"),
-    order?.customer?.fullName,
-    order?.customer?.FullName,
-    order?.customer?.name,
-    order?.customer?.Name,
-  );
-  if (directText) return directText;
-
-  const customerId = toPositiveNumber(readField(order, "customerId", "CustomerId"));
-  const customer = customerId ? customerById.get(customerId) : null;
-  return firstNonEmptyText(customer?.fullName, customer?.FullName, customer?.name, customer?.Name, "-");
-}
-
-function resolveVehiclePlateDisplay(order, vehicleById) {
-  const directText = firstNonEmptyText(
-    readField(
-      order,
-      "vehicleLicensePlate",
-      "VehicleLicensePlate",
-      "vehiclePlate",
-      "VehiclePlate",
-      "licensePlate",
-      "LicensePlate",
-      "guestVehicleLicensePlate",
-      "GuestVehicleLicensePlate",
-    ),
-    order?.vehicle?.licensePlate,
-    order?.vehicle?.LicensePlate,
-    order?.customerVehicle?.licensePlate,
-    order?.customerVehicle?.LicensePlate,
-  );
-  if (directText) return directText;
-
-  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
-  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
-  return firstNonEmptyText(vehicle?.licensePlate, vehicle?.LicensePlate, vehicle?.plateNumber, vehicle?.PlateNumber, "-");
-}
-
-function resolveVehicleBrandModelDisplay(order, vehicleById, brandById, modelById) {
-  const directBrand = firstNonEmptyText(
-    readField(order, "vehicleBrandName", "VehicleBrandName", "brandName", "BrandName"),
-    order?.vehicle?.brandName,
-    order?.vehicle?.BrandName,
-    order?.customerVehicle?.brandName,
-    order?.customerVehicle?.BrandName,
-  );
-  const directModel = firstNonEmptyText(
-    readField(order, "vehicleModelName", "VehicleModelName", "modelName", "ModelName"),
-    order?.vehicle?.modelName,
-    order?.vehicle?.ModelName,
-    order?.customerVehicle?.modelName,
-    order?.customerVehicle?.ModelName,
-  );
-  if (directBrand || directModel) {
-    return firstNonEmptyText(`${directBrand} ${directModel}`.trim(), directBrand, directModel, "-");
-  }
-
-  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
-  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
-  const brandId = toPositiveNumber(
-    readField(order, "vehicleBrandId", "VehicleBrandId", "brandId", "BrandId"),
-    readField(vehicle, "vehicleBrandId", "VehicleBrandId", "brandId", "BrandId"),
-  );
-  const modelId = toPositiveNumber(
-    readField(order, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"),
-    readField(vehicle, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"),
-  );
-
-  const brandFromCatalog = brandId ? brandById.get(brandId) : null;
-  const modelFromCatalog = modelId ? modelById.get(modelId) : null;
-
-  const fallbackBrand = firstNonEmptyText(
-    vehicle?.brandName,
-    vehicle?.BrandName,
-    vehicle?.vehicleBrandName,
-    vehicle?.VehicleBrandName,
-    readField(brandFromCatalog, "name", "Name", "code", "Code"),
-  );
-  const fallbackModel = firstNonEmptyText(
-    vehicle?.modelName,
-    vehicle?.ModelName,
-    vehicle?.vehicleModelName,
-    vehicle?.VehicleModelName,
-    readField(modelFromCatalog, "modelName", "ModelName", "name", "Name"),
-  );
-  return firstNonEmptyText(`${fallbackBrand} ${fallbackModel}`.trim(), fallbackBrand, fallbackModel, "-");
-}
+import {
+  SERVICE_ROW_TOOLTIP_EXPAND,
+  SERVICE_ROW_TOOLTIP_COLLAPSE,
+  SERVICE_ROW_TOOLTIP_STATIC,
+  DISCOUNT_MODE_AMOUNT,
+  DISCOUNT_MODE_PERCENT,
+  SERVICE_QTY_WARNING_MESSAGE,
+  PART_QTY_WARNING_MESSAGE,
+  getQuantityWarningMessage,
+  EXCEL_UI_TEXT,
+  extractServiceId,
+  extractServiceName,
+  extractServicePrice,
+  extractServiceTax,
+  extractProductId,
+  extractProductName,
+  extractProductPrice,
+  extractProductTax,
+  normalizeOrderDetailType,
+  isValidHttpUrl,
+  normalizeBooleanLike,
+  pickPreferredActiveQuotationId,
+  toCsvCell,
+  resolveCustomerDisplay,
+  resolveVehiclePlateDisplay,
+  resolveVehicleBrandModelDisplay,
+} from "./serviceOrderQuoteHelpers";
+import { QuoteCancelModal, QuoteInfoCard, QuoteStepper } from "./QuotePageWidgets";
 
 export default function ServiceOrderQuotePage() {
   const navigate = useNavigate();
@@ -720,19 +507,6 @@ export default function ServiceOrderQuotePage() {
 
   useEffect(() => {
     const details = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
-    const quoteStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
-    const totalInsuranceAmount = Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0);
-    const shouldAutoFillInsuranceDefault =
-      ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quoteStatus) &&
-      totalInsuranceAmount <= 0 &&
-      details.length > 0 &&
-      details.every((row) => {
-        const raw = Number(
-          readField(row, "insuranceCoveredAmount", "InsuranceCoveredAmount", "insuranceRequestedAmount", "InsuranceRequestedAmount") || 0,
-        );
-        return !Number.isFinite(raw) || raw <= 0;
-      });
-
     const nextDraft = {};
     const nextQuantityDraft = {};
     const nextDiscountDraft = {};
@@ -752,14 +526,12 @@ export default function ServiceOrderQuotePage() {
         "insuranceRequestedAmount",
         "InsuranceRequestedAmount",
       );
-      const insuranceCovered = shouldAutoFillInsuranceDefault
-        ? finalAmount
-        : insuranceRaw === null || insuranceRaw === undefined || String(insuranceRaw).trim() === ""
-          ? finalAmount
-          : Number(insuranceRaw);
+      const insuranceCovered = insuranceRaw === null || insuranceRaw === undefined || String(insuranceRaw).trim() === ""
+        ? 0
+        : Number(insuranceRaw);
       const safeInsurance = Number.isFinite(insuranceCovered)
         ? Math.min(Math.max(insuranceCovered, 0), Math.max(0, finalAmount))
-        : Math.max(0, finalAmount);
+        : 0;
       nextDraft[detailId] = safeInsurance;
 
       const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
@@ -1849,6 +1621,11 @@ export default function ServiceOrderQuotePage() {
   }, [activeQuotation, staffId, quotationDiscountDraft, loadData]);
 
   const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+  const isNormalQuotation = normalizeStatus(readField(activeQuotation, "quotationType", "QuotationType")) === "NORMAL";
+  const displayQuotationStatus = (status, quote) =>
+    normalizeStatus(status) === "INSURANCE_APPROVED" && normalizeStatus(readField(quote, "quotationType", "QuotationType")) === "NORMAL"
+      ? "ĐÃ DUYỆT NỘI BỘ"
+      : getStatusLabelVi(status, status);
   const splitBillingLockedStatuses = new Set([
     "SUPERSEDED",
     "CANCELED",
@@ -2318,7 +2095,7 @@ export default function ServiceOrderQuotePage() {
         </div>
       ) : (
         <div className="reception-quote-layout">
-          <QuoteStepper status={quotationStatus} />
+          <QuoteStepper status={quotationStatus} requiresInsurance={!isNormalQuotation} />
 
           <div className="quote-info-grid">
             {/* Row 1 */}
@@ -2341,7 +2118,7 @@ export default function ServiceOrderQuotePage() {
             <QuoteInfoCard
               icon={<FileText size={24} />}
               label="Trạng thái báo giá"
-              value={<span className="status-badge-inline">{getStatusLabelVi(quotationStatus, "")}</span>}
+              value={<span className="status-badge-inline">{displayQuotationStatus(quotationStatus, activeQuotation)}</span>}
             />
 
             {/* Row 2 */}
@@ -2392,7 +2169,7 @@ export default function ServiceOrderQuotePage() {
                         <div className="version-btn-body">
                           <span className="version-name">Phiên bản V{versionNo}</span>
                           <div className="version-status-line">
-                            <span className="version-status-text">{getStatusLabelVi(status, status)}</span>
+                            <span className="version-status-text">{displayQuotationStatus(status, row)}</span>
                           </div>
                           <span className="version-date">{formatDateTime(readField(row, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</span>
                         </div>
@@ -2810,42 +2587,13 @@ export default function ServiceOrderQuotePage() {
         </div>
       )}
 
-      {/* Cancel Confirmation Modal */}
-      {showCancelModal && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 450 }}>
-            <div className="modal-header">
-              <h2 style={{ display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: 18 }}>
-                <AlertTriangle color="var(--quota-danger)" size={20} /> Xác nhận hủy báo giá
-              </h2>
-            </div>
-            <div className="modal-body-content" style={{ padding: 20 }}>
-              <p style={{ margin: 0, color: "#475569" }}>Bạn có chắc chắn muốn hủy toàn bộ các hạng mục trong lệnh sửa chữa này không? Hành động này không thể hoàn tác.</p>
-
-              <div style={{ marginTop: 15 }}>
-                <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Lý do hủy hồ sơ</label>
-                <select
-                  className="reception-quote-approval-note-input"
-                  style={{ marginTop: 5, width: "100%", height: 40 }}
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                >
-                  <option value="Khách vội">Khách vội</option>
-                  <option value="Chờ đợi">Chờ đợi</option>
-                  <option value="Đổi ý">Đổi ý</option>
-                  <option value="Có việc gấp">Có việc gấp</option>
-                  <option value="Khác">Lý do khác...</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
-                <button type="button" className="btn-quota btn-quota-outline" onClick={() => setShowCancelModal(false)}>Hủy bỏ</button>
-                <button type="button" className="btn-quota btn-quota-primary" style={{ background: "var(--quota-danger)", color: "white" }} onClick={() => { void runOnceGuarded(handleCancelAll); }}>Xác nhận hủy</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <QuoteCancelModal
+        showCancelModal={showCancelModal}
+        cancelReason={cancelReason}
+        setCancelReason={setCancelReason}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={() => { void runOnceGuarded(handleCancelAll); }}
+      />
     </div>
   );
 }

@@ -45,8 +45,8 @@ export async function getSalaryProfiles(branchId, options = {}, requester) {
   const params = { ...(options.params || {}) };
   if (branchId) params.branchId = branchId;
   return requestWithDualRoute(
+    "/api/v1/salary-profiles",
     "/api/v1/salary-admin/profiles",
-    "/api/salary-admin/profiles",
     { ...options, method: "GET", params },
     requester
   );
@@ -56,8 +56,8 @@ export async function getSalaryProfilePage(branchId, page, pageSize, requester) 
   const params = { page, pageSize };
   if (branchId) params.branchId = branchId;
   const response = await requestSafeWithDualRoute(
+    "/api/v1/salary-profiles",
     "/api/v1/salary-admin/profiles",
-    "/api/salary-admin/profiles",
     { method: "GET", params },
     requester
   );
@@ -66,8 +66,8 @@ export async function getSalaryProfilePage(branchId, page, pageSize, requester) 
 
 export async function createSalaryProfile(payload, requester) {
   return requestWithDualRoute(
+    "/api/v1/salary-profiles",
     "/api/v1/salary-admin/profiles",
-    "/api/salary-admin/profiles",
     { method: "POST", data: payload },
     requester
   );
@@ -75,8 +75,8 @@ export async function createSalaryProfile(payload, requester) {
 
 export async function updateSalaryProfile(id, payload, requester) {
   return requestWithDualRoute(
+    `/api/v1/salary-profiles/${id}`,
     `/api/v1/salary-admin/profiles/${id}`,
-    `/api/salary-admin/profiles/${id}`,
     { method: "PUT", data: payload },
     requester
   );
@@ -84,8 +84,8 @@ export async function updateSalaryProfile(id, payload, requester) {
 
 export async function deleteSalaryProfile(id, requester) {
   return requestWithDualRoute(
+    `/api/v1/salary-profiles/${id}`,
     `/api/v1/salary-admin/profiles/${id}`,
-    `/api/salary-admin/profiles/${id}`,
     { method: "DELETE" },
     requester
   );
@@ -93,8 +93,8 @@ export async function deleteSalaryProfile(id, requester) {
 
 export async function getInitialSalaryRequests(params = {}, requester) {
   return requestWithDualRoute(
+    "/api/v1/initial-salary-requests",
     "/api/v1/salary-admin/requests",
-    "/api/salary-admin/requests",
     { method: "GET", params },
     requester
   );
@@ -102,8 +102,8 @@ export async function getInitialSalaryRequests(params = {}, requester) {
 
 export async function getInitialSalaryRequestPage(params, requester) {
   const response = await requestSafeWithDualRoute(
+    "/api/v1/initial-salary-requests",
     "/api/v1/salary-admin/requests",
-    "/api/salary-admin/requests",
     { method: "GET", params },
     requester
   );
@@ -112,8 +112,8 @@ export async function getInitialSalaryRequestPage(params, requester) {
 
 export async function approveInitialSalaryRequest(id, payload = {}, requester) {
   return requestWithDualRoute(
-    `/api/v1/salary-admin/requests/${id}/approve`,
-    `/api/salary-admin/requests/${id}/approve`,
+    `/api/v1/initial-salary-requests/${id}/approvals`,
+    `/api/v1/salary-admin/requests/${id}/approvals`,
     { method: "POST", data: payload },
     requester
   );
@@ -121,8 +121,8 @@ export async function approveInitialSalaryRequest(id, payload = {}, requester) {
 
 export async function rejectInitialSalaryRequest(id, payload = {}, requester) {
   return requestWithDualRoute(
-    `/api/v1/salary-admin/requests/${id}/reject`,
-    `/api/salary-admin/requests/${id}/reject`,
+    `/api/v1/initial-salary-requests/${id}/rejections`,
+    `/api/v1/salary-admin/requests/${id}/rejections`,
     { method: "POST", data: payload },
     requester
   );

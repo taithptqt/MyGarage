@@ -1,7 +1,10 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
+using MyGarage.Application.Authorization;
 using MyGarage.Application.Invoices;
+using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -11,9 +14,13 @@ namespace MyGarage.Services
 {
     public class InvoiceService : GenericService<Invoice>, IInvoiceService
     {
+        private readonly IInvoiceRepository _invoiceRepository;
         private readonly IInvoiceBackfillStore _backfillStore;
         private readonly IInvoiceOrderContextStore _orderContextStore;
         private readonly IInvoicePersistenceStore _persistenceStore;
+        private readonly IInvoiceBranchLookupStore _branchLookup;
+        private readonly IInvoiceAuthorizationService _authorization;
+        private readonly IServiceOrderEditCapabilityService _editCapabilityService;
         private readonly IMapper _mapper;
 
         public InvoiceService(
@@ -21,11 +28,18 @@ namespace MyGarage.Services
             IInvoiceBackfillStore backfillStore,
             IInvoiceOrderContextStore orderContextStore,
             IInvoicePersistenceStore persistenceStore,
+            IInvoiceBranchLookupStore branchLookup,
+            IInvoiceAuthorizationService authorization,
+            IServiceOrderEditCapabilityService editCapabilityService,
             IMapper mapper) : base(repository)
         {
+            _invoiceRepository = repository;
             _backfillStore = backfillStore;
             _orderContextStore = orderContextStore;
             _persistenceStore = persistenceStore;
+            _branchLookup = branchLookup;
+            _authorization = authorization;
+            _editCapabilityService = editCapabilityService;
             _mapper = mapper;
         }
 
@@ -39,6 +53,137 @@ namespace MyGarage.Services
         {
             var item = await GetByIdAsync(id);
             return item == null ? null : _mapper.Map<InvoiceResponseDto>(item);
+        }
+
+        public async Task<(IReadOnlyList<InvoiceResponseDto> Items, int Total)> GetScopedPageDtosAsync(
+            long? branchId,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            var (items, total) = await _invoiceRepository.GetScopedPageAsync(branchId, page, pageSize, ct);
+            return (MapToDtos(items), total);
+        }
+
+        public async Task<InvoiceResponseDto?> GetScopedDtoByIdAsync(
+            long id,
+            long? branchId,
+            CancellationToken ct = default)
+        {
+            var item = await _invoiceRepository.GetScopedAsync(id, branchId, ct);
+            return item == null ? null : MapToDto(item);
+        }
+
+        public async Task<InvoiceMutationResult> CreateOrUpdateForContextAsync(
+            InvoiceCreateDto? itemDto,
+            long actorUserId,
+            long? scopedBranchId,
+            UserActorContext actor,
+            CancellationToken ct = default)
+        {
+            if ((itemDto?.ServiceOrderId ?? 0) <= 0 && (itemDto?.RetailOrderId ?? 0) <= 0)
+            {
+                return new InvoiceMutationResult(
+                    InvoiceMutationStatus.BadRequest,
+                    ErrorMessage: "Invoice must be created from a service order or retail order.");
+            }
+
+            if ((itemDto?.ServiceOrderId ?? 0) > 0 && (itemDto?.RetailOrderId ?? 0) > 0)
+            {
+                return new InvoiceMutationResult(
+                    InvoiceMutationStatus.BadRequest,
+                    ErrorMessage: "Invoice must have exactly one source order.");
+            }
+
+            var sourceBranch = (itemDto?.ServiceOrderId ?? 0) > 0
+                ? await _branchLookup.GetBranchIdForServiceOrderAsync(itemDto!.ServiceOrderId!.Value, ct)
+                : await _branchLookup.GetBranchIdForRetailOrderAsync(itemDto!.RetailOrderId!.Value, ct);
+            if (!sourceBranch.HasValue)
+            {
+                return new InvoiceMutationResult(InvoiceMutationStatus.NotFound);
+            }
+
+            if (scopedBranchId.HasValue && sourceBranch.Value != scopedBranchId.Value)
+            {
+                return new InvoiceMutationResult(InvoiceMutationStatus.Forbidden);
+            }
+
+            if (!await _authorization.CanCreateInvoiceAsync(sourceBranch, actor, ct))
+            {
+                return new InvoiceMutationResult(InvoiceMutationStatus.Forbidden);
+            }
+
+            var lockError = await ValidateInvoiceMutationAsync(itemDto?.ServiceOrderId);
+            if (!string.IsNullOrWhiteSpace(lockError))
+            {
+                return new InvoiceMutationResult(InvoiceMutationStatus.BadRequest, ErrorMessage: lockError);
+            }
+
+            try
+            {
+                var outcome = await EnsureForPaymentContextWithOutcomeAsync(
+                    itemDto?.ServiceOrderId,
+                    itemDto?.RetailOrderId,
+                    itemDto?.PayerType,
+                    itemDto?.PayerId);
+                var createdItem = outcome.Invoice;
+                if (createdItem == null)
+                {
+                    return new InvoiceMutationResult(
+                        InvoiceMutationStatus.BadRequest,
+                        ErrorMessage: "Không thể tạo hóa đơn từ nguồn dữ liệu hiện tại.");
+                }
+
+                createdItem.Phone = itemDto?.Phone ?? createdItem.Phone;
+                createdItem.Address = itemDto?.Address ?? createdItem.Address;
+                createdItem.InvoiceUrl = itemDto?.InvoiceUrl ?? createdItem.InvoiceUrl;
+                createdItem.CompanyName = itemDto?.CompanyName ?? createdItem.CompanyName;
+                createdItem.CompanyAddress = itemDto?.CompanyAddress ?? createdItem.CompanyAddress;
+                createdItem.ReceiveEmail = itemDto?.ReceiveEmail ?? createdItem.ReceiveEmail;
+                createdItem.TaxCode = itemDto?.TaxCode ?? createdItem.TaxCode;
+                createdItem.CreditNote = itemDto?.CreditNote ?? createdItem.CreditNote;
+                createdItem.IssuedAt ??= itemDto?.IssuedAt;
+                createdItem.DueDate ??= itemDto?.DueDate?.Date;
+                createdItem.CreatedBy ??= actorUserId;
+                createdItem.UpdatedBy = actorUserId;
+                createdItem.UpdatedAt = VietnamTime.Now;
+
+                createdItem = await UpdateAsync(createdItem.Id, createdItem) ?? createdItem;
+                var responseDto = MapToDto(createdItem);
+                return new InvoiceMutationResult(
+                    outcome.Created ? InvoiceMutationStatus.Created : InvoiceMutationStatus.Ok,
+                    Data: responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new InvoiceMutationResult(InvoiceMutationStatus.BadRequest, ErrorMessage: ex.Message);
+            }
+        }
+
+        private async Task<string?> ValidateInvoiceMutationAsync(long? serviceOrderId)
+        {
+            if (!serviceOrderId.HasValue || serviceOrderId.Value <= 0)
+            {
+                return null;
+            }
+
+            var capability = await _editCapabilityService.GetEditCapabilityAsync(serviceOrderId.Value);
+            if (capability == null)
+            {
+                return "Không tìm thấy service order để xử lý hóa đơn.";
+            }
+
+            if (capability.IsClosedLocked)
+            {
+                return "Không thể chỉnh sửa hóa đơn vì service order đã đóng.";
+            }
+
+            if (capability.IsBillingLocked)
+            {
+                return "Không thể chỉnh sửa hóa đơn vì lệnh đã chốt tài chính.";
+            }
+
+            return null;
         }
 
         public async Task<Invoice?> EnsureForPaymentContextAsync(long? serviceOrderId, long? retailOrderId, string? payerType, long? payerId)
@@ -69,6 +214,11 @@ namespace MyGarage.Services
             foreach (var payment in completedPayments)
             {
                 var hadInvoiceId = payment.InvoiceId.HasValue && payment.InvoiceId.Value > 0;
+                // Backfill only missing links; existing links require separate reconciliation.
+                if (hadInvoiceId)
+                {
+                    continue;
+                }
 
                 var beforeInvoiceIds = await _backfillStore.GetAllInvoiceIdsAsync();
                 var beforeInvoiceSet = beforeInvoiceIds.ToHashSet();
@@ -107,19 +257,32 @@ namespace MyGarage.Services
 
         private async Task<(Invoice? Invoice, bool Created)> EnsureServiceOrderInvoiceAsync(long serviceOrderId, string? payerType, long? payerId)
         {
-            var invoice = await _orderContextStore.GetLatestInvoiceByServiceOrderIdAsync(serviceOrderId);
             var serviceOrder = await _orderContextStore.GetServiceOrderWithDetailsForInvoiceAsync(serviceOrderId);
+            if (serviceOrder == null) return (null, false);
 
-            if (serviceOrder == null)
-            {
-                return (invoice, false);
-            }
+            var normalizedPayer = RequirePayerType(payerType);
+            var resolvedPayerId = ResolvePayerId(normalizedPayer, payerId, serviceOrder.CustomerId);
+            if (resolvedPayerId is not > 0 || (normalizedPayer == "CUSTOMER" && resolvedPayerId != serviceOrder.CustomerId))
+                throw new InvalidOperationException("Không xác định được bên thanh toán phù hợp với lệnh sửa chữa.");
+
+            var invoices = await _orderContextStore.GetInvoicesByServiceOrderIdAsync(serviceOrderId);
+            var invoice = ResolveExistingInvoice(invoices, normalizedPayer, resolvedPayerId.Value, serviceOrderId, null);
+            if (invoice != null) return (invoice, false);
+            if (invoices.Count != 0)
+                throw new InvalidOperationException("Không thể tự tạo hóa đơn khác khi lệnh đã có hóa đơn; vui lòng chọn hóa đơn phù hợp.");
+
+            var activeDetails = serviceOrder.ServiceOrderDetails
+                .Where(d => !string.Equals(d.Status, nameof(ServiceOrderDetailStatusCode.CANCELED), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (normalizedPayer != "CUSTOMER" || activeDetails.Any(d =>
+                    !string.Equals(d.PayerType, "CUSTOMER", StringComparison.OrdinalIgnoreCase) ||
+                    d.InsuranceCompanyId is > 0 || d.InsuranceRequestedAmount.GetValueOrDefault() > 0m ||
+                    d.InsuranceApprovedAmount.GetValueOrDefault() > 0m || d.GarageAbsorbedAmount.GetValueOrDefault() > 0m) ||
+                !serviceOrder.FinalAmount.HasValue || activeDetails.Sum(d => d.FinalAmount) != serviceOrder.FinalAmount.Value)
+                throw new InvalidOperationException("Không thể tự tạo hóa đơn khi chưa xác định an toàn phần thanh toán từ báo giá đã duyệt.");
 
             var now = VietnamTime.Now;
-            var created = invoice == null;
-            if (invoice == null)
-            {
-                invoice = new Invoice
+            invoice = new Invoice
                 {
                     ServiceOrderId = serviceOrder.Id,
                     VehicleId = serviceOrder.VehicleId,
@@ -137,41 +300,31 @@ namespace MyGarage.Services
                     UpdatedAt = now
                 };
 
-                await _persistenceStore.AddInvoiceAndSaveAsync(invoice);
-            }
-            else
-            {
-                invoice.VehicleId ??= serviceOrder.VehicleId;
-                invoice.Phone ??= serviceOrder.Customer?.Phone;
-                invoice.ReceiveEmail ??= serviceOrder.Customer?.Email;
-                invoice.SubTotalAmount ??= serviceOrder.SubTotalAmount ?? 0m;
-                invoice.TaxAmount ??= serviceOrder.TaxAmount ?? 0m;
-                invoice.TotalAmount ??= serviceOrder.FinalAmount ?? 0m;
-                invoice.PayerType = string.IsNullOrWhiteSpace(invoice.PayerType) ? NormalizePayerType(payerType) : invoice.PayerType;
-                invoice.PayerId ??= ResolvePayerId(payerType, payerId, serviceOrder.CustomerId);
-                invoice.UpdatedAt = now;
-            }
+            await _persistenceStore.AddInvoiceAndSaveAsync(invoice);
 
-            await PopulateServiceOrderInvoiceDetailsAsync(invoice, serviceOrder.ServiceOrderDetails.ToList());
+            await PopulateServiceOrderInvoiceDetailsAsync(invoice, activeDetails);
             await _persistenceStore.SaveChangesInTransactionAsync();
-            return (invoice, created);
+            return (invoice, true);
         }
 
         private async Task<(Invoice? Invoice, bool Created)> EnsureRetailOrderInvoiceAsync(long retailOrderId, string? payerType, long? payerId)
         {
-            var invoice = await _orderContextStore.GetLatestInvoiceByRetailOrderIdAsync(retailOrderId);
             var retailOrder = await _orderContextStore.GetRetailOrderWithItemsForInvoiceAsync(retailOrderId);
+            if (retailOrder == null) return (null, false);
 
-            if (retailOrder == null)
-            {
-                return (invoice, false);
-            }
+            var normalizedPayer = RequirePayerType(payerType);
+            var resolvedPayerId = ResolvePayerId(normalizedPayer, payerId, retailOrder.CustomerId);
+            if (normalizedPayer != "CUSTOMER" || resolvedPayerId is not > 0 || resolvedPayerId != retailOrder.CustomerId)
+                throw new InvalidOperationException("Không xác định được bên thanh toán phù hợp với đơn bán lẻ.");
+
+            var invoices = await _orderContextStore.GetInvoicesByRetailOrderIdAsync(retailOrderId);
+            var invoice = ResolveExistingInvoice(invoices, normalizedPayer, resolvedPayerId.Value, null, retailOrderId);
+            if (invoice != null) return (invoice, false);
+            if (invoices.Count != 0)
+                throw new InvalidOperationException("Không thể tự tạo hóa đơn khác khi đơn đã có hóa đơn; vui lòng chọn hóa đơn phù hợp.");
 
             var now = VietnamTime.Now;
-            var created = invoice == null;
-            if (invoice == null)
-            {
-                invoice = new Invoice
+            invoice = new Invoice
                 {
                     RetailOrderId = retailOrder.Id,
                     Phone = retailOrder.Customer?.Phone,
@@ -188,23 +341,11 @@ namespace MyGarage.Services
                     UpdatedAt = now
                 };
 
-                await _persistenceStore.AddInvoiceAndSaveAsync(invoice);
-            }
-            else
-            {
-                invoice.Phone ??= retailOrder.Customer?.Phone;
-                invoice.ReceiveEmail ??= retailOrder.Customer?.Email;
-                invoice.SubTotalAmount ??= retailOrder.SubTotal;
-                invoice.TaxAmount ??= retailOrder.TaxAmount ?? 0m;
-                invoice.TotalAmount ??= retailOrder.FinalAmount;
-                invoice.PayerType = string.IsNullOrWhiteSpace(invoice.PayerType) ? NormalizePayerType(payerType) : invoice.PayerType;
-                invoice.PayerId ??= ResolvePayerId(payerType, payerId, retailOrder.CustomerId);
-                invoice.UpdatedAt = now;
-            }
+            await _persistenceStore.AddInvoiceAndSaveAsync(invoice);
 
             await PopulateRetailOrderInvoiceDetailsAsync(invoice, retailOrder.RetailOrderItems.ToList());
             await _persistenceStore.SaveChangesInTransactionAsync();
-            return (invoice, created);
+            return (invoice, true);
         }
 
         private async Task PopulateServiceOrderInvoiceDetailsAsync(Invoice invoice, List<ServiceOrderDetail> details)
@@ -280,6 +421,25 @@ namespace MyGarage.Services
             }
         }
 
+        private static string RequirePayerType(string? payerType)
+        {
+            var normalized = payerType?.Trim().ToUpperInvariant();
+            if (string.IsNullOrEmpty(normalized)) return "CUSTOMER";
+            if (normalized is "CUSTOMER" or "INSURANCE") return normalized;
+            throw new InvalidOperationException("Loại bên thanh toán không hợp lệ.");
+        }
+
+        private static Invoice? ResolveExistingInvoice(
+            IReadOnlyList<Invoice> invoices, string payerType, long payerId, long? serviceOrderId, long? retailOrderId)
+        {
+            var matches = invoices.Where(invoice =>
+                invoice.ServiceOrderId == serviceOrderId && invoice.RetailOrderId == retailOrderId &&
+                invoice.PayerId == payerId && string.Equals(invoice.PayerType?.Trim(), payerType, StringComparison.OrdinalIgnoreCase))
+                .Take(2).ToList();
+            if (matches.Count > 1)
+                throw new InvalidOperationException("Có nhiều hóa đơn phù hợp; vui lòng chọn hóa đơn cụ thể.");
+            return matches.SingleOrDefault();
+        }
         private static string NormalizePayerType(string? payerType)
         {
             var normalized = payerType?.Trim().ToUpperInvariant();

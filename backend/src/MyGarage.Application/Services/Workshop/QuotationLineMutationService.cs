@@ -66,6 +66,8 @@ public sealed class QuotationLineMutationService : IQuotationLineMutationService
             return QuotationMappingHelper.MapQuotationResponse(quotation);
         }
 
+        QuotationPricingHelper.CalculateQuotationTotals(quotation, excludedDetailId: detail.Id);
+
         var previousStatus = quotation.Status;
         var hadInsuranceCoverage = QuotationValidationHelper.ResolveInsuranceCoveredAmount(detail) > 0m;
         var now = VietnamTime.Now;
@@ -150,82 +152,114 @@ public sealed class QuotationLineMutationService : IQuotationLineMutationService
             .GroupBy(x => x.QuotationDetailId)
             .ToDictionary(x => x.Key, x => x.First());
 
-        foreach (var detail in quotation.QuotationDetails)
+        // Validate the requested state before modifying EF-tracked rows.
+        var preview = new Quotation
         {
-            if (string.Equals(detail.Status, QuotationWorkflowConstants.DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
+            QuotationDetails = quotation.QuotationDetails.Select(x => new QuotationDetail
             {
-                continue;
-            }
+                Id = x.Id, Status = x.Status, Quantity = x.Quantity, UnitPriceAtTime = x.UnitPriceAtTime,
+                SubTotal = x.SubTotal, TaxRate = x.TaxRate, PayerType = x.PayerType,
+                InsuranceCoveredAmount = x.InsuranceCoveredAmount, CustomerCoveredAmount = x.CustomerCoveredAmount
+            }).ToList(),
+            QuotationDiscounts = (quotation.QuotationDiscounts ?? new List<QuotationDiscount>()).Select(x => new QuotationDiscount
+            {
+                QuotationDetailId = x.QuotationDetailId, DiscountType = x.DiscountType, ValueType = x.ValueType,
+                DiscountValue = x.DiscountValue, AppliedAmount = x.AppliedAmount
+            }).ToList()
+        };
+        ApplyUpdates(preview, true);
+        QuotationPricingHelper.CalculateQuotationTotals(preview);
+        ApplyUpdates(quotation, false);
 
-            if (!updatesByDetailId.TryGetValue(detail.Id, out var update))
+        void ApplyUpdates(Quotation target, bool isPreview)
+        {
+            foreach (var detail in target.QuotationDetails)
             {
-                continue;
-            }
-
-            if (update.Quantity.HasValue)
-            {
-                var normalizedQuantity = update.Quantity.Value <= 0m ? 1m : update.Quantity.Value;
-                detail.Quantity = normalizedQuantity;
-            }
-
-            var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
-            var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
-            var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
-            decimal nextDiscount;
-
-            if (update.DiscountPercentage.HasValue)
-            {
-                var normalizedPercent = update.DiscountPercentage.Value < 0m ? 0m : update.DiscountPercentage.Value;
-                normalizedPercent = Math.Min(normalizedPercent, 100m);
-                nextDiscount = Math.Round(subTotal * (normalizedPercent / 100m), 2, MidpointRounding.AwayFromZero);
-            }
-            else if (update.DiscountValue.HasValue)
-            {
-                var normalizedDiscount = update.DiscountValue.Value < 0m ? 0m : update.DiscountValue.Value;
-                nextDiscount = Math.Min(normalizedDiscount, Math.Max(0m, subTotal));
-            }
-            else
-            {
-                var currentDiscountPercentage = QuotationPricingHelper.ResolveQuotationDetailDiscountPercentage(detail, quotation.QuotationDiscounts);
-                var normalizedPercent = currentDiscountPercentage.HasValue
-                    ? Math.Min(Math.Max(currentDiscountPercentage.Value, 0m), 100m)
-                    : (decimal?)null;
-                if (normalizedPercent.HasValue)
+                if (string.Equals(detail.Status, QuotationWorkflowConstants.DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
                 {
-                    nextDiscount = Math.Round(subTotal * (normalizedPercent.Value / 100m), 2, MidpointRounding.AwayFromZero);
+                    continue;
+                }
+
+                if (!updatesByDetailId.TryGetValue(detail.Id, out var update))
+                {
+                    continue;
+                }
+
+                if (update.Quantity.HasValue)
+                {
+                    var normalizedQuantity = update.Quantity.Value <= 0m ? 1m : update.Quantity.Value;
+                    detail.Quantity = normalizedQuantity;
+                }
+
+                var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
+                var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
+                var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
+                decimal nextDiscount;
+
+                if (update.DiscountPercentage.HasValue)
+                {
+                    var normalizedPercent = update.DiscountPercentage.Value < 0m ? 0m : update.DiscountPercentage.Value;
+                    normalizedPercent = Math.Min(normalizedPercent, 100m);
+                    nextDiscount = Math.Round(subTotal * (normalizedPercent / 100m), 2, MidpointRounding.AwayFromZero);
+                }
+                else if (update.DiscountValue.HasValue)
+                {
+                    var normalizedDiscount = update.DiscountValue.Value < 0m ? 0m : update.DiscountValue.Value;
+                    nextDiscount = Math.Min(normalizedDiscount, Math.Max(0m, subTotal));
                 }
                 else
                 {
-                    nextDiscount = QuotationPricingHelper.ResolveQuotationDetailDiscountAmount(detail, quotation.QuotationDiscounts);
+                    var currentDiscountPercentage = QuotationPricingHelper.ResolveQuotationDetailDiscountPercentage(detail, target.QuotationDiscounts);
+                    var normalizedPercent = currentDiscountPercentage.HasValue
+                        ? Math.Min(Math.Max(currentDiscountPercentage.Value, 0m), 100m)
+                        : (decimal?)null;
+                    if (normalizedPercent.HasValue)
+                    {
+                        nextDiscount = Math.Round(subTotal * (normalizedPercent.Value / 100m), 2, MidpointRounding.AwayFromZero);
+                    }
+                    else
+                    {
+                        nextDiscount = QuotationPricingHelper.ResolveQuotationDetailDiscountAmount(detail, target.QuotationDiscounts);
+                    }
                 }
+
+                nextDiscount = Math.Min(Math.Max(0m, nextDiscount), Math.Max(0m, subTotal));
+                if (update.DiscountPercentage.HasValue || update.DiscountValue.HasValue)
+                {
+                    if (isPreview)
+                    {
+                        var discounts = target.QuotationDiscounts;
+                        foreach (var row in discounts.Where(x => x.QuotationDetailId == detail.Id).ToList())
+                        {
+                            discounts.Remove(row);
+                        }
+                        if (nextDiscount > 0m)
+                        {
+                            discounts.Add(new QuotationDiscount { QuotationDetailId = detail.Id, DiscountValue = nextDiscount, AppliedAmount = nextDiscount });
+                        }
+                    }
+                    else
+                    {
+                        ReplaceQuotationDetailDiscountWithManual(target, detail.Id, nextDiscount, request.ActorStaffId, now, request.Note);
+                    }
+                }
+                var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
+                var taxableBase = Math.Max(0m, subTotal - nextDiscount);
+                var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
+                var previewFinalAmount = Math.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
+                var split = QuotationPricingHelper.CalculateSplitBilling(
+                    previewFinalAmount,
+                    update.InsuranceCoveredAmount,
+                    null,
+                    update.PayerType ?? detail.PayerType);
+
+                detail.PayerType = split.PayerType;
+                detail.InsuranceCoveredAmount = split.InsuranceCoveredAmount;
+                detail.CustomerCoveredAmount = split.CustomerCoveredAmount;
+                detail.UpdatedAt = now;
+                detail.UpdatedBy = request.ActorStaffId;
             }
 
-            nextDiscount = Math.Min(Math.Max(0m, nextDiscount), Math.Max(0m, subTotal));
-            if (update.DiscountPercentage.HasValue || update.DiscountValue.HasValue)
-            {
-                ReplaceQuotationDetailDiscountWithManual(
-                    quotation,
-                    detail.Id,
-                    nextDiscount,
-                    request.ActorStaffId,
-                    now,
-                    request.Note);
-            }
-            var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
-            var taxableBase = Math.Max(0m, subTotal - nextDiscount);
-            var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
-            var previewFinalAmount = Math.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
-            var split = QuotationPricingHelper.CalculateSplitBilling(
-                previewFinalAmount,
-                update.InsuranceCoveredAmount,
-                null,
-                update.PayerType ?? detail.PayerType);
-
-            detail.PayerType = split.PayerType;
-            detail.InsuranceCoveredAmount = split.InsuranceCoveredAmount;
-            detail.CustomerCoveredAmount = split.CustomerCoveredAmount;
-            detail.UpdatedAt = now;
-            detail.UpdatedBy = request.ActorStaffId;
         }
 
         if (!string.IsNullOrWhiteSpace(request.Note))
@@ -290,20 +324,22 @@ public sealed class QuotationLineMutationService : IQuotationLineMutationService
             quotationId);
 
         var existingRows = quotation.QuotationDiscounts?.ToList() ?? new List<QuotationDiscount>();
-        if (existingRows.Count > 0)
+        var lineDiscounts = existingRows.Where(x => x.QuotationDetailId.HasValue || x.QuotationDetail != null).ToList();
+        var quotationDiscounts = existingRows.Except(lineDiscounts).ToList();
+        var prospectiveDiscounts = lineDiscounts.Concat(normalizedItems).ToList();
+
+        // Validate without discarding discounts attached to individual lines.
+        QuotationPricingHelper.CalculateQuotationTotals(quotation, prospectiveDiscounts);
+        if (quotationDiscounts.Count > 0)
         {
-            _store.RemoveQuotationDiscounts(existingRows);
+            _store.RemoveQuotationDiscounts(quotationDiscounts);
         }
 
         if (normalizedItems.Count > 0)
         {
             _store.AddQuotationDiscounts(normalizedItems);
-            quotation.QuotationDiscounts = normalizedItems;
         }
-        else
-        {
-            quotation.QuotationDiscounts = new List<QuotationDiscount>();
-        }
+        quotation.QuotationDiscounts = prospectiveDiscounts;
 
         if (!string.IsNullOrWhiteSpace(request.Note))
         {
@@ -321,7 +357,7 @@ public sealed class QuotationLineMutationService : IQuotationLineMutationService
 
         await _store.SaveChangesInTransactionAsync();
 
-        return (quotation.QuotationDiscounts ?? new List<QuotationDiscount>())
+        return normalizedItems
             .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
             .ThenByDescending(x => x.Id)
             .Select(QuotationMappingHelper.MapQuotationDiscountResponse)

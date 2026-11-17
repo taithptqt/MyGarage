@@ -25,7 +25,7 @@ export default function StockAlertPage() {
       // Mocking fetch or assuming API supports type filter or returns all alerts needing attention
       // Since it's stock-alerts, it should return array
       const res = await request({ 
-        url: "/api/stock-alerts", 
+        url: "/api/v1/stock-alerts", 
         method: "GET", 
         params: { branchId: user?.branchId, resolved: false } 
       });

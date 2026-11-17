@@ -176,8 +176,8 @@ export default function MyTasksPage() {
 
     try {
       const [assignRes, allOrdersRes, boardRes, vehiclesRes, vehicleModelsRes, vehicleBrandsRes] = await Promise.all([
-        request({ url: "/api/service-staff-assignments", method: "GET", params: { staffId: techId } }),
-        request({ url: "/api/service-orders", method: "GET" }),
+        request({ url: "/api/v1/service-staff-assignments", method: "GET", params: { staffId: techId } }),
+        request({ url: "/api/v1/service-orders", method: "GET" }),
         serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
         getAllVehicles(),
         getAllVehicleModels(),
@@ -328,8 +328,8 @@ export default function MyTasksPage() {
     setError("");
     try {
       await request({
-        url: `/api/service-staff-assignments/${task.assignmentId}/start`,
-        method: "PUT",
+        url: `/api/v1/service-staff-assignments/${task.assignmentId}/starts`,
+        method: "POST",
         data: { startedAt: new Date().toISOString() },
       });
       await fetchData();
@@ -348,8 +348,8 @@ export default function MyTasksPage() {
     setError("");
     try {
       await request({
-        url: `/api/service-staff-assignments/${task.assignmentId}/pause`,
-        method: "PUT",
+        url: `/api/v1/service-staff-assignments/${task.assignmentId}/pauses`,
+        method: "POST",
       });
       await fetchData();
       showMsg("⏸️ Đã tạm dừng tác vụ.");
@@ -368,8 +368,8 @@ export default function MyTasksPage() {
     setError("");
     try {
       await request({
-        url: `/api/service-staff-assignments/${task.assignmentId}/complete`,
-        method: "PUT",
+        url: `/api/v1/service-staff-assignments/${task.assignmentId}/completions`,
+        method: "POST",
         data: { completedAt: new Date().toISOString() },
       });
       await fetchData();

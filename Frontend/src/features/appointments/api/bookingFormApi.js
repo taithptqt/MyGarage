@@ -2,13 +2,10 @@ import {
   bookAppointment,
   getAllBranches,
   getAllBranchOperatingHours,
-  getAllCustomerVehicles,
-  getAllCustomers,
   getAllInsuranceCompanies,
   getAllPackages,
   getAllServiceCategories,
   getAllStandardServices,
-  getAllVehicles,
   getAvailableSlots,
   createSlotHold,
   releaseSlotHold,
@@ -17,6 +14,7 @@ import {
   uploadAppointmentInsuranceAsset,
 } from "@features/appointments/api/appointmentApi";
 import { createGroupSession } from "@features/appointments/api/groupSessionApi";
+import { getCustomerVehicles } from "@features/customerPortal/api/customerPortalApi";
 import { normalizeText } from "@features/appointments/utils/bookingCommon";
 import { mergeBookableServicesAndPackages } from "@features/appointments/utils/bookingPackages";
 
@@ -30,8 +28,6 @@ export async function loadBookingFormMasterData() {
     brandData,
     modelData,
     insuranceCompanyData,
-    customerData,
-    customerVehicleData,
     vehicleData,
   ] = await Promise.all([
     getAllServiceCategories(),
@@ -42,9 +38,7 @@ export async function loadBookingFormMasterData() {
     getVehicleBrands(),
     getVehicleModels(),
     getAllInsuranceCompanies().catch(() => []),
-    getAllCustomers(),
-    getAllCustomerVehicles(),
-    getAllVehicles(),
+    getCustomerVehicles(),
   ]);
 
   return {
@@ -61,9 +55,9 @@ export async function loadBookingFormMasterData() {
     insuranceCompanies: Array.isArray(insuranceCompanyData)
       ? insuranceCompanyData.filter((item) => item?.isDeleted !== true)
       : [],
-    customers: Array.isArray(customerData) ? customerData : [],
-    customerVehicles: Array.isArray(customerVehicleData) ? customerVehicleData : [],
-    vehicles: Array.isArray(vehicleData) ? vehicleData : [],
+    vehicles: Array.isArray(vehicleData)
+      ? vehicleData.map((vehicle) => ({ ...vehicle, id: vehicle.vehicleId ?? vehicle.VehicleId }))
+      : [],
   };
 }
 

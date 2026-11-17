@@ -95,6 +95,11 @@ public static class QuotationPricingEngine
         var detailsInsurance = activeDetails.Sum(x => x.InsuranceCoveredAmount);
         var detailsCustomer = activeDetails.Sum(x => x.CustomerCoveredAmount);
 
+        if (safeQuotationLevelDiscount > detailsCustomer)
+        {
+            throw new InvalidOperationException("Giảm giá toàn báo giá không được vượt quá phần khách hàng thanh toán.");
+        }
+
         var finalAmount = Math.Max(0m, detailsFinal - safeQuotationLevelDiscount);
         var totalCustomerAmount = Math.Max(0m, detailsCustomer - safeQuotationLevelDiscount);
 

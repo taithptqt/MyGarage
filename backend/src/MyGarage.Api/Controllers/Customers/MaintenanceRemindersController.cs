@@ -49,6 +49,7 @@ public sealed class MaintenanceRemindersController : ControllerBase
     }
 
     [HttpPost("service-orders/{serviceOrderId:long}/schedules")]
+    [HttpPost("/api/v1/service-orders/{serviceOrderId:long}/maintenance-reminder-schedules")]
     public async Task<IActionResult> ScheduleByServiceOrder(
         long serviceOrderId,
         [FromQuery] int? remindAfterDays = null,

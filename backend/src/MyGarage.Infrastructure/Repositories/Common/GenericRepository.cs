@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Interfaces;
@@ -23,12 +24,17 @@ namespace MyGarage.Repositories
 
         public virtual async Task<(IReadOnlyList<T> Items, int Total)> GetPageByIdAsync(int page, int pageSize)
         {
-            var query = _dbSet.AsNoTracking();
+            return await GetOrderedPageAsync(
+                _dbSet.AsNoTracking().OrderBy(x => EF.Property<long>(x, "Id")), page, pageSize);
+        }
+
+        protected static async Task<(IReadOnlyList<T> Items, int Total)> GetOrderedPageAsync(
+            IOrderedQueryable<T> query, int page, int pageSize)
+        {
             var total = await query.CountAsync();
             var offset = ((long)page - 1) * pageSize;
             if (offset >= total) return (new List<T>(), total);
-            var items = await query.OrderBy(x => EF.Property<long>(x, "Id"))
-                .Skip((int)offset).Take(pageSize).ToListAsync();
+            var items = await query.Skip((int)offset).Take(pageSize).ToListAsync();
             return (items, total);
         }
 

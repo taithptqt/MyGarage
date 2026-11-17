@@ -8,6 +8,7 @@ namespace MyGarage.Controllers
     public partial class DiagnosisController : ControllerBase
     {
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues")]
         public async Task<ActionResult<DiagnosisResponseDto>> RequestDiagnosis(
             long serviceOrderId,
             [FromBody] DiagnosisQueueCreateRequestDto? request)
@@ -16,6 +17,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPatch("service-orders/{serviceOrderId:long}/diagnosis-queues")]
+        [HttpPatch("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues")]
         public async Task<ActionResult<DiagnosisResponseDto>> PatchRequestAssignment(
             long serviceOrderId,
             [FromBody] DiagnosisAcceptRequestDto request)
@@ -24,6 +26,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/starts")]
+        [HttpPost("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues/starts")]
         public async Task<ActionResult<DiagnosisResponseDto>> StartDiagnosis(
             long serviceOrderId,
             [FromBody] DiagnosisStartRequestDto request)
@@ -32,6 +35,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpDelete("service-orders/{serviceOrderId:long}/diagnosis-queues")]
+        [HttpDelete("~/api/v1/service-orders/{serviceOrderId:long}/diagnosis-queues")]
         public async Task<IActionResult> DeleteRequest(long serviceOrderId)
         {
             return ToActionResult(await _queueFacade.DeleteRequestAsync(serviceOrderId));

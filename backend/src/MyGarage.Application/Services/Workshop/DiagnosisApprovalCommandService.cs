@@ -6,6 +6,7 @@ using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
+using MyGarage.Application.Interfaces.Stores.Workshop;
 using static MyGarage.Services.DiagnosisCommandHelpers;
 
 namespace MyGarage.Services
@@ -13,14 +14,20 @@ namespace MyGarage.Services
     public class DiagnosisApprovalCommandService : IDiagnosisApprovalCommandService
     {
         private readonly IDiagnosisService _diagnosisService;
-        private readonly IQuotationWorkflowService _quotationWorkflowService;
+        private readonly IQuotationBuildService _quotationBuildService;
+        private readonly IQuotationQueryService _quotationQueryService;
+        private readonly IQuotationBuildCommandStore _transactionStore;
 
         public DiagnosisApprovalCommandService(
             IDiagnosisService diagnosisService,
-            IQuotationWorkflowService quotationWorkflowService)
+            IQuotationBuildService quotationBuildService,
+            IQuotationQueryService quotationQueryService,
+            IQuotationBuildCommandStore transactionStore)
         {
             _diagnosisService = diagnosisService;
-            _quotationWorkflowService = quotationWorkflowService;
+            _quotationBuildService = quotationBuildService;
+            _quotationQueryService = quotationQueryService;
+            _transactionStore = transactionStore;
         }
 
         public async Task<DiagnosisCommandResult> ApproveTechnicalAsync(
@@ -131,7 +138,16 @@ namespace MyGarage.Services
             return DiagnosisCommandResult.Ok(new { message = "Đã tạo phiên bản mới để kỹ thuật viên chỉnh sửa lại.", affected });
         }
 
-        public async Task<DiagnosisCommandResult> ApproveFinalAsync(
+        public async Task<DiagnosisCommandResult> ApproveFinalAsync(long serviceOrderId, DiagnosisFinalApprovalRequestDto? request)
+        {
+            try
+            {
+                return await _transactionStore.ExecuteDiagnosisApprovalTransactionalAsync(serviceOrderId, () => ApproveFinalCoreAsync(serviceOrderId, request));
+            }
+            catch (InvalidOperationException ex) { return DiagnosisCommandResult.BadRequest(ex.Message); }
+        }
+
+        private async Task<DiagnosisCommandResult> ApproveFinalCoreAsync(
             long serviceOrderId,
             DiagnosisFinalApprovalRequestDto? request)
         {
@@ -157,8 +173,13 @@ namespace MyGarage.Services
                 return DiagnosisCommandResult.BadRequest("Cần tổ trưởng duyệt báo cáo kỹ thuật trước khi duyệt báo giá.");
             }
 
+            var validationMessage = await _quotationBuildService.ValidateInitialQuotationFromDiagnosisAsync(
+                serviceOrderId, diagnoses.Select(x => x.Id).Distinct().ToList());
+            if (!string.IsNullOrWhiteSpace(validationMessage))
+                return DiagnosisCommandResult.BadRequest(validationMessage);
+
             await _diagnosisService.ApproveFinalAsync(diagnoses, request.TeamLeaderId, request.Note);
-            var quotation = await _quotationWorkflowService.GenerateInitialQuotationFromDiagnosisAsync(
+            var quotation = await _quotationBuildService.GenerateInitialQuotationFromDiagnosisAsync(
                 serviceOrderId,
                 request.TeamLeaderId,
                 request.Note,
@@ -170,7 +191,16 @@ namespace MyGarage.Services
             });
         }
 
-        public async Task<DiagnosisCommandResult> ForemanDecisionAsync(
+        public async Task<DiagnosisCommandResult> ForemanDecisionAsync(long serviceOrderId, DiagnosisForemanDecisionRequestDto? request)
+        {
+            try
+            {
+                return await _transactionStore.ExecuteDiagnosisApprovalTransactionalAsync(serviceOrderId, () => ForemanDecisionCoreAsync(serviceOrderId, request));
+            }
+            catch (InvalidOperationException ex) { return DiagnosisCommandResult.BadRequest(ex.Message); }
+        }
+
+        private async Task<DiagnosisCommandResult> ForemanDecisionCoreAsync(
             long serviceOrderId,
             DiagnosisForemanDecisionRequestDto? request)
         {
@@ -210,7 +240,7 @@ namespace MyGarage.Services
 
             if (request.Approve)
             {
-                var validationMessage = await _quotationWorkflowService.ValidateInitialQuotationFromDiagnosisAsync(
+                var validationMessage = await _quotationBuildService.ValidateInitialQuotationFromDiagnosisAsync(
                     serviceOrderId,
                     diagnosisIds);
                 if (!string.IsNullOrWhiteSpace(validationMessage))
@@ -233,18 +263,14 @@ namespace MyGarage.Services
 
                 await _diagnosisService.ApproveFinalAsync(diagnoses, request.ForemanId, request.Note, bypassTeamLeader, bypassAuditNote);
 
-                var quotationResult = await TryGenerateInitialQuotationAsync(serviceOrderId, request.ForemanId, request.Note, diagnosisIds);
-                if (quotationResult.Error != null)
-                {
-                    return quotationResult.Error;
-                }
+                var quotation = await _quotationBuildService.GenerateInitialQuotationFromDiagnosisAsync(serviceOrderId, request.ForemanId, request.Note, diagnosisIds);
 
                 return DiagnosisCommandResult.Ok(new
                 {
                     message = bypassTeamLeader
                         ? "Quản đốc đã duyệt vượt cấp và chuyển báo giá."
                         : "Quản đốc đã duyệt và chuyển báo giá.",
-                    quotation = quotationResult.Quotation
+                    quotation
                 });
             }
 
@@ -273,7 +299,7 @@ namespace MyGarage.Services
                 return DiagnosisCommandResult.BadRequest("Phiếu đã bị từ chối duyệt cuối, không thể tự động tạo báo giá.");
             }
 
-            var existingQuotations = await _quotationWorkflowService.GetQuotationsByServiceOrderAsync(serviceOrderId);
+            var existingQuotations = await _quotationQueryService.GetQuotationsByServiceOrderAsync(serviceOrderId);
             if (existingQuotations.Count > 0)
             {
                 var latestQuotation = existingQuotations
@@ -287,7 +313,7 @@ namespace MyGarage.Services
                 });
             }
 
-            var validationMessage = await _quotationWorkflowService.ValidateInitialQuotationFromDiagnosisAsync(
+            var validationMessage = await _quotationBuildService.ValidateInitialQuotationFromDiagnosisAsync(
                 serviceOrderId,
                 diagnosisIds);
             if (!string.IsNullOrWhiteSpace(validationMessage))
@@ -295,38 +321,13 @@ namespace MyGarage.Services
                 return DiagnosisCommandResult.BadRequest(validationMessage);
             }
 
-            var quotationResult = await TryGenerateInitialQuotationAsync(serviceOrderId, request.ForemanId, request.Note, diagnosisIds);
-            if (quotationResult.Error != null)
-            {
-                return quotationResult.Error;
-            }
+            var quotation = await _quotationBuildService.GenerateInitialQuotationFromDiagnosisAsync(serviceOrderId, request.ForemanId, request.Note, diagnosisIds);
 
             return DiagnosisCommandResult.Ok(new
             {
                 message = "Phiếu đã duyệt trước đó, hệ thống đã tạo bù báo giá.",
-                quotation = quotationResult.Quotation
+                quotation
             });
-        }
-
-        private async Task<(QuotationResponseDto? Quotation, DiagnosisCommandResult? Error)> TryGenerateInitialQuotationAsync(
-            long serviceOrderId,
-            long actorId,
-            string? note,
-            List<long> diagnosisIds)
-        {
-            try
-            {
-                var quotation = await _quotationWorkflowService.GenerateInitialQuotationFromDiagnosisAsync(
-                    serviceOrderId,
-                    actorId,
-                    note,
-                    diagnosisIds);
-                return (quotation, null);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return (null, DiagnosisCommandResult.BadRequest(ex.Message));
-            }
         }
     }
 }

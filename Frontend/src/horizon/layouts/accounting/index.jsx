@@ -124,7 +124,7 @@ export default function AccountingLayout(props) {
             transitionProperty='top, bottom, width'
             transitionTimingFunction='linear, linear, ease'>
             <Portal>
-              <Box>
+              <Box position="relative" zIndex={1200}>
                 <Navbar
                   onOpen={onOpen}
                   logoText='MyGarage Accounting'

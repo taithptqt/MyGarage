@@ -17,8 +17,8 @@ async function requestWithDualRoute(v1Url, legacyUrl, options = {}) {
 
 export function getMyRetailOrderPage({ page, pageSize, anchorId } = {}) {
   return requestWithDualRoute(
+    "/api/v1/customers/current/retail-orders/page",
     "/api/v1/retail-orders/customers/current/page",
-    "/api/retail-orders/customers/current/page",
     {
       method: "GET",
       params: { page, pageSize, anchorId: anchorId || undefined },

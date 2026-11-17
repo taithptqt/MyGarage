@@ -146,6 +146,9 @@ internal static class QuotationPricingHelper
             );
         }
 
+        if (recommendation.StandardServiceId.GetValueOrDefault() > 0 || recommendation.InventoryItemId.GetValueOrDefault() > 0)
+            throw new InvalidOperationException("Hạng mục chẩn đoán tham chiếu dịch vụ hoặc phụ tùng không tồn tại; vui lòng kiểm tra trước khi tạo báo giá.");
+
         var fallbackName = string.IsNullOrWhiteSpace(recommendation.TechnicianNotes)
             ? "UNNAMED_ITEM"
             : recommendation.TechnicianNotes!.Trim();
@@ -242,16 +245,45 @@ internal static class QuotationPricingHelper
 
     internal static void RecalculateQuotationTotals(Quotation quotation)
     {
+        var totals = CalculateQuotationTotals(quotation);
         var details = (quotation.QuotationDetails ?? new List<QuotationDetail>())
             .Where(x => !string.Equals(x.Status, QuotationWorkflowConstants.DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var allDiscounts = quotation.QuotationDiscounts ?? new List<QuotationDiscount>();
+        for (var index = 0; index < details.Count; index++)
+        {
+            var detail = details[index];
+            var output = totals.Details[index];
+            detail.Quantity = output.Quantity;
+            detail.UnitPriceAtTime = output.UnitPriceAtTime;
+            detail.TaxRate = output.TaxRate;
+            detail.SubTotal = output.SubTotal;
+            detail.TaxAmount = output.TaxAmount;
+            detail.FinalAmount = output.FinalAmount;
+            detail.PayerType = output.PayerType;
+            detail.InsuranceCoveredAmount = output.InsuranceCoveredAmount;
+            detail.CustomerCoveredAmount = output.CustomerCoveredAmount;
+        }
+
+        quotation.SubTotalAmount = totals.SubTotalAmount;
+        quotation.TaxAmount = totals.TaxAmount;
+        quotation.FinalAmount = totals.FinalAmount;
+        quotation.TotalInsuranceAmount = totals.TotalInsuranceAmount;
+        quotation.TotalCustomerAmount = totals.TotalCustomerAmount;
+    }
+
+    internal static QuotationTotalsOutput CalculateQuotationTotals(Quotation quotation, IEnumerable<QuotationDiscount>? discountsOverride = null, long? excludedDetailId = null)
+    {
+        var details = (quotation.QuotationDetails ?? new List<QuotationDetail>())
+            .Where(x => x.Id != excludedDetailId && !string.Equals(x.Status, QuotationWorkflowConstants.DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var allDiscounts = (discountsOverride ?? quotation.QuotationDiscounts ?? new List<QuotationDiscount>()).ToList();
 
         var inputs = details.Select(detail =>
         {
             var lineDiscounts = allDiscounts
-                .Where(d => d.QuotationDetailId == detail.Id)
+                .Where(d => ReferenceEquals(d.QuotationDetail, detail) ||
+                    (detail.Id > 0 && d.QuotationDetailId == detail.Id))
                 .Sum(d => d.AppliedAmount > 0 ? d.AppliedAmount : d.DiscountValue);
 
             return new DetailPricingInput(
@@ -267,32 +299,9 @@ internal static class QuotationPricingHelper
             );
         }).ToList();
 
-        var quotationLevelDiscount = SumQuotationLevelDiscount(allDiscounts.Where(d => d.QuotationDetailId == null));
+        var quotationLevelDiscount = SumQuotationLevelDiscount(allDiscounts.Where(d => d.QuotationDetailId == null && d.QuotationDetail == null));
 
-        var totals = QuotationPricingEngine.CalculateTotals(inputs, quotationLevelDiscount);
-
-        var outputsById = totals.Details.ToDictionary(d => d.Id);
-        foreach (var detail in details)
-        {
-            if (outputsById.TryGetValue(detail.Id, out var output))
-            {
-                detail.Quantity = output.Quantity;
-                detail.UnitPriceAtTime = output.UnitPriceAtTime;
-                detail.TaxRate = output.TaxRate;
-                detail.SubTotal = output.SubTotal;
-                detail.TaxAmount = output.TaxAmount;
-                detail.FinalAmount = output.FinalAmount;
-                detail.PayerType = output.PayerType;
-                detail.InsuranceCoveredAmount = output.InsuranceCoveredAmount;
-                detail.CustomerCoveredAmount = output.CustomerCoveredAmount;
-            }
-        }
-
-        quotation.SubTotalAmount = totals.SubTotalAmount;
-        quotation.TaxAmount = totals.TaxAmount;
-        quotation.FinalAmount = totals.FinalAmount;
-        quotation.TotalInsuranceAmount = totals.TotalInsuranceAmount;
-        quotation.TotalCustomerAmount = totals.TotalCustomerAmount;
+        return QuotationPricingEngine.CalculateTotals(inputs, quotationLevelDiscount);
     }
 
     private static decimal SumQuotationLevelDiscount(IEnumerable<QuotationDiscount>? discounts)
@@ -328,9 +337,14 @@ internal static class QuotationPricingHelper
             serviceOrderId,
             nameof(ServiceOrderDetailStatusCode.CANCELED));
 
+        var orderDiscounts = await store.GetServiceOrderDiscountsForUpdateAsync(serviceOrderId);
+        var orderLevelDiscount = orderDiscounts
+            .Where(x => !x.ServiceOrderDetailId.HasValue && x.ServiceOrderDetail == null)
+            .Sum(x => x.AppliedAmount > 0m ? x.AppliedAmount : Math.Max(0m, x.DiscountValue));
+
         serviceOrder.SubTotalAmount = summary?.SubTotal ?? 0m;
         serviceOrder.TaxAmount = summary?.Tax ?? 0m;
-        serviceOrder.FinalAmount = summary?.Final ?? 0m;
+        serviceOrder.FinalAmount = Math.Max(0m, (summary?.Final ?? 0m) - orderLevelDiscount);
         serviceOrder.UpdatedBy = actorStaffId;
         serviceOrder.UpdatedAt = now;
     }

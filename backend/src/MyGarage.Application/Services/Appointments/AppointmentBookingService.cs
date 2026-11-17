@@ -48,8 +48,9 @@ namespace MyGarage.Services
 
             var plans = dto.VehiclePlans!.Where(plan => plan != null).ToList();
             var replaceAppointmentId = dto.ReplaceAppointmentId.GetValueOrDefault();
+            EnsureDistinctHoldTokens(plans.Select(plan => plan.SlotHoldToken));
 
-            return await _store.ExecuteInTransactionAsync(async () =>
+            var committed = await _store.ExecuteInTransactionAsync(async () =>
             {
                 var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
                 var resolvedCustomerId = await _receptionService.ResolveReceptionCustomerIdAsync(dto, actorStaffId);
@@ -68,11 +69,13 @@ namespace MyGarage.Services
                 }
 
                 var createdAppointments = new List<Appointment>(plans.Count);
+                var processedHoldTokens = new List<string>();
                 foreach (var plan in plans)
                 {
                     var request = await _receptionService.BuildReceptionBookRequestAsync(dto, plan, resolvedCustomerId, actorStaffId);
-                    var created = await _bookingCoreService.BookCoreAsync(actorUserId, request, groupSessionId);
+                    var created = await _bookingCoreService.BookCoreDeferredHoldAsync(actorUserId, request, groupSessionId, processedHoldTokens);
                     createdAppointments.Add(created);
+                    if (!string.IsNullOrWhiteSpace(request.SlotHoldToken)) processedHoldTokens.Add(request.SlotHoldToken.Trim());
                 }
 
                 await _receptionService.CompleteReceptionReplacementAsync(actorUserId, replaceAppointmentId, createdAppointments);
@@ -80,14 +83,26 @@ namespace MyGarage.Services
                 if (groupSessionId.HasValue)
                     await _groupSessionService.SyncCountersAsync(groupSessionId.Value, actorStaffId);
 
-                await _notificationService.TrySendBookingSuccessEmailAsync(createdAppointments.Select(a => a.Id).ToList());
-
-                return await _receptionService.BuildReceptionSaveResponseAsync(
+                var response = await _receptionService.BuildReceptionSaveResponseAsync(
                     resolvedCustomerId,
                     groupSessionId,
                     replaceAppointmentId > 0,
                     createdAppointments);
+                return (Response: response, AppointmentIds: createdAppointments.Select(a => a.Id).ToList(), HoldTokens: processedHoldTokens);
             });
+            foreach (var holdToken in committed.HoldTokens) _bookingCoreService.ConsumeSlotHold(holdToken);
+            await _notificationService.TrySendBookingSuccessEmailAsync(committed.AppointmentIds);
+            return committed.Response;
+        }
+
+        private static void EnsureDistinctHoldTokens(IEnumerable<string?> holdTokens)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var token in holdTokens)
+            {
+                if (!string.IsNullOrWhiteSpace(token) && !seen.Add(token.Trim()))
+                    throw new InvalidOperationException("Mỗi lịch trong nhóm phải có giữ chỗ riêng.");
+            }
         }
 
         public async Task<GroupSessionResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
@@ -103,21 +118,27 @@ namespace MyGarage.Services
             if (targetCustomerId <= 0)
                 throw new InvalidOperationException("Khách hàng đặt lịch không hợp lệ.");
 
+            if (dto.Items.Any(item => item == null || (item.CustomerId.HasValue && item.CustomerId.Value != targetCustomerId)))
+                throw new InvalidOperationException("Mỗi lịch trong nhóm phải thuộc cùng khách hàng.");
+
+            EnsureDistinctHoldTokens(dto.Items.Select(item => item.SlotHoldToken));
             await _bookingCoreService.EnsureBatchFixedLeadTimesAsync(dto.BranchId, dto.Items);
 
-            return await _store.ExecuteInTransactionAsync(async () =>
+            var committed = await _store.ExecuteInTransactionAsync(async () =>
             {
                 var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
                 var group = await _groupSessionService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
 
                 var createdAppointmentIds = new List<long>();
+                var processedHoldTokens = new List<string>();
                 foreach (var item in dto.Items)
                 {
                     item.BranchId = dto.BranchId;
                     item.CreatedBy = actorStaffId;
                     item.CustomerId ??= targetCustomerId;
-                    var created = await _bookingCoreService.BookCoreAsync(actorUserId, item, group.Id);
+                    var created = await _bookingCoreService.BookCoreDeferredHoldAsync(actorUserId, item, group.Id, processedHoldTokens);
                     createdAppointmentIds.Add(created.Id);
+                    if (!string.IsNullOrWhiteSpace(item.SlotHoldToken)) processedHoldTokens.Add(item.SlotHoldToken.Trim());
                 }
 
                 await _groupSessionService.SyncCountersAsync(group.Id, actorStaffId);
@@ -129,12 +150,14 @@ namespace MyGarage.Services
 
                     response.Appointments = (await _appointmentDetailAssembler.AssembleManyAsync(createdAppointments))
                         .ToList();
-                    await _notificationService.TrySendBookingSuccessEmailAsync(createdAppointmentIds);
-                    return response;
+                    return (Response: response, AppointmentIds: createdAppointmentIds, HoldTokens: processedHoldTokens);
                 }
 
                 throw new InvalidOperationException("Không thể tải thông tin nhóm lịch hẹn sau khi tạo.");
             });
+            foreach (var holdToken in committed.HoldTokens) _bookingCoreService.ConsumeSlotHold(holdToken);
+            await _notificationService.TrySendBookingSuccessEmailAsync(committed.AppointmentIds);
+            return committed.Response;
         }
     }
 }

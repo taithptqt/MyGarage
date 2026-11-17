@@ -18,16 +18,25 @@ namespace MyGarage.Services;
 
 public sealed class QuotationPortalNotificationService : IQuotationPortalNotificationService
 {
-    private readonly IQuotationWorkflowStore _store;
+    private readonly IQuotationPortalStore _portalStore;
+    private readonly IQuotationLineageQueryStore _lineageStore;
+    private readonly IQuotationApprovalOrderSyncStore _auditStore;
+    private readonly IQuotationBuildCommandStore _transactionStore;
     private readonly IEmailService _emailService;
     private readonly IQuotationRealtimeNotifier _realtimeNotifier;
 
     public QuotationPortalNotificationService(
-        IQuotationWorkflowStore store,
+        IQuotationPortalStore portalStore,
+        IQuotationLineageQueryStore lineageStore,
+        IQuotationApprovalOrderSyncStore auditStore,
+        IQuotationBuildCommandStore transactionStore,
         IEmailService emailService,
         IQuotationRealtimeNotifier realtimeNotifier)
     {
-        _store = store;
+        _portalStore = portalStore;
+        _lineageStore = lineageStore;
+        _auditStore = auditStore;
+        _transactionStore = transactionStore;
         _emailService = emailService;
         _realtimeNotifier = realtimeNotifier;
     }
@@ -41,7 +50,7 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
 
     public async Task<QuotationPublicOtpResponseDto> SendDecisionOtpAsync(QuotationAccessLink accessLink, QuotationPublicOtpRequestDto? request = null)
     {
-        var quotation = await _store.GetQuotationWithCustomerForOtpAsync(accessLink.QuotationId);
+        var quotation = await _portalStore.GetQuotationWithCustomerForOtpAsync(accessLink.QuotationId);
 
         if (quotation == null)
         {
@@ -88,7 +97,7 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
         accessLink.SentToEmail = targetEmail;
         accessLink.UpdatedAt = now;
         accessLink.UpdatedBy = quotation.ServiceOrder?.CustomerId;
-        await _store.SaveChangesInTransactionAsync();
+        await _transactionStore.SaveChangesInTransactionAsync();
 
         try
         {
@@ -105,8 +114,9 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
             accessLink.OtpExpiresAt = null;
             accessLink.OtpAttemptCount = 0;
             accessLink.OtpVerifiedAt = null;
+            accessLink.OtpLastSentAt = null;
             accessLink.UpdatedAt = VietnamTime.Now;
-            await _store.SaveChangesInTransactionAsync();
+            await _transactionStore.SaveChangesInTransactionAsync();
             throw new InvalidOperationException("Không thể gửi OTP. Vui lòng kiểm tra cấu hình email.");
         }
 
@@ -144,13 +154,13 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
 </div>";
 
             var serviceAdvisorEmail = serviceOrder.ServiceAdvisorId.HasValue
-                ? await _store.GetStaffEmailAsync(serviceOrder.ServiceAdvisorId.Value)
+                ? await _lineageStore.GetStaffEmailAsync(serviceOrder.ServiceAdvisorId.Value)
                 : null;
 
             var roleCodes = new[] { "WORKSHOP_MANAGER", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER" };
             var fallbackRoleHints = new[] { "quan doc", "to truong", "thu kho", "manager", "foreman", "leader", "STORE_KEEPER" };
 
-            var branchStaffCandidates = await _store.GetBranchStaffCandidatesAsync(serviceOrder.ExecuteBranchId);
+            var branchStaffCandidates = await _lineageStore.GetBranchStaffCandidatesAsync(serviceOrder.ExecuteBranchId);
 
             var branchStaffEmails = branchStaffCandidates
                 .Where(x =>
@@ -173,11 +183,6 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
             foreach (var email in branchStaffEmails.Where(x => !string.IsNullOrWhiteSpace(x)))
             {
                 recipients.Add(email.Trim());
-            }
-
-            foreach (var recipient in recipients)
-            {
-                await _emailService.SendEmailAsync(recipient, subject, content);
             }
 
             var foremanIds = branchStaffCandidates
@@ -211,6 +216,11 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
                 serviceOrder.ServiceAdvisorId,
                 foremanIds,
                 storekeeperIds));
+
+            foreach (var recipient in recipients)
+            {
+                await _emailService.SendEmailAsync(recipient, subject, content);
+            }
         }
         catch
         {
@@ -225,7 +235,7 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
             return;
         }
 
-        var serviceOrder = await _store.GetCancellationOrderInfoAsync(quotation.ServiceOrderId);
+        var serviceOrder = await _lineageStore.GetCancellationOrderInfoAsync(quotation.ServiceOrderId);
         if (serviceOrder == null)
         {
             return;
@@ -284,7 +294,7 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
                 serviceOrderId = serviceOrder.Id
             });
 
-            _store.AddAuditLog(new AuditLog
+            _auditStore.AddAuditLog(new AuditLog
             {
                 UserId = quotation.UpdatedBy ?? quotation.CreatedBy ?? 0,
                 UserType = "SYSTEM",
@@ -296,7 +306,7 @@ public sealed class QuotationPortalNotificationService : IQuotationPortalNotific
                 Timestamp = VietnamTime.Now
             });
 
-            await _store.SaveChangesInTransactionAsync();
+            await _transactionStore.SaveChangesInTransactionAsync();
         }
         catch
         {

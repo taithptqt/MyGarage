@@ -10,20 +10,16 @@ import {
 } from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW, INITIAL_ODD_SLOT_VISIBILITY, SESSION_TABS } from "@features/appointments/constants/bookingConstants";
 import { releaseBookingSlotHold } from "@features/appointments/api/bookingFormApi";
-import BookingInsurancePanel from "@features/appointments/components/BookingInsurancePanel";
 import {
   buildDisplayedSlots,
   buildSlotsBySession,
   resolveFirstActiveSession
 } from "@features/appointments/utils/bookingSlots";
-import DateTimePicker from "@features/workshop/components/DateTimePicker";
-import { timeLabel } from "@features/appointments/utils/bookingCommon";
-import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
 import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
-import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE, formatVinInput, isValidVin } from "@shared/utils/vinValidation";
+import { formatVinInput, isValidVin } from "@shared/utils/vinValidation";
 import {
   buildInspectionTriadTypeByServiceId,
-  getInspectionTriadDisplayName,
   getConflictingInspectionTriadServiceIds,
   sumServiceMinutes,
 } from "@shared/utils/serviceDurationUtils";
@@ -51,450 +47,49 @@ import {
   validateInsuranceSnapshotByMode,
 } from "@features/appointments/utils/bookingInsurance";
 import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
-
-const SERVICE_MODE = {
-  SHARED: "SHARED",
-  CUSTOM: "CUSTOM"
-};
-
-const SLOT_MODE = {
-  PARALLEL: "PARALLEL",
-  INDIVIDUAL: "INDIVIDUAL"
-};
-
-const EMPTY_PLAN = {
-  categoryIds: [],
-  serviceIds: [],
-  excludedSharedCategoryIds: [],
-  excludedSharedServiceIds: []
-};
-
-const EMPTY_FORM_DATA = {
-  customerId: "",
-  customerName: "",
-  customerPhone: "",
-  selectedVehicleIds: [],
-  isQuickOrder: false,
-  isNewVehicle: false,
-
-  vehicleLicensePlate: "",
-  vehicleModelId: "",
-  vehicleColor: "",
-  vehicleVin: "",
-  vehicleYear: "",
-
-  guestName: "",
-  guestPhone: "",
-  guestVehiclePlate: "",
-  guestVehicleModelId: "",
-  guestVehicleColor: "",
-  guestVehicleVin: "",
-  guestVehicleYear: "",
-
-  appointmentDate: "",
-  startTime: "",
-  customerNotes: ""
-};
-
-const VN_PHONE_PATTERN = "^(0[0-9]{9}|\\+84[0-9]{9})$";
-const SLOT_DURATION_MINUTES = 15;
-const CHECK_IN_SETUP_MINUTES = 15;
-const EXECUTION_BUFFER_MINUTES = 15;
-
-function resolveSlotDateTime(rawValue, fallbackDate = "") {
-  if (!rawValue) return null;
-  const parsed = new Date(rawValue);
-  if (!Number.isNaN(parsed.getTime())) return parsed;
-
-  const match = String(rawValue).match(/^(\d{1,2}):(\d{2})/);
-  if (!match || !fallbackDate) return null;
-
-  const hours = String(match[1]).padStart(2, "0");
-  const minutes = String(match[2]).padStart(2, "0");
-  const composed = new Date(`${fallbackDate}T${hours}:${minutes}:00`);
-  return Number.isNaN(composed.getTime()) ? null : composed;
-}
-
-function buildFixedFlowSchedule(startTimeRaw, serviceMinutes, fallbackDate = "") {
-  const startDate = resolveSlotDateTime(startTimeRaw, fallbackDate);
-  if (!startDate) {
-    return {
-      startDate: null,
-      endDate: null,
-      completionMs: null,
-      roundedTotalMinutes: 0
-    };
-  }
-
-  const normalizedServiceMinutes = Number(serviceMinutes || 0);
-  const safeServiceMinutes = Number.isFinite(normalizedServiceMinutes) && normalizedServiceMinutes > 0
-    ? normalizedServiceMinutes
-    : 0;
-  const occupancyMinutes = CHECK_IN_SETUP_MINUTES + safeServiceMinutes + EXECUTION_BUFFER_MINUTES;
-  const slotCount = Math.max(1, Math.ceil(occupancyMinutes / SLOT_DURATION_MINUTES));
-  const roundedTotalMinutes = slotCount * SLOT_DURATION_MINUTES;
-  const completionMs = startDate.getTime() + roundedTotalMinutes * 60 * 1000;
-
-  return {
-    startDate,
-    endDate: new Date(completionMs),
-    completionMs,
-    roundedTotalMinutes
-  };
-}
-
-function normalizePhone(phone) {
-  return String(phone || "").replace(/\s+/g, "");
-}
-
-function normalizeSearchText(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
-}
-
-function isValidPhone(phone) {
-  return /^(0\d{9}|\+84\d{9})$/.test(normalizePhone(phone));
-}
-
-function normalizeText(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/gi, "d")
-    .trim()
-    .toLowerCase();
-}
-
-function toDateTimeParts(value) {
-  if (!value) return { appointmentDate: "", startTime: "" };
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return { appointmentDate: "", startTime: "" };
-  const appointmentDate = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(
-    parsed.getDate()
-  ).padStart(2, "0")}`;
-  const startTime = `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
-  return { appointmentDate, startTime };
-}
-
-function toNumberList(value) {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value
-        .map(Number)
-        .filter((id) => Number.isFinite(id) && id > 0)
-    )
-  );
-}
-
-function toSelectableItemIdList(value) {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value
-        .map(Number)
-        .filter((id) => Number.isFinite(id) && id !== 0)
-    )
-  );
-}
-
-function parseServiceIdsFromInput(value) {
-  if (Array.isArray(value)) return toSelectableItemIdList(value);
-  if (Number.isFinite(Number(value)) && Number(value) !== 0) return [Number(value)];
-
-  return toSelectableItemIdList(
-    String(value || "")
-      .split(/[,|]/g)
-      .map((item) => Number(String(item || "").trim()))
-      .filter((id) => Number.isFinite(id) && id !== 0)
-  );
-}
-
-function parseInitialNoteText(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.symptoms)) {
-      return parsed.symptoms.map((item) => String(item || "").trim()).filter(Boolean).join("; ");
-    }
-    if (Array.isArray(parsed?.symptomsByVehicle)) {
-      const firstWithSymptoms = parsed.symptomsByVehicle.find(
-        (item) => Array.isArray(item?.symptoms) && item.symptoms.length > 0
-      );
-      if (firstWithSymptoms) {
-        return firstWithSymptoms.symptoms.map((item) => String(item || "").trim()).filter(Boolean).join("; ");
-      }
-    }
-  } catch {
-    // Fallback to plain text parsing.
-  }
-
-  return raw;
-}
-
-function buildPlanFromServiceIds(serviceIds, serviceCategoryMap) {
-  const normalizedServiceIds = parseServiceIdsFromInput(serviceIds);
-  const categoryIds = toNumberList(
-    normalizedServiceIds
-      .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
-      .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
-  );
-  return normalizePlan({
-    categoryIds,
-    serviceIds: normalizedServiceIds,
-    excludedSharedCategoryIds: [],
-    excludedSharedServiceIds: []
-  });
-}
-
-function buildInitialFormData(initialValues) {
-  if (!initialValues) return { ...EMPTY_FORM_DATA };
-
-  const selectedVehicleIds = Array.isArray(initialValues.selectedVehicleIds)
-    ? toNumberList(initialValues.selectedVehicleIds)
-    : Number(initialValues.vehicleId) > 0
-      ? [Number(initialValues.vehicleId)]
-      : [];
-
-  const { appointmentDate, startTime } = toDateTimeParts(initialValues.startTime);
-
-  return {
-    ...EMPTY_FORM_DATA,
-    customerId: initialValues.customerId ? Number(initialValues.customerId) : "",
-    customerName: initialValues.customerName || "",
-    customerPhone: initialValues.customerPhone || "",
-    selectedVehicleIds,
-    appointmentDate,
-    startTime,
-    customerNotes: initialValues.customerNotes || ""
-  };
-}
-
-function readField(obj, keys, fallback = null) {
-  for (const key of keys) {
-    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
-  }
-  return fallback;
-}
-
-function normalizePlan(plan) {
-  const categoryIds = toNumberList(plan?.categoryIds || []);
-  const serviceIds = toSelectableItemIdList(plan?.serviceIds || []);
-  const excludedSharedCategoryIds = toNumberList(plan?.excludedSharedCategoryIds || []);
-  const excludedSharedServiceIds = toSelectableItemIdList(plan?.excludedSharedServiceIds || []);
-  return { categoryIds, serviceIds, excludedSharedCategoryIds, excludedSharedServiceIds };
-}
-
-function normalizeService(service) {
-  const id = Number(readField(service, ["id", "Id"], 0));
-  const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
-  const rawName = String(readField(service, ["name", "Name"], "") || "");
-  return {
-    id,
-    categoryId,
-    code: String(readField(service, ["code", "Code"], "") || ""),
-    name: getInspectionTriadDisplayName(service, rawName),
-    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
-    minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
-    price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0))
-  };
-}
-
-function getVehicleKeyFromId(vehicleId) {
-  return `existing-${Number(vehicleId)}`;
-}
-
-function getVehicleIdFromKey(vehicleKey) {
-  const match = String(vehicleKey || "").match(/^existing-(\d+)$/);
-  return match ? Number(match[1]) : null;
-}
-
-function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
-}
-
-function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelInfoById = new Map()) {
-  const text = (value) => String(value || "").trim();
-
-  const brandObject = readField(vehicle, ["brand", "Brand"], null);
-  const modelObject = readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null);
-
-  const modelId = Number(
-    readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], readField(modelObject, ["id", "Id"], 0))
-  );
-  const brandId = Number(
-    readField(vehicle, ["brandId", "BrandId", "vehicleBrandId", "VehicleBrandId"], readField(brandObject, ["id", "Id"], 0))
-  );
-
-  const modelInfo = modelInfoById.get(modelId) || null;
-  const lookupBrandNameFromModel = modelInfo?.brandId ? text(brandNameById.get(Number(modelInfo.brandId))) : "";
-  const lookupBrandName = text(brandNameById.get(brandId));
-
-  const brandName =
-    [
-      text(readField(vehicle, ["brandName", "BrandName", "vehicleBrandName", "VehicleBrandName"], "")),
-      text(readField(brandObject, ["name", "Name", "brandName", "BrandName"], "")),
-      text(modelInfo?.brandName),
-      lookupBrandNameFromModel,
-      lookupBrandName
-    ].find(Boolean) || "";
-
-  const modelName =
-    [
-      text(readField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "")),
-      text(readField(modelObject, ["modelName", "ModelName", "name", "Name"], "")),
-      text(modelInfo?.name)
-    ].find(Boolean) || "";
-
-  if (brandName && modelName) return `${brandName} ${modelName}`;
-  if (modelName) return modelName;
-  if (brandName) return brandName;
-  return "Chưa rõ hãng - chưa rõ dòng xe";
-}
-
-function toVehicleTabLabel(vehicleLabel, fallback = "") {
-  const normalizedLabel = String(vehicleLabel || "").trim();
-  if (!normalizedLabel) {
-    const normalizedFallback = String(fallback || "").trim();
-    return normalizedFallback || "Kh\u00f4ng bi\u1ec3n s\u1ed1";
-  }
-
-  const [platePart] = normalizedLabel.split(" - ");
-  const plate = String(platePart || "").trim();
-  return plate || normalizedLabel;
-}
-
-function toIsoDate(value) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(
-    parsed.getDate()
-  ).padStart(2, "0")}`;
-}
-
-function toTimeValue(value) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
-}
-
-function formatDateTimeWithFullDate(value) {
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "Chưa chọn";
-
-  const hour = String(parsed.getHours()).padStart(2, "0");
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const day = String(parsed.getDate());
-  const month = String(parsed.getMonth() + 1);
-  const year = String(parsed.getFullYear());
-  return `${hour}:${minute} (${day}/${month}/${year})`;
-}
-
-function formatCompletionWarningTime(value) {
-  if (!value) return "chưa xác định";
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "chưa xác định";
-  const hour = String(parsed.getHours()).padStart(2, "0");
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const year = String(parsed.getFullYear());
-  return `${hour} giờ ${minute} phút ngày ${day}/${month}/${year}`;
-}
-
-function normalizeSlotSelection(slot) {
-  if (!slot) {
-    return {
-      startTime: "",
-      endTime: "",
-      slotDate: "",
-      slotTime: ""
-    };
-  }
-
-  const startTime = readField(slot, ["startTime", "StartTime"], "");
-  const endTime = readField(slot, ["endTime", "EndTime"], "");
-  return {
-    startTime,
-    endTime,
-    slotDate: toIsoDate(startTime),
-    slotTime: toTimeValue(startTime)
-  };
-}
-
-function buildCategoryOptions(serviceCategories, normalizedServices) {
-  const map = new Map();
-
-  (serviceCategories || []).forEach((category) => {
-    const id = Number(readField(category, ["id", "Id"], 0));
-    if (!Number.isFinite(id) || id <= 0) return;
-    const name = String(readField(category, ["categoryName", "name", "Name"], "") || "").trim();
-    if (!name) return;
-    if (category?.isDeleted === true || category?.isActive === false) return;
-    map.set(id, { id, name });
-  });
-
-  normalizedServices.forEach((service) => {
-    if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
-    if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
-    }
-  });
-
-  return Array.from(map.values());
-}
-
-function clonePlan(plan) {
-  return {
-    categoryIds: [...(plan?.categoryIds || [])],
-    serviceIds: [...(plan?.serviceIds || [])],
-    excludedSharedCategoryIds: [...(plan?.excludedSharedCategoryIds || [])],
-    excludedSharedServiceIds: [...(plan?.excludedSharedServiceIds || [])]
-  };
-}
-
-function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById) {
-  return (planSummaries || [])
-    .map((plan) => {
-      const categoryIds = toNumberList(plan?.categoryIds || []);
-      if (categoryIds.length === 0) return null;
-
-      const coveredCategoryIds = new Set(
-        toSelectableItemIdList(plan?.serviceIds || [])
-          .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
-          .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
-      );
-
-      const missingCategoryNames = categoryIds
-        .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
-        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
-
-      if (missingCategoryNames.length === 0) return null;
-
-      return {
-        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
-        missingCategoryNames
-      };
-    })
-    .filter(Boolean);
-}
-
-function buildMissingSpecificServiceMessage(missingByVehicle) {
-  if (!Array.isArray(missingByVehicle) || missingByVehicle.length === 0) return "";
-
-  const details = missingByVehicle.map((item) => {
-    const categories = (item.missingCategoryNames || []).map((name) => `'${name}'`).join(", ");
-    return `${item.vehicleLabel}: ${categories}`;
-  });
-
-  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
-}
+import ReceptionAppointmentCustomerStep from "@features/workshop/components/ReceptionAppointmentCustomerStep";
+import ReceptionAppointmentServiceStep from "@features/workshop/components/ReceptionAppointmentServiceStep";
+import ReceptionAppointmentTimingStep from "@features/workshop/components/ReceptionAppointmentTimingStep";
+import {
+  SERVICE_MODE,
+  SLOT_MODE,
+  EMPTY_PLAN,
+  EMPTY_FORM_DATA,
+  VN_PHONE_PATTERN,
+  SLOT_DURATION_MINUTES,
+  CHECK_IN_SETUP_MINUTES,
+  EXECUTION_BUFFER_MINUTES,
+  resolveSlotDateTime,
+  buildFixedFlowSchedule,
+  normalizePhone,
+  normalizeSearchText,
+  isValidPhone,
+  normalizeText,
+  toDateTimeParts,
+  toNumberList,
+  toSelectableItemIdList,
+  parseServiceIdsFromInput,
+  parseInitialNoteText,
+  buildPlanFromServiceIds,
+  buildInitialFormData,
+  readField,
+  normalizePlan,
+  normalizeService,
+  getVehicleKeyFromId,
+  getVehicleIdFromKey,
+  formatCurrency,
+  formatSavedVehicleDescriptor,
+  toVehicleTabLabel,
+  toIsoDate,
+  toTimeValue,
+  formatDateTimeWithFullDate,
+  formatCompletionWarningTime,
+  normalizeSlotSelection,
+  buildCategoryOptions,
+  clonePlan,
+  getMissingSpecificServiceByVehicle,
+  buildMissingSpecificServiceMessage,
+} from "@features/workshop/components/receptionCreateAppointmentHelpers";
 
 export default function ReceptionCreateAppointmentForm({
   customers = [],
@@ -1235,7 +830,7 @@ export default function ReceptionCreateAppointmentForm({
     }
 
     if ((sharedPlan.categoryIds || []).includes(id)) {
-      setErrorText('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
+      setErrorText('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Áp dụng tất cả xe".');
       return;
     }
 
@@ -2682,905 +2277,109 @@ export default function ReceptionCreateAppointmentForm({
       {errorText && typeof onErrorMessage !== "function" ? <div className="reception-error-banner">{errorText}</div> : null}
       <div className="reception-appt-layout">
         <div className="reception-appt-left-column">
-          <section className="reception-appt-section">
-            <div className="reception-appt-step-head">
-              <span className="reception-step-badge">BƯỚC 1</span>
-              <label className="reception-appt-quick-toggle" htmlFor="appt-quick-toggle">
-                <input
-                  id="appt-quick-toggle"
-                  type="checkbox"
-                  checked={formData.isQuickOrder}
-                  onChange={toggleQuickOrder}
-                />
-                <span>Đặt lịch cho khách vãng lai</span>
-              </label>
-            </div>
-            <h4 className="reception-appt-section-title">
-              {!formData.isQuickOrder ? "Khách hàng và xe" : "Khách vãng lai"}
-            </h4>
+          <ReceptionAppointmentCustomerStep
+            formData={formData}
+            search={search}
+            setSearch={setSearch}
+            filteredCustomers={filteredCustomers}
+            selectCustomer={selectCustomer}
+            toggleQuickOrder={toggleQuickOrder}
+            customerVehiclesFiltered={customerVehiclesFiltered}
+            selectedCustomerVehicles={selectedCustomerVehicles}
+            selectableCustomerVehicles={selectableCustomerVehicles}
+            isSavedVehiclePopupOpen={isSavedVehiclePopupOpen}
+            setIsSavedVehiclePopupOpen={setIsSavedVehiclePopupOpen}
+            describeSavedVehicle={describeSavedVehicle}
+            toggleVehicleSelection={toggleVehicleSelection}
+            addExistingVehicle={addExistingVehicle}
+            switchToNewVehicleMode={switchToNewVehicleMode}
+            switchToSavedVehicleMode={switchToSavedVehicleMode}
+            confirmNewVehicleMode={confirmNewVehicleMode}
+            cancelNewVehicleMode={cancelNewVehicleMode}
+            customerHasNoVehicles={customerHasNoVehicles}
+            handleChange={handleChange}
+            handlePlateBlur={handlePlateBlur}
+            selectedBrandId={selectedBrandId}
+            setSelectedBrandId={setSelectedBrandId}
+            guestSelectedBrandId={guestSelectedBrandId}
+            setGuestSelectedBrandId={setGuestSelectedBrandId}
+            brands={brands}
+            models={models}
+            years={years}
+          />
 
-            {!formData.isQuickOrder ? (
-              <>
-                <div className="form-group">
-                  <label>Tìm khách hàng</label>
-                  <div className="search-input-wrapper">
-                    <input
-                      type="text"
-                      placeholder="Nhập tên hoặc số điện thoại..."
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      required={!formData.customerId}
-                    />
-                    {filteredCustomers.length > 0 ? (
-                      <div
-                        className="dropdown-panel"
-                        style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20 }}
-                      >
-                        {filteredCustomers.map((customer) => (
-                          <div
-                            key={customer.id}
-                            className="dropdown-item"
-                            onClick={() => selectCustomer(customer)}
-                          >
-                            <strong>{customer.fullName}</strong> - {customer.phone}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                {formData.customerId ? (
-                  <div className="reception-customer-selected-card">
-                    <div className="reception-customer-selected-main">
-                      <small>KHÁCH ĐÃ CHỌN</small>
-                      <strong>{formData.customerName}</strong>
-                      <span>{formData.customerPhone}</span>
-                    </div>
-                  </div>
-                ) : null}
-
-                {!formData.isNewVehicle ? (
-                  <div className="form-group">
-                    <label>Xe của khách (có thể chọn nhiều xe)</label>
-                    {!formData.customerId ? (
-                      <div className="reception-muted-note">Hãy chọn khách hàng trước.</div>
-                    ) : (
-                      <>
-                        <div className="reception-vehicle-popup-toolbar">
-                          <button
-                            type="button"
-                            className="reception-open-vehicle-popup-btn"
-                            onClick={() => setIsSavedVehiclePopupOpen(true)}
-                            disabled={customerVehiclesFiltered.length === 0}
-                          >
-                            Chọn xe đã lưu
-                          </button>
-                          <button
-                            type="button"
-                            className="reception-open-vehicle-popup-btn"
-                            onClick={switchToNewVehicleMode}
-                          >
-                            Thêm xe mới
-                          </button>
-                        </div>
-                        {customerVehiclesFiltered.length === 0 ? (
-                          <div className="reception-muted-note">Khách hàng chưa có xe đã lưu.</div>
-                        ) : (
-                          <>
-                            {selectedCustomerVehicles.length > 0 ? (
-                              <div className="reception-selected-vehicle-list">
-                                {selectedCustomerVehicles.map((vehicle) => {
-                                  const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-                                  return (
-                                    <div
-                                      key={`selected-vehicle-${vehicle.id}`}
-                                      className="reception-selected-vehicle-chip"
-                                    >
-                                      <span className="reception-selected-vehicle-chip-main">
-                                        <strong>{plate}</strong>
-                                        <small>{describeSavedVehicle(vehicle)}</small>
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="reception-selected-vehicle-chip-remove"
-                                        onClick={() => toggleVehicleSelection(vehicle.id)}
-                                      >
-                                        Xóa
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-
-                            {isSavedVehiclePopupOpen ? (
-                              <div
-                                className="reception-vehicle-popup-backdrop"
-                                onClick={() => setIsSavedVehiclePopupOpen(false)}
-                              >
-                                <div
-                                  className="reception-vehicle-popup-card"
-                                  role="dialog"
-                                  aria-modal="true"
-                                  aria-label="Chọn xe đã lưu"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <div className="reception-vehicle-popup-head">
-                                    <div className="reception-vehicle-popup-head-copy">
-                                      <h5>Chọn xe đã lưu lại</h5>
-                                      <p>Chỉ hiển thị các xe chưa chọn.</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="reception-vehicle-popup-close-btn"
-                                      onClick={() => setIsSavedVehiclePopupOpen(false)}
-                                    >
-                                      Đóng
-                                    </button>
-                                  </div>
-
-                                  <div className="reception-vehicle-popup-list">
-                                    {selectableCustomerVehicles.length === 0 ? (
-                                      <div className="reception-muted-note">
-                                        Bạn đã chọn hết xe đã lưu. Bỏ xe ở danh sách đã chọn để chọn lại.
-                                      </div>
-                                    ) : (
-                                      selectableCustomerVehicles.map((vehicle) => {
-                                        const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-                                        return (
-                                          <button
-                                            key={`popup-vehicle-${vehicle.id}`}
-                                            type="button"
-                                            className="reception-vehicle-popup-item"
-                                            onClick={() => addExistingVehicle(vehicle.id)}
-                                          >
-                                            <span className="reception-vehicle-popup-item-mark" aria-hidden="true">
-                                              +
-                                            </span>
-                                            <span className="reception-vehicle-popup-item-copy">
-                                              <strong>{plate}</strong>
-                                              <small>{describeSavedVehicle(vehicle)}</small>
-                                            </span>
-                                            <span className="reception-vehicle-popup-item-action">Thêm xe</span>
-                                          </button>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="reception-new-vehicle-box">
-                      <div className="reception-vehicle-popup-toolbar">
-                        <button
-                          type="button"
-                          className="reception-open-vehicle-popup-btn"
-                          onClick={switchToSavedVehicleMode}
-                          disabled={customerHasNoVehicles}
-                        >
-                          Chọn xe đã lưu
-                        </button>
-                      <button
-                        type="button"
-                        className="reception-open-vehicle-popup-btn is-active"
-                        onClick={switchToNewVehicleMode}
-                      >
-                        Thêm xe mới
-                      </button>
-                    </div>
-                    <div className="form-group">
-                      <label>Biển số xe mới *</label>
-                      <input
-                        type="text"
-                        name="vehicleLicensePlate"
-                        value={formData.vehicleLicensePlate}
-                        onChange={handleChange}
-                        onBlur={handlePlateBlur}
-                        pattern={VIETNAM_LICENSE_PLATE_PATTERN}
-                        title={VIETNAM_LICENSE_PLATE_TITLE}
-                        style={{ textTransform: "uppercase" }}
-                        placeholder="VD: 30A-12345"
-                      />
-                    </div>
-                    <div className="reception-grid reception-grid-2">
-                      <div className="form-group">
-                        <label>Hãng xe *</label>
-                        <select value={selectedBrandId} onChange={(event) => setSelectedBrandId(event.target.value)}>
-                          <option value="">-- Chọn hãng --</option>
-                          {brands.map((brand) => (
-                            <option key={brand.id} value={brand.id}>
-                              {brand.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Dòng xe *</label>
-                        <select
-                          name="vehicleModelId"
-                          value={formData.vehicleModelId}
-                          onChange={handleChange}
-                          disabled={!selectedBrandId}
-                        >
-                          <option value="">-- Chọn dòng xe --</option>
-                          {models
-                            .filter((model) => Number(model.brandId) === Number(selectedBrandId))
-                            .map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {model.modelName}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="reception-grid reception-grid-3">
-                      <div className="form-group">
-                        <label>Màu sắc</label>
-                        <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
-                      </div>
-                      <div className="form-group">
-                        <label>Năm sản xuất</label>
-                        <select name="vehicleYear" value={formData.vehicleYear} onChange={handleChange}>
-                          <option value="">-- Chọn năm --</option>
-                          {years.map((year) => (
-                            <option key={year} value={year}>
-                              {year}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>VIN *</label>
-                        <input
-                          name="vehicleVin"
-                          value={formData.vehicleVin}
-                          onChange={handleChange}
-                          pattern={VIETNAM_VIN_PATTERN}
-                          title={VIETNAM_VIN_TITLE}
-                          maxLength={17}
-                          style={{ textTransform: "uppercase" }}
-                        />
-                      </div>
-                    </div>
-                    <div className="reception-new-vehicle-actions">
-                      <button
-                        type="button"
-                        className="reception-open-vehicle-popup-btn is-active"
-                        onClick={confirmNewVehicleMode}
-                      >
-                        Xác nhận
-                      </button>
-                      <button type="button" className="reception-open-vehicle-popup-btn" onClick={cancelNewVehicleMode}>
-                        Hủy
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="reception-new-vehicle-box">
-                <div className="reception-grid reception-grid-2">
-                  <div className="form-group">
-                    <label>Tên khách *</label>
-                    <input name="guestName" value={formData.guestName} onChange={handleChange} />
-                  </div>
-                  <div className="form-group">
-                    <label>Số điện thoại *</label>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    name="guestPhone"
-                    value={formData.guestPhone}
-                    onChange={handleChange}
-                    pattern={VN_PHONE_PATTERN}
-                    title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
-                  />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Biển số xe *</label>
-                  <input
-                    name="guestVehiclePlate"
-                    value={formData.guestVehiclePlate}
-                    onChange={handleChange}
-                    onBlur={handlePlateBlur}
-                    pattern={VIETNAM_LICENSE_PLATE_PATTERN}
-                    title={VIETNAM_LICENSE_PLATE_TITLE}
-                    style={{ textTransform: "uppercase" }}
-                  />
-                </div>
-                <div className="reception-grid reception-grid-2">
-                  <div className="form-group">
-                    <label>Hãng xe *</label>
-                    <select value={guestSelectedBrandId} onChange={(event) => setGuestSelectedBrandId(event.target.value)}>
-                      <option value="">-- Chọn hãng --</option>
-                      {brands.map((brand) => (
-                        <option key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Dòng xe *</label>
-                    <select
-                      name="guestVehicleModelId"
-                      value={formData.guestVehicleModelId}
-                      onChange={handleChange}
-                      disabled={!guestSelectedBrandId}
-                    >
-                      <option value="">-- Chọn dòng xe --</option>
-                      {models
-                        .filter((model) => Number(model.brandId) === Number(guestSelectedBrandId))
-                        .map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.modelName}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="reception-grid reception-grid-3">
-                  <div className="form-group">
-                    <label>Màu sắc</label>
-                    <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
-                  </div>
-                  <div className="form-group">
-                    <label>Năm sản xuất</label>
-                    <select name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange}>
-                      <option value="">-- Chọn năm --</option>
-                      {years.map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>VIN *</label>
-                    <input
-                      name="guestVehicleVin"
-                      value={formData.guestVehicleVin}
-                      onChange={handleChange}
-                      pattern={VIETNAM_VIN_PATTERN}
-                      title={VIETNAM_VIN_TITLE}
-                      maxLength={17}
-                      style={{ textTransform: "uppercase" }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="reception-appt-section">
-            <div className="reception-appt-step-head reception-appt-step-head-service">
-              <span className="reception-step-badge">BƯỚC 2</span>
-            </div>
-            <h4 className="reception-appt-section-title reception-appt-section-title-service">
-              Loại dịch vụ và dịch vụ cụ thể
-            </h4>
-
-            {showServiceModeSwitch ? (
-              <div className="reception-scope-switch">
-                <button
-                  type="button"
-                  className={effectiveServiceMode === SERVICE_MODE.SHARED ? "active" : ""}
-                  onClick={() => handleServiceModeChange(SERVICE_MODE.SHARED)}
-                >
-                  Dùng chung tất cả xe
-                </button>
-                <button
-                  type="button"
-                  className={effectiveServiceMode === SERVICE_MODE.CUSTOM ? "active" : ""}
-                  onClick={() => handleServiceModeChange(SERVICE_MODE.CUSTOM)}
-                  disabled={!hasMultipleSelectedVehicles}
-                  title={!hasMultipleSelectedVehicles ? "Cần chọn từ 2 xe trở lên để tùy chỉnh riêng" : undefined}
-                >
-                  Tùy chỉnh theo từng xe
-                </button>
-              </div>
-            ) : null}
-
-            {selectedVehicleKeys.length > 1 ? (
-              <div className="reception-selected-tabs reception-vehicle-tabs-layout">
-                {selectedVehicleKeys.map((vehicleKey) => (
-                  <div
-                    key={vehicleKey}
-                    className={`reception-selected-tab ${
-                      effectiveServiceMode === SERVICE_MODE.CUSTOM && activePlanVehicleKey === vehicleKey
-                        ? "active"
-                        : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className="reception-selected-tab-main"
-                      onClick={() => {
-                        setActivePlanVehicleKey(vehicleKey);
-                        if (effectiveServiceMode === SERVICE_MODE.SHARED) {
-                          handleServiceModeChange(SERVICE_MODE.CUSTOM);
-                        }
-                      }}
-                    >
-                      {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
-                    </button>
-                    <button
-                      type="button"
-                      className="reception-selected-tab-remove"
-                      aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        const vehicleId = getVehicleIdFromKey(vehicleKey);
-                        if (vehicleId > 0) {
-                          toggleVehicleSelection(vehicleId);
-                        }
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="reception-service-subsection reception-service-type-subsection">
-              <h5 className="reception-service-subtitle">Loại dịch vụ</h5>
-              <button
-                type="button"
-                className={`reception-section-collapse-btn reception-section-collapse-btn-corner ${
-                  isServicePickerCollapsed ? "is-collapsed" : "is-expanded"
-                }`}
-                aria-expanded={!isServicePickerCollapsed}
-                aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
-                onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
-              >
-                <span className="reception-section-collapse-glyph" aria-hidden="true" />
-              </button>
-              {!isServicePickerCollapsed ? (
-                <div className="reception-category-grid">
-                  {visibleCategoryOptions.map((category) => {
-                    const selected = activePlan.categoryIds.includes(Number(category.id));
-                    return (
-                      <button
-                        key={category.id}
-                        type="button"
-                        className={`reception-category-chip ${selected ? "selected" : ""}`}
-                        onClick={() => toggleCategory(category.id)}
-                      >
-                        {category.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="reception-service-collapsed-card">
-                  <span className="reception-service-collapsed-label">Loại dịch vụ</span>
-                  <span className="reception-service-collapsed-value">
-                    {activePlan.categoryIds.length > 0
-                      ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
-                      : "Chưa chọn loại dịch vụ"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="reception-service-subsection reception-service-detail-subsection">
-              <h5 className="reception-service-subtitle">Dịch vụ cụ thể</h5>
-              {activePlan.categoryIds.length > 0 ? (
-                <>
-                  <div className="reception-selected-tabs reception-category-tabs-layout">
-                    {activePlan.categoryIds.map((categoryId) => (
-                      <div
-                        key={`cat-${categoryId}`}
-                        className={`reception-selected-tab ${String(activeCategoryId) === String(categoryId) ? "active" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          className="reception-selected-tab-main"
-                          onClick={() => setActiveCategoryId(String(categoryId))}
-                        >
-                          {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
-                        </button>
-                        <button
-                          type="button"
-                          className="reception-selected-tab-remove"
-                          aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleCategory(categoryId);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="form-group">
-                    <label>Tìm dịch vụ</label>
-                    <input
-                      type="text"
-                      placeholder="Tìm theo tên dịch vụ..."
-                      value={serviceSearch}
-                      onChange={(event) => setServiceSearch(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="reception-service-list">
-                    {filteredServices.length === 0 ? (
-                      <div className="reception-muted-note">
-                        Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.
-                      </div>
-                    ) : (
-                      filteredServices.map((service) => {
-                        const selected = activePlan.serviceIds.includes(service.id);
-                        return (
-                          <button
-                            key={service.id}
-                            type="button"
-                            className={`reception-service-card ${selected ? "selected" : ""}`}
-                            onClick={() => toggleService(service.id)}
-                          >
-                            <div className="reception-service-card-main">
-                              <strong>{service.name}</strong>
-                              <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
-                            </div>
-                            <span>{formatCurrency(service.price)}</span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
-              )}
-            </div>
-
-            {insuranceVehicleOptions.length > 0 ? (
-              <div className="reception-service-subsection">
-                <BookingInsurancePanel
-                  vehicleOptions={insuranceVehicleOptions}
-                  activeVehicleKey={activeInsuranceVehicleKey}
-                  onActiveVehicleChange={setActiveInsuranceVehicleKey}
-                  value={activeInsuranceSnapshot}
-                  onChange={handleInsuranceSnapshotChange}
-                  onUploadAsset={handleInsuranceAssetUpload}
-                  onRemoveAsset={handleInsuranceAssetRemove}
-                  uploadingState={insuranceUploadStateByVehicleKey[activeInsuranceVehicleKey] || {}}
-                  companies={insuranceCompanies}
-                  companyNameById={insuranceCompanyNameById}
-                  contextLabel="tiếp nhận xe"
-                  mode="booking"
-                />
-              </div>
-            ) : null}
-          </section>
+          <ReceptionAppointmentServiceStep
+            showServiceModeSwitch={showServiceModeSwitch}
+            effectiveServiceMode={effectiveServiceMode}
+            handleServiceModeChange={handleServiceModeChange}
+            hasMultipleSelectedVehicles={hasMultipleSelectedVehicles}
+            selectedVehicleKeys={selectedVehicleKeys}
+            activePlanVehicleKey={activePlanVehicleKey}
+            setActivePlanVehicleKey={setActivePlanVehicleKey}
+            vehicleLabelByKey={vehicleLabelByKey}
+            toggleVehicleSelection={toggleVehicleSelection}
+            isServicePickerCollapsed={isServicePickerCollapsed}
+            setIsServicePickerCollapsed={setIsServicePickerCollapsed}
+            visibleCategoryOptions={visibleCategoryOptions}
+            activePlan={activePlan}
+            toggleCategory={toggleCategory}
+            categoryNameById={categoryNameById}
+            activeCategoryId={activeCategoryId}
+            setActiveCategoryId={setActiveCategoryId}
+            serviceSearch={serviceSearch}
+            setServiceSearch={setServiceSearch}
+            filteredServices={filteredServices}
+            toggleService={toggleService}
+            insuranceVehicleOptions={insuranceVehicleOptions}
+            activeInsuranceVehicleKey={activeInsuranceVehicleKey}
+            setActiveInsuranceVehicleKey={setActiveInsuranceVehicleKey}
+            activeInsuranceSnapshot={activeInsuranceSnapshot}
+            handleInsuranceSnapshotChange={handleInsuranceSnapshotChange}
+            handleInsuranceAssetUpload={handleInsuranceAssetUpload}
+            handleInsuranceAssetRemove={handleInsuranceAssetRemove}
+            insuranceUploadStateByVehicleKey={insuranceUploadStateByVehicleKey}
+            insuranceCompanies={insuranceCompanies}
+            insuranceCompanyNameById={insuranceCompanyNameById}
+          />
         </div>
 
         <div className="reception-appt-right-column">
-          <section className="reception-appt-section reception-appt-timing-section">
-            <div className="reception-appt-step-head">
-              <span className="reception-step-badge">BƯỚC 3</span>
-            </div>
-            <h4 className="reception-appt-section-title">Thông tin lịch hẹn</h4>
-            <p className="reception-step-subtitle">Chọn thời gian và mô tả để xác nhận lịch hẹn.</p>
-
-            {hasMultipleSelectedVehicles ? (
-              <div className="reception-scope-switch reception-slot-mode-switch">
-                <button
-                  type="button"
-                  className={slotMode === SLOT_MODE.PARALLEL ? "active" : ""}
-                  onClick={() => {
-                    void handleSlotModeChange(SLOT_MODE.PARALLEL);
-                  }}
-                >
-                  Song song
-                </button>
-                <button
-                  type="button"
-                  className={slotMode === SLOT_MODE.INDIVIDUAL ? "active" : ""}
-                  onClick={() => {
-                    void handleSlotModeChange(SLOT_MODE.INDIVIDUAL);
-                  }}
-                >
-                  Riêng lẻ
-                </button>
-              </div>
-            ) : null}
-
-            {slotMode === SLOT_MODE.INDIVIDUAL && selectedVehicleKeys.length > 1 ? (
-              <div className="reception-selected-tabs reception-vehicle-tabs-layout">
-                {selectedVehicleKeys.map((vehicleKey) => (
-                  <div
-                    key={`slot-mode-${vehicleKey}`}
-                    className={`reception-selected-tab ${activeSlotVehicleKey === vehicleKey ? "active" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className="reception-selected-tab-main"
-                      onClick={() => setActiveSlotVehicleKey(vehicleKey)}
-                    >
-                      {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="form-group">
-              <label>Ngày đặt lịch *</label>
-              <DateTimePicker
-                value={effectiveSelectedDate ? `${effectiveSelectedDate}T08:00:00` : ""}
-                onChange={(value) => {
-                  void handleDateChange(value);
-                }}
-                minDate={new Date()}
-                showTime={false}
-                iconColor="#2f6bd8"
-                onOpenRequest={() => {
-                  if (dateSelectionGuardMessage) {
-                    setErrorText(dateSelectionGuardMessage);
-                    return false;
-                  }
-                  return true;
-                }}
-                placeholder="Chọn ngày..."
-              />
-              {appointmentSummary ? <div className="reception-muted-note">{appointmentSummary}</div> : null}
-            </div>
-
-            <div className="slot-section reception-slot-section">
-              {!Number(branchId) ? (
-                <div className="booking-empty">Vui lòng chọn đúng chi nhánh làm việc trước khi chọn giờ.</div>
-              ) : !effectiveSelectedDate ? (
-                <div className="booking-empty">
-                  {slotMode === SLOT_MODE.INDIVIDUAL
-                    ? "Vui lòng chọn ngày cho xe đang thao tác trước khi chọn giờ."
-                    : "Vui lòng chọn ngày trước khi chọn giờ."}
-                </div>
-              ) : slotsLoading ? (
-                <div className="booking-empty">Đang tải khung giờ...</div>
-              ) : (
-                <>
-                  <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
-                    {slotSelectionGuide}
-                  </p>
-                  <div className="session-tabs">
-                    {SESSION_TABS.map((tab) => (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        className={`session-tab ${activeSession === tab.key ? "active" : ""}`}
-                        onClick={() => setActiveSession(tab.key)}
-                      >
-                        <strong>{tab.label}</strong>
-                        <small>{tab.hint}</small>
-                      </button>
-                    ))}
-                  </div>
-
-                  {(slotsBySession[activeSession] || []).length > 0 ? (
-                    <div className="slot-actions">
-                      <button
-                        type="button"
-                        className="slot-expand-toggle"
-                        onClick={() => toggleOddSlotsForSession(activeSession)}
-                      >
-                        {showOddSlots[activeSession] ? "Ẩn" : "Xem thêm"}
-                      </button>
-                    </div>
-                  ) : null}
-
-                  <div className="slot-grid">
-                    {displayedSlots.map((slot) => {
-                      const start = readField(slot, ["startTime", "StartTime"], "");
-                      const end = readField(slot, ["endTime", "EndTime"], "");
-                      const selectedStart = readField(chosenSlot, ["startTime", "StartTime"], "");
-                      const selectedEnd = readField(chosenSlot, ["endTime", "EndTime"], "");
-                      const isSelected = selectedStart === start && selectedEnd === end;
-                      const remaining = Number(readField(slot, ["remainingCapacity", "RemainingCapacity"], 0) || 0);
-                      const hasCapacity = remaining > 0;
-
-                      return (
-                        <button
-                          key={`${start}-${end}`}
-                          type="button"
-                          className={`slot-card ${isSelected ? "selected" : ""}`}
-                          onClick={() => {
-                            void handleSelectSlot(slot);
-                          }}
-                        >
-                          <strong className="slot-time">
-                            {timeLabel(start)} - {timeLabel(end)}
-                          </strong>
-                          <div className="slot-meta">
-                            <span className={`slot-state-dot ${hasCapacity ? "ok" : "full"}`} />
-                            <span className={`slot-state-text ${hasCapacity ? "ok" : "full"}`}>
-                              {hasCapacity ? `Còn ${remaining} chỗ` : "Hết chỗ"}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {displayedSlots.length === 0 ? (
-                    <div className="booking-empty">Không có khung giờ phù hợp cho ngày đã chọn.</div>
-                  ) : null}
-                </>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label>Ghi chú theo từng xe</label>
-              {selectedVehicleKeys.length > 0 ? (
-                <div className="reception-note-editor">
-                  {selectedVehicleKeys.length > 1 ? (
-                    <div className="reception-selected-tabs reception-vehicle-tabs-layout reception-note-vehicle-tabs">
-                      {selectedVehicleKeys.map((vehicleKey) => (
-                        <div
-                          key={`note-tab-${vehicleKey}`}
-                          className={`reception-selected-tab ${activeNoteKey === vehicleKey ? "active" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            className="reception-selected-tab-main"
-                            onClick={() => setActiveNoteVehicleKey(vehicleKey)}
-                          >
-                            {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
-                          </button>
-                          <button
-                            type="button"
-                            className="reception-selected-tab-remove"
-                              aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              const vehicleId = getVehicleIdFromKey(vehicleKey);
-                              if (vehicleId > 0) {
-                                toggleVehicleSelection(vehicleId);
-                              }
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="reception-note-list">
-                    <textarea
-                      key={`note-${activeNoteKey || "none"}`}
-                      className="reception-note-input"
-                      rows={3}
-                      value={activeNoteValue}
-                      placeholder="Nhập ghi chú cho xe này..."
-                      onChange={(event) => onVehicleNoteChange(activeNoteKey, event.target.value)}
-                    />
-                  </div>
-                  {selectedVehicleKeys.length > 1 ? (
-                    <p className="reception-muted-note">Chọn xe ở tab bên trên để nhập ghi chú theo từng xe.</p>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
-              )}
-            </div>
-
-            <div className="reception-summary-inline" role="status" aria-live="polite">
-              <div className="reception-summary-inline-row">
-                <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
-                <strong>{fleetCompletionDateTimeLabel}</strong>
-              </div>
-              <div className="reception-summary-inline-row">
-                <span>Tổng giá dịch vụ tất cả xe</span>
-                <strong>{formatCurrency(totalPrice)}</strong>
-              </div>
-              <div className="reception-summary-inline-row">
-                <span>Số xe</span>
-                <strong>
-                  {selectedVehicleCount} {selectedVehicleCount > 1 ? "(lịch nhóm)" : "(lịch thường)"}
-                </strong>
-              </div>
-            </div>
-
-            {planSummaries.length > 0 ? (
-              <div className="reception-plan-summary-grid">
-                {planSummaries.map((plan) => {
-                  const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
-                  const insuranceSummary = insuranceDetails?.summary || null;
-
-                  return (
-                  <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
-                    <div className="reception-plan-summary-head">
-                      <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
-                      <span className="reception-plan-summary-badge">
-                        {`${plan.serviceIds.length} dịch vụ`}
-                      </span>
-                    </div>
-
-                    <div className="reception-plan-summary-block">
-                      <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                      {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0 ? (
-                        <ul className="reception-plan-summary-list">
-                          {plan.serviceGroupsByCategory.map((group) => (
-                            <li key={`${plan.vehicleKey}-${group.categoryName}`} className="reception-plan-summary-list-item">
-                              <span className="reception-plan-summary-list-group">{group.categoryName}</span>
-                              <ul className="reception-plan-summary-sublist">
-                                {(group.serviceNames || []).map((serviceName) => (
-                                  <li
-                                    key={`${plan.vehicleKey}-${group.categoryName}-${serviceName}`}
-                                    className="reception-plan-summary-sublist-item"
-                                  >
-                                    {serviceName}
-                                  </li>
-                                ))}
-                              </ul>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
-                      )}
-                    </div>
-
-                    {insuranceSummary ? (
-                      <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
-                        <div className="reception-plan-summary-time-row">
-                          <span>Công ty bảo hiểm:</span>
-                          <strong>{insuranceSummary.companyName}</strong>
-                        </div>
-                        <div className="reception-plan-summary-time-row">
-                          <span>Hồ sơ bảo hiểm:</span>
-                          <strong>{insuranceSummary.assetSummaryLabel}</strong>
-                        </div>
-                        <p className="reception-plan-summary-text">
-                          {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    <div className="reception-plan-summary-block">
-                      <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
-                      <div className="reception-plan-summary-time-row">
-                        <span>Giờ bắt đầu:</span>
-                        <strong>{plan.startTimeLabel}</strong>
-                      </div>
-                      <div className="reception-plan-summary-time-row">
-                        <span>Giờ kết thúc:</span>
-                        <strong>{plan.endTimeLabel}</strong>
-                      </div>
-                      <div className="reception-plan-summary-time-row">
-                        <span>Tổng thời lượng:</span>
-                        <strong>{`${plan.totalMinutes} phút`}</strong>
-                      </div>
-                    </div>
-
-                    {plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && plan.flowWarningLabel ? (
-                      <p className="reception-plan-summary-warning">
-                        {`* ${plan.flowWarningLabel}`}
-                      </p>
-                    ) : null}
-
-                    <div className="reception-plan-summary-footer">
-                      <span>Tổng giá dịch vụ</span>
-                      <strong>{formatCurrency(plan.totalPrice)}</strong>
-                    </div>
-                  </article>
-                )})}
-              </div>
-            ) : null}
-          </section>
+          <ReceptionAppointmentTimingStep
+            hasMultipleSelectedVehicles={hasMultipleSelectedVehicles}
+            slotMode={slotMode}
+            handleSlotModeChange={handleSlotModeChange}
+            selectedVehicleKeys={selectedVehicleKeys}
+            activeSlotVehicleKey={activeSlotVehicleKey}
+            setActiveSlotVehicleKey={setActiveSlotVehicleKey}
+            vehicleLabelByKey={vehicleLabelByKey}
+            effectiveSelectedDate={effectiveSelectedDate}
+            handleDateChange={handleDateChange}
+            dateSelectionGuardMessage={dateSelectionGuardMessage}
+            setErrorText={setErrorText}
+            appointmentSummary={appointmentSummary}
+            branchId={branchId}
+            slotsLoading={slotsLoading}
+            effectiveSlotFlow={effectiveSlotFlow}
+            slotSelectionGuide={slotSelectionGuide}
+            activeSession={activeSession}
+            setActiveSession={setActiveSession}
+            slotsBySession={slotsBySession}
+            showOddSlots={showOddSlots}
+            toggleOddSlotsForSession={toggleOddSlotsForSession}
+            displayedSlots={displayedSlots}
+            chosenSlot={chosenSlot}
+            handleSelectSlot={handleSelectSlot}
+            activeNoteKey={activeNoteKey}
+            setActiveNoteVehicleKey={setActiveNoteVehicleKey}
+            toggleVehicleSelection={toggleVehicleSelection}
+            activeNoteValue={activeNoteValue}
+            onVehicleNoteChange={onVehicleNoteChange}
+            fleetCompletionDateTimeLabel={fleetCompletionDateTimeLabel}
+            totalPrice={totalPrice}
+            selectedVehicleCount={selectedVehicleCount}
+            planSummaries={planSummaries}
+            insuranceSummaryByVehicleKey={insuranceSummaryByVehicleKey}
+          />
         </div>
       </div>
 

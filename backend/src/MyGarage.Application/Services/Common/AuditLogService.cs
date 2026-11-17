@@ -9,7 +9,7 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Services
 {
-    public class AuditLogService : GenericService<AuditLog>, IAuditLogService
+    public class AuditLogService : GenericService<AuditLog>, IAuditLogService, IAuditLogReader, IAuditLogWriter
     {
         private readonly IAuditLogStore _store;
         private readonly IMapper _mapper;

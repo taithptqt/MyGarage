@@ -1,4 +1,4 @@
-using MyGarage.Models;
+using MyGarage.Application.Payments.DTOs;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Services;

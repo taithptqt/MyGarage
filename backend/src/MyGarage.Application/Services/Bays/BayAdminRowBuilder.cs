@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 
 namespace MyGarage.Application.Bays;
 
@@ -6,13 +7,13 @@ internal static class BayAdminRowBuilder
 {
     public static async Task<List<BayViewRow>> BuildBayRowsAsync(
         IBayAdminReadDataService dataService,
+        IAppConfigFileStore configStore,
         bool includeHidden,
-        string contentRootPath,
         BayAdminSettings? settings = null,
         DateTime? nowUtc = null,
         CancellationToken ct = default)
     {
-        settings ??= await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        settings ??= await BayAdminSettingsHelper.ReadSettingsAsync(configStore, ct);
         var now = nowUtc ?? VietnamTime.Now;
 
         var bays = await dataService.GetBaysWithBranchAsync(includeHidden, ct);

@@ -207,9 +207,9 @@ export default function QcChecklistPage() {
     setError("");
     try {
       const [orderRes, templatesRes, staffRes] = await Promise.all([
-        request({ url: `/api/service-orders/${orderId}`, method: "GET" }),
+        request({ url: `/api/v1/service-orders/${orderId}`, method: "GET" }),
         executionApi.getQcChecklistTemplates({ serviceOrderId: orderId }),
-        request({ url: "/api/staff", method: "GET" }).catch(() => []),
+        request({ url: "/api/v1/staff", method: "GET" }).catch(() => []),
       ]);
 
       const raw = orderRes?.data ?? orderRes;
@@ -238,7 +238,7 @@ export default function QcChecklistPage() {
 
       // Load existing inspection if any
       const inspRes = await request({
-        url: "/api/qc-inspections",
+        url: "/api/v1/qc-inspections",
         method: "GET",
         params: { serviceOrderId: orderId },
       }).catch(() => null);
@@ -329,7 +329,7 @@ export default function QcChecklistPage() {
       await saveDraft();
       const inspId = inspection?.id ?? inspection?.Id;
       if (inspId) {
-        await request({ url: `/api/qc-inspections/${inspId}/pass`, method: "PUT",
+        await request({ url: `/api/v1/qc-inspections/${inspId}/passes`, method: "POST",
           data: { inspectorId: user?.id ?? user?.staffId } });
       }
       setSuccess("✅ QC ĐẠT — Xe sẵn sàng bàn giao!");
@@ -349,7 +349,7 @@ export default function QcChecklistPage() {
     try {
       const inspId = inspection?.id ?? inspection?.Id;
       if (inspId) {
-        await request({ url: `/api/qc-inspections/${inspId}/fail`, method: "PUT",
+        await request({ url: `/api/v1/qc-inspections/${inspId}/failures`, method: "POST",
           data: { reason, assignToTechnicianId: technicianId || null, inspectorId: user?.id ?? user?.staffId } });
       }
       setSuccess("Đã đánh dấu KHÔNG ĐẠT - Trả về thợ sửa lại.");

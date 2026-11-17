@@ -61,17 +61,17 @@ public sealed class EfDiagnosisRecommendationDataService(IGarageContext context)
             return Array.Empty<PendingSupplementaryProposalResponseDto>();
         }
 
-        var latestDiagnosisByOrder = await context.Diagnoses.AsNoTracking()
+        var latestDiagnosisRows = await context.Diagnoses.AsNoTracking()
             .Where(x => candidateOrderIds.Contains(x.ServiceOrderId))
             .Where(x => x.Status != nameof(DiagnosisStatus.CANCELED))
-            .GroupBy(x => x.ServiceOrderId)
-            .Select(g => g
-                .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
-                .ThenByDescending(x => x.Id)
-                .Select(x => new { x.ServiceOrderId, x.Id })
-                .FirstOrDefault())
-            .Where(x => x != null)
+            .Select(x => new { x.ServiceOrderId, x.Id, x.UpdatedAt, x.CreatedAt })
             .ToListAsync(ct);
+
+        var latestDiagnosisByOrder = latestDiagnosisRows
+            .GroupBy(x => x.ServiceOrderId)
+            .Select(g => g.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Id).First())
+            .ToList();
 
         var latestDiagnosisIds = latestDiagnosisByOrder
             .Select(x => x!.Id)
@@ -100,6 +100,14 @@ public sealed class EfDiagnosisRecommendationDataService(IGarageContext context)
         {
             return Array.Empty<PendingSupplementaryProposalResponseDto>();
         }
+
+        var recommendationIds = recommendations.Select(x => x.Id).ToList();
+        var quotedRecommendationIds = (await context.QuotationDetails.AsNoTracking()
+            .Where(x => x.DiagnosisRecommendationId.HasValue && recommendationIds.Contains(x.DiagnosisRecommendationId.Value))
+            .Where(x => x.Quotation.Status != nameof(QuotationStatusCode.SUPERSEDED) &&
+                        x.Quotation.Status != nameof(QuotationStatusCode.CANCELED))
+            .Select(x => x.DiagnosisRecommendationId!.Value)
+            .Distinct().ToListAsync(ct)).ToHashSet();
 
         var recommendationAssignmentIds = recommendations
             .Where(x => x.DiagnosisAssignmentId.HasValue && x.DiagnosisAssignmentId.Value > 0)
@@ -137,6 +145,7 @@ public sealed class EfDiagnosisRecommendationDataService(IGarageContext context)
         return recommendations
             .Where(rec =>
             {
+                if (quotedRecommendationIds.Contains(rec.Id)) return false;
                 DateTime quotedAt;
                 var hasQuotedAt = rec.DiagnosisAssignmentId.HasValue && rec.DiagnosisAssignmentId.Value > 0
                     ? latestSupplementaryQuotedAtByAssignmentId.TryGetValue(rec.DiagnosisAssignmentId.Value, out quotedAt)

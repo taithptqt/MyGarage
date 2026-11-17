@@ -26,6 +26,7 @@ const STATUS_MAP = {
   ISSUED:    { label: "Đã xuất",     bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
   REJECTED:  { label: "Từ chối",     bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" },
   PARTIAL:   { label: "Xuất 1 phần", bg: "#ede9fe", color: "#4c1d95", dot: "#7c3aed" },
+  PARTIALLY_ISSUED: { label: "Xuất 1 phần", bg: "#ede9fe", color: "#4c1d95", dot: "#7c3aed" },
   CANCELLED: { label: "Đã hủy",      bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" },
 };
 
@@ -77,6 +78,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
   const [showRejectInput, setShowRejectInput] = useState(false);
   const status = String(req.status ?? req.Status ?? "PENDING").toUpperCase();
   const isPending = status === "PENDING";
+  const canIssue = isPending || status === "PARTIAL" || status === "PARTIALLY_ISSUED";
   const items = req.items ?? req.Items ?? req.materialRequestItems ?? [];
   const totalItems = items.length;
 
@@ -87,7 +89,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
   };
 
   return (
-    <div className={`mrq-card ${!isPending ? "mrq-card-closed" : ""}`}>
+    <div className={`mrq-card ${!canIssue ? "mrq-card-closed" : ""}`}>
       {/* card header */}
       <div className="mrq-card-header" onClick={() => setExpanded(e => !e)} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && setExpanded(x => !x)}>
         <div className="mrq-card-left">
@@ -124,7 +126,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
           )}
 
           {/* actions */}
-          {isPending && (
+          {canIssue && (
             <div className="mrq-card-actions">
               {showRejectInput ? (
                 <div className="mrq-reject-input">
@@ -144,13 +146,13 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
                 </div>
               ) : (
                 <>
-                  <button
+                  {isPending && <button
                     className="mrq-btn mrq-btn-ghost"
                     onClick={() => setShowRejectInput(true)}
                     disabled={issuing}
                   >
                     🚫 Từ chối
-                  </button>
+                  </button>}
                   <button
                     className="mrq-btn mrq-btn-green"
                     onClick={() => onIssue(req.id)}
@@ -188,7 +190,7 @@ export default function MaterialRequestQueuePage() {
     setError("");
     try {
       const res = await request({
-        url: "/api/material-requests",
+        url: "/api/v1/material-requests",
         method: "GET",
         params: { branchId: user?.branchId ?? user?.BranchId ?? "" },
       });
@@ -213,10 +215,10 @@ export default function MaterialRequestQueuePage() {
   const handleIssue = async (reqId) => {
     setIssuingId(reqId);
     try {
-      await request({ url: `/api/material-requests/${reqId}/issue`, method: "POST",
+      const updated = await request({ url: `/api/v1/material-requests/${reqId}/issuances`, method: "POST",
         data: { issuedBy: user?.id ?? user?.staffId } });
       setRequests(prev => prev.map(r =>
-        (r.id === reqId || r.Id === reqId) ? { ...r, status: "ISSUED" } : r
+        (r.id === reqId || r.Id === reqId) ? updated : r
       ));
     } catch (err) {
       setError(err?.response?.data?.message || "Không thể xuất vật tư. Kiểm tra tồn kho.");
@@ -229,7 +231,7 @@ export default function MaterialRequestQueuePage() {
   const handleReject = async (reqId, reason) => {
     setRejectingId(reqId);
     try {
-      await request({ url: `/api/material-requests/${reqId}/reject`, method: "POST",
+      await request({ url: `/api/v1/material-requests/${reqId}/rejections`, method: "POST",
         data: { reason, rejectedBy: user?.id ?? user?.staffId } });
       setRequests(prev => prev.map(r =>
         (r.id === reqId || r.Id === reqId) ? { ...r, status: "REJECTED", rejectionReason: reason } : r
@@ -245,7 +247,10 @@ export default function MaterialRequestQueuePage() {
   const filtered = useMemo(() => {
     let list = [...requests];
     if (activeTab !== "ALL") {
-      list = list.filter(r => String(r.status ?? r.Status ?? "").toUpperCase() === activeTab);
+      list = list.filter(r => {
+        const status = String(r.status ?? r.Status ?? "").toUpperCase();
+        return status === activeTab || (activeTab === "PENDING" && ["PARTIAL", "PARTIALLY_ISSUED"].includes(status));
+      });
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -264,7 +269,8 @@ export default function MaterialRequestQueuePage() {
     const c = { PENDING: 0, ISSUED: 0, REJECTED: 0, ALL: requests.length };
     requests.forEach(r => {
       const s = String(r.status ?? r.Status ?? "").toUpperCase();
-      if (s in c) c[s]++;
+      if (s === "PARTIAL" || s === "PARTIALLY_ISSUED") c.PENDING++;
+      else if (s in c) c[s]++;
     });
     return c;
   }, [requests]);

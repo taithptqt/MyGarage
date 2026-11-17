@@ -312,38 +312,6 @@
   background: rgba(0, 0, 0, 0.46);
 }
 
-.hero-scroll {
-  position: absolute;
-  right: 26px;
-  bottom: 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #fff;
-  z-index: 3;
-}
-
-.hero-scroll span {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  font-size: 9px;
-  letter-spacing: 0.34em;
-  margin-bottom: 14px;
-}
-
-.scroll-line {
-  width: 1px;
-  height: 88px;
-  background: var(--gold);
-}
-
-.scroll-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--gold);
-  margin-top: -1px;
-}
-
 .brand-strip {
   display: flex;
   flex-wrap: nowrap;
@@ -709,7 +677,7 @@
 .partners-grid img {
   width: clamp(180px, 18vw, 280px);
   max-width: 100%;
-  height: clamp(84px, 8vw, 120px);
+  height: auto;
   object-fit: contain;
   opacity: 0.78;
   filter: grayscale(1);
@@ -1049,11 +1017,6 @@
   .footer-bottom {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .hero-scroll {
-    right: 8px;
-    bottom: 18px;
   }
 
   .experience-section {

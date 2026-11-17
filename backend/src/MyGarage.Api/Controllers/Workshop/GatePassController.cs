@@ -90,6 +90,28 @@ namespace MyGarage.Controllers
             };
         }
 
+        [HttpPost("{id:long}/scans")]
+        public async Task<IActionResult> Scan(
+            long id,
+            [FromBody] ScanGatePassCommand? request,
+            [FromServices] IGatePassAndApprovalApplicationService service,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await service.ScanGatePassAsync(id, request ?? new ScanGatePassCommand(), this.ToUserActorContext(), cancellationToken);
+                return result == null ? NotFound() : Ok(result);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return this.BadRequestProblem(ex.Message);
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

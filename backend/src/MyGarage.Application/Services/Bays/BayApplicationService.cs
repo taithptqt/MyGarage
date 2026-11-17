@@ -250,15 +250,29 @@ public sealed class BayApplicationService : IBayApplicationService
         {
             throw new NotFoundException("Không tìm thấy khoang sửa chữa.");
         }
+        if (bay.IsActive == false)
+        {
+            throw new BadRequestException("Khoang đang bị khóa, không thể phân bổ xe.");
+        }
 
         var serviceOrder = await _queryStore.FindServiceOrderByIdAsync(input.ServiceOrderId, ct);
         if (serviceOrder == null)
         {
             throw new NotFoundException("Không tìm thấy lệnh sửa chữa.");
         }
+        if (serviceOrder.VehicleId != input.VehicleId)
+        {
+            throw new BadRequestException("Phương tiện không thuộc lệnh sửa chữa đã chọn.");
+        }
+        if (serviceOrder.ActualHandover.HasValue ||
+            string.Equals(serviceOrder.Status?.Trim(), "CLOSED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(serviceOrder.Status?.Trim(), "CANCELED", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException("Không thể phân bổ khoang cho lệnh đã kết thúc hoặc hủy.");
+        }
 
         var vehicle = await _queryStore.FindVehicleByIdAsync(input.VehicleId, ct);
-        if (vehicle == null)
+        if (vehicle == null || vehicle.IsDeleted == true)
         {
             throw new NotFoundException("Không tìm thấy phương tiện.");
         }
@@ -384,9 +398,13 @@ public sealed class BayApplicationService : IBayApplicationService
         {
             throw new NotFoundException("Không tìm thấy khoang đích.");
         }
+        if (targetBay.IsActive == false)
+        {
+            throw new BadRequestException("Khoang đích đang bị khóa, không thể điều chuyển xe.");
+        }
 
-        var sourceAllocation = await _allocationStore.GetActiveAllocationForBayAndVehicleAsync(fromBayId, vehicleId, ct);
-        if (sourceAllocation == null)
+        var sourceAllocation = await _allocationStore.GetActiveAllocationForBayAsync(fromBayId, ct);
+        if (sourceAllocation == null || sourceAllocation.VehicleId != vehicleId)
         {
             throw new BadRequestException("Không tìm thấy phân bổ đang hoạt động cho phương tiện tại khoang gốc.");
         }

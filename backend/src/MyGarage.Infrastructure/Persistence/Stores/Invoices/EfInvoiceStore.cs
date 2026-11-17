@@ -18,23 +18,11 @@ public sealed class EfInvoiceStore : IInvoiceStore
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
     {
-        if (_context.Database.CurrentTransaction != null)
+        if (_context.Database.CurrentTransaction != null || !_context.Database.IsRelational())
         {
             return null;
         }
-
-        try
-        {
-            return await _context.Database.BeginTransactionAsync();
-        }
-        catch (InvalidOperationException ex)
-        {
-            if (ex.Message.Contains("SqlServerRetryingExecutionStrategy"))
-            {
-                return null;
-            }
-            throw;
-        }
+        return await _context.Database.BeginTransactionAsync();
     }
 
     public Task<Invoice?> GetInvoiceWithDetailsAsync(long id, CancellationToken ct = default)
@@ -152,6 +140,17 @@ public sealed class EfInvoiceStore : IInvoiceStore
             .ToListAsync(ct);
     }
 
+    public Task<List<Invoice>> GetInvoicesByServiceOrderIdAsync(long serviceOrderId, CancellationToken ct = default)
+    {
+        return _context.Invoices.Include(x => x.InvoiceDetails)
+            .Where(x => x.ServiceOrderId == serviceOrderId).ToListAsync(ct);
+    }
+
+    public Task<List<Invoice>> GetInvoicesByRetailOrderIdAsync(long retailOrderId, CancellationToken ct = default)
+    {
+        return _context.Invoices.Include(x => x.InvoiceDetails)
+            .Where(x => x.RetailOrderId == retailOrderId).ToListAsync(ct);
+    }
     public Task<Invoice?> GetLatestInvoiceByServiceOrderIdAsync(long serviceOrderId, CancellationToken ct = default)
     {
         return _context.Invoices

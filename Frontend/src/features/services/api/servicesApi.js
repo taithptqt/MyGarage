@@ -22,25 +22,25 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 
 export const servicesApi = {
   getServiceCategories: (params = {}, requester) =>
-    requestWithDualRoute("/api/v1/service-categories", "/api/service-categories", {
+    requestWithDualRoute("/api/v1/service-categories", "/api/v1/service-categories", {
       method: "GET",
       params: { page: 1, pageSize: 100, ...params },
     }, requester),
 
   createServiceCategory: (data, requester) =>
-    requestWithDualRoute("/api/v1/service-categories", "/api/service-categories", {
+    requestWithDualRoute("/api/v1/service-categories", "/api/v1/service-categories", {
       method: "POST",
       data,
     }, requester),
 
   updateServiceCategory: (id, data, requester) =>
-    requestWithDualRoute(`/api/v1/service-categories/${id}`, `/api/service-categories/${id}`, {
+    requestWithDualRoute(`/api/v1/service-categories/${id}`, `/api/v1/service-categories/${id}`, {
       method: "PUT",
       data,
     }, requester),
 
   deleteServiceCategory: (id, requester) =>
-    requestWithDualRoute(`/api/v1/service-categories/${id}`, `/api/service-categories/${id}`, {
+    requestWithDualRoute(`/api/v1/service-categories/${id}`, `/api/v1/service-categories/${id}`, {
       method: "DELETE",
     }, requester),
 
@@ -52,32 +52,32 @@ export const servicesApi = {
       if (branchIdOrParams) params.branchId = branchIdOrParams;
       params = { ...params, ...maybeParams };
     }
-    return requestWithDualRoute("/api/v1/standard-services", "/api/standard-services", {
+    return requestWithDualRoute("/api/v1/standard-services", "/api/v1/standard-services", {
       method: "GET",
       params,
     }, requester);
   },
 
   getStandardServicePage: (params = {}, requester) =>
-    requestWithDualRoute("/api/v1/standard-services/admin-list", "/api/standard-services/admin-list", {
+    requestWithDualRoute("/api/v1/standard-services/admin-list", "/api/v1/standard-services/admin-list", {
       method: "GET",
       params: { page: 1, pageSize: 20, ...params },
     }, requester),
 
   createStandardService: (data, requester) =>
-    requestWithDualRoute("/api/v1/standard-services", "/api/standard-services", {
+    requestWithDualRoute("/api/v1/standard-services", "/api/v1/standard-services", {
       method: "POST",
       data,
     }, requester),
 
   updateStandardService: (id, data, requester) =>
-    requestWithDualRoute(`/api/v1/standard-services/${id}`, `/api/standard-services/${id}`, {
+    requestWithDualRoute(`/api/v1/standard-services/${id}`, `/api/v1/standard-services/${id}`, {
       method: "PUT",
       data,
     }, requester),
 
   deleteStandardService: (id, requester) =>
-    requestWithDualRoute(`/api/v1/standard-services/${id}`, `/api/standard-services/${id}`, {
+    requestWithDualRoute(`/api/v1/standard-services/${id}`, `/api/v1/standard-services/${id}`, {
       method: "DELETE",
     }, requester),
 };

@@ -7,7 +7,9 @@ public sealed record OrderInvoiceScope(
     long? ServiceCustomerId,
     long? RetailCustomerId,
     long? ServiceOrderId,
-    long? RetailOrderId);
+    long? RetailOrderId,
+    string? PayerType,
+    long? PayerId);
 
 public sealed record OrderPendingPaymentCreateResult(
     bool Success,

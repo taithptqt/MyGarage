@@ -97,20 +97,76 @@
 }
 
 .mg-header-side a {
-  color: var(--mg-header-white);
+  position: relative;
+  color: rgba(255, 255, 255, 0.65);
   text-decoration: none;
   font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
   font-family: "Oswald", "Bebas Neue", "Manrope", "Segoe UI", sans-serif;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+  padding-bottom: 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  opacity: 0.7;
+  transition:
+    color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    text-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mg-header-side a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--mg-header-gold), transparent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mg-header-side a:hover {
   color: var(--mg-header-gold);
+  opacity: 1;
+  transform: translateY(-1px);
+  text-shadow: 0 0 16px rgba(197, 160, 89, 0.55);
+}
+
+.mg-header-side a.is-active {
+  color: var(--mg-header-gold);
+  opacity: 1;
+  font-weight: 700;
+  text-shadow: 0 0 18px rgba(197, 160, 89, 0.65);
+}
+
+.mg-header-wrap.solid .mg-header-side a {
+  color: rgba(26, 39, 35, 0.65);
+  text-shadow: none;
+  opacity: 0.72;
+}
+
+.mg-header-wrap.solid .mg-header-side a:hover {
+  color: var(--mg-header-gold);
+  opacity: 1;
+  transform: translateY(-1px);
+  text-shadow: 0 0 12px rgba(197, 160, 89, 0.35);
+}
+
+.mg-header-wrap.solid .mg-header-side a.is-active {
+  color: var(--mg-header-gold);
+  opacity: 1;
+  font-weight: 700;
+  text-shadow: 0 0 14px rgba(197, 160, 89, 0.4);
+}
+
+.mg-header-side a:hover::after,
+.mg-header-side a.is-active::after {
+  transform: scaleX(1);
 }
 
 .mg-header-logo {

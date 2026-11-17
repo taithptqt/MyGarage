@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MyGarage.Application.Interfaces.Stores.Workshop;
 using MyGarage.Interfaces;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Infrastructure.Persistence.Stores.Workshop;
@@ -18,6 +19,7 @@ public sealed partial class EfQuotationWorkflowStore : IQuotationWorkflowStore
     private readonly IGarageContext _context;
     private readonly IConfiguration _configuration;
     private readonly ILogger<EfQuotationWorkflowStore> _logger;
+    private bool _executingTransaction;
 
     public EfQuotationWorkflowStore(
         IGarageContext context,
@@ -50,26 +52,32 @@ public sealed partial class EfQuotationWorkflowStore : IQuotationWorkflowStore
 
     public async Task SaveChangesInTransactionAsync()
     {
-        if (_context.Database.CurrentTransaction != null)
-        {
-            await _context.SaveChangesAsync();
-            return;
-        }
+        // SaveChanges provides its own transaction when none exists. Do not clear
+        // tracked changes or replay a previously mutated context in a retry delegate.
+        await _context.SaveChangesAsync();
+    }
 
-        await ExecuteTransactionalAsync(async () =>
-        {
-            await _context.SaveChangesAsync();
-            return 0;
-        });
+    public async Task LockServiceOrderForDecisionAsync(long quotationId)
+    {
+        if (!_context.Database.IsSqlServer()) return;
+        if (_context.Database.CurrentTransaction == null)
+            throw new InvalidOperationException("Không thể khóa lệnh sửa chữa khi thiếu giao dịch.");
+        await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT so.Id FROM dbo.ServiceOrders so WITH (UPDLOCK, HOLDLOCK) INNER JOIN dbo.Quotations q ON q.ServiceOrderId = so.Id WHERE q.Id = {quotationId}");
     }
 
     public async Task<T> ExecuteTransactionalAsync<T>(Func<Task<T>> action)
     {
+        if (_executingTransaction)
+        {
+            return await action();
+        }
+
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
             _context.ChangeTracker.Clear();
             await using var tx = await TryBeginTransactionAsync();
+            _executingTransaction = true;
             try
             {
                 var result = await action();
@@ -89,6 +97,10 @@ public sealed partial class EfQuotationWorkflowStore : IQuotationWorkflowStore
                 }
 
                 throw;
+            }
+            finally
+            {
+                _executingTransaction = false;
             }
         });
     }
@@ -111,6 +123,25 @@ public sealed partial class EfQuotationWorkflowStore : IQuotationWorkflowStore
             throw new InvalidOperationException("Phiên bản báo giá bị xung đột do thao tác tạo đồng thời. Vui lòng thử lại.", dbEx);
         }
     }
+
+    public Task<T> ExecuteDiagnosisApprovalTransactionalAsync<T>(long serviceOrderId, Func<Task<T>> action) =>
+        ExecuteTransactionalAsync(async () =>
+        {
+            if (_context.Database.IsSqlServer())
+            {
+                var transaction = _context.Database.CurrentTransaction
+                    ?? throw new InvalidOperationException("Không thể khóa lệnh sửa chữa khi thiếu giao dịch.");
+                await using var command = _context.Database.GetDbConnection().CreateCommand();
+                command.Transaction = transaction.GetDbTransaction();
+                command.CommandText = "SELECT Id FROM dbo.ServiceOrders WITH (UPDLOCK, HOLDLOCK) WHERE Id = @id";
+                var id = command.CreateParameter();
+                id.ParameterName = "@id";
+                id.Value = serviceOrderId;
+                command.Parameters.Add(id);
+                await command.ExecuteScalarAsync();
+            }
+            return await action();
+        });
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
     {
@@ -173,7 +204,9 @@ public sealed partial class EfQuotationWorkflowStore : IQuotationWorkflowStore
             .Where(x =>
                 x.ServiceOrderId == serviceOrderId &&
                 x.Status != statusSuperseded &&
-                x.Status != statusCustomerApproved)
+                x.Status != statusCustomerApproved &&
+                x.Status != nameof(QuotationStatusCode.CUSTOMER_REJECTED) &&
+                x.Status != nameof(QuotationStatusCode.CANCELED))
             .ToListAsync();
     }
 

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { getApiBaseUrl } from "@features/auth/api/authApi";
 import AuthResult from "@features/auth/components/AuthResult";
 import GoogleLoginButton from "@features/auth/components/GoogleLoginButton";
 import LoginForm from "@features/auth/login/LoginForm";
@@ -58,7 +57,10 @@ function resolvePostAuthDestination(data, requestedPath) {
   if (code === "ACCOUNTANT") {
     return "/accounting/dashboard";
   }
-  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER"].includes(code)) {
+  if (code === "RECEPTIONIST") {
+    return "/admin/service-orders";
+  }
+  if (["TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER"].includes(code)) {
     return "/workshop";
   }
   return "/home";
@@ -94,7 +96,8 @@ function AuthPage() {
   const [googlePhone, setGooglePhone] = useState("");
   const [pendingGoogleRole, setPendingGoogleRole] = useState(GOOGLE_PHONE_ROLE.CUSTOMER);
   const [locationDenied, setLocationDenied] = useState(false);
-  const requestedPath = location?.state?.from?.pathname || "";
+  const rawFrom = location?.state?.from;
+  const requestedPath = typeof rawFrom === "string" ? rawFrom : (rawFrom?.pathname || "");
   const isStaffPhoneRequest = pendingGoogleRole === GOOGLE_PHONE_ROLE.STAFF;
 
   useEffect(() => {
@@ -102,15 +105,21 @@ function AuthPage() {
   }, [mode]);
 
   useEffect(() => {
-    const incomingFlash = location?.state?.flashMessage;
-    if (!incomingFlash) return;
+    const rawFrom = location?.state?.from;
+    const requested = typeof rawFrom === "string" ? rawFrom : (rawFrom?.pathname || "");
+    const incomingFlash = location?.state?.flashMessage || location?.state?.message;
 
-    setFlashMessage(String(incomingFlash));
-    const timer = setTimeout(() => setFlashMessage(""), 3000);
-    navigate(location.pathname, { replace: true, state: null });
+    if (incomingFlash) {
+      setFlashMessage(String(incomingFlash));
+    } else if (requested === "/my-garage-dashboard") {
+      setFlashMessage("Đăng nhập để xem tiến độ xe của bạn tại xưởng");
+    }
 
-    return () => clearTimeout(timer);
-  }, [location, navigate]);
+    if (incomingFlash || requested === "/my-garage-dashboard") {
+      const timer = setTimeout(() => setFlashMessage(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [location]);
 
   useEffect(() => {
     if (navigator?.permissions) {
@@ -369,6 +378,29 @@ function AuthPage() {
           <h1>{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
           <p className="subtitle">Một tài khoản sử dụng tất cả dịch vụ của MyGarage</p>
 
+          {flashMessage ? (
+            <div
+              className="auth-info-notice"
+              style={{
+                margin: "0 0 16px 0",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(199, 163, 90, 0.12)",
+                border: "1px solid rgba(199, 163, 90, 0.35)",
+                color: "#8c6b2d",
+                fontSize: "13.5px",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                lineHeight: 1.4,
+              }}
+            >
+              <span style={{ fontSize: "16px" }}>ℹ️</span>
+              <span>{flashMessage}</span>
+            </div>
+          ) : null}
+
           {mode === "login" ? (
             <LoginForm
               form={loginForm}
@@ -461,8 +493,6 @@ function AuthPage() {
           </div>
         </div>
       )}
-
-      <p className="api-hint">API: {getApiBaseUrl()}</p>
     </main>
   );
 }

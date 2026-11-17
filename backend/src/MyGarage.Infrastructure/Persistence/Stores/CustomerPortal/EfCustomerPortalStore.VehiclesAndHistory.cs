@@ -336,7 +336,7 @@ public sealed partial class EfCustomerPortalStore
         if (orderIds.Count > 0)
         {
             var condRows = await _context.VehicleConditionLogs.AsNoTracking()
-                .Where(l => orderIds.Contains(l.ServiceOrderId))
+                .Where(l => orderIds.Contains(l.ServiceOrderId) && l.LogType != "REPAIR_3D")
                 .OrderBy(l => l.CreatedAt)
                 .Select(l => new
                 {

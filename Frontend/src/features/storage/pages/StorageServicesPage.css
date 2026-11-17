@@ -46,16 +46,20 @@
   margin: 0 0 16px;
   color: #ffffff;
   font-size: clamp(2rem, 5.8vw, 4.5rem);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   line-height: 1.1;
+  font-family: "Oswald", "Space Grotesk", "Segoe UI", sans-serif;
+  text-transform: uppercase;
 }
 
 .storage-hero__subtitle {
   margin: 0;
-  color: #f6e6c9;
-  font-size: 0.82rem;
+  color: #c5a059;
+  font-size: 0.88rem;
   letter-spacing: 0.28em;
   font-weight: 700;
+  font-family: "Oswald", "Space Grotesk", "Segoe UI", sans-serif;
+  text-transform: uppercase;
 }
 
 .storage-intro {

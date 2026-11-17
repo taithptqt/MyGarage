@@ -27,14 +27,14 @@ export async function requestSafeWithDualRoute(v1Url, legacyUrl, options = {}) {
 }
 
 export async function createPayosOrder(payload) {
-  return requestSafeWithDualRoute("/api/v1/orders", "/api/orders", {
+  return requestSafeWithDualRoute("/api/v1/orders", "/api/v1/orders", {
     method: "POST",
     data: payload
   });
 }
 
 export async function getPayments({ page, pageSize } = {}) {
-  return requestSafeWithDualRoute("/api/v1/payments/mine", "/api/payments/mine", {
+  return requestSafeWithDualRoute("/api/v1/payments/mine", "/api/v1/payments/mine", {
     method: "GET",
     params: page == null && pageSize == null ? undefined : { page, pageSize }
   });
@@ -43,7 +43,7 @@ export async function getPayments({ page, pageSize } = {}) {
 export async function getPaymentStatus(paymentId) {
   return requestSafeWithDualRoute(
     `/api/v1/payments/${paymentId}/status`,
-    `/api/payments/${paymentId}/status`,
+    `/api/v1/payments/${paymentId}/status`,
     {
       method: "GET"
     }
@@ -53,7 +53,7 @@ export async function getPaymentStatus(paymentId) {
 export async function syncOrder(orderId) {
   return requestSafeWithDualRoute(
     `/api/v1/orders/${orderId}`,
-    `/api/orders/${orderId}`,
+    `/api/v1/orders/${orderId}`,
     {
       method: "GET"
     }

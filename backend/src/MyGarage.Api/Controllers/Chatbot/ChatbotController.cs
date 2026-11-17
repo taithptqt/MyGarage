@@ -20,15 +20,18 @@ public class ChatbotController : ControllerBase
     private readonly IChatbotService _chatbotService;
     private readonly IChatbotImageUploadService _chatbotImageUploadService;
     private readonly IChatbotOrchestrator _chatbotOrchestrator;
+    private readonly IChatCallerCustomerResolver _customerResolver;
 
     public ChatbotController(
         IChatbotService chatbotService,
         IChatbotImageUploadService chatbotImageUploadService,
-        IChatbotOrchestrator chatbotOrchestrator)
+        IChatbotOrchestrator chatbotOrchestrator,
+        IChatCallerCustomerResolver customerResolver)
     {
         _chatbotService = chatbotService;
         _chatbotImageUploadService = chatbotImageUploadService;
         _chatbotOrchestrator = chatbotOrchestrator;
+        _customerResolver = customerResolver;
     }
 
     /// <summary>
@@ -55,12 +58,12 @@ public class ChatbotController : ControllerBase
         [FromBody] CreateChatbotSessionRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedChatbotRole())
         {
             return Forbid();
         }
 
-        var customerId = this.GetCurrentUserId();
+        var customerId = await ResolveEffectiveCustomerIdAsync(cancellationToken);
         if (!customerId.HasValue)
         {
             return Unauthorized();
@@ -115,12 +118,12 @@ public class ChatbotController : ControllerBase
         [FromBody] OrchestrateChatbotRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedChatbotRole())
         {
             return Forbid();
         }
 
-        var customerId = this.GetCurrentUserId();
+        var customerId = await ResolveEffectiveCustomerIdAsync(cancellationToken);
         if (!customerId.HasValue)
         {
             return Unauthorized();
@@ -195,12 +198,12 @@ public class ChatbotController : ControllerBase
         [FromBody] SaveChatbotMessageRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedChatbotRole())
         {
             return Forbid();
         }
 
-        var customerId = this.GetCurrentUserId();
+        var customerId = await ResolveEffectiveCustomerIdAsync(cancellationToken);
         if (!customerId.HasValue)
         {
             return Unauthorized();
@@ -252,12 +255,12 @@ public class ChatbotController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ChatbotSessionResponseDto>> GetSession(long id, CancellationToken cancellationToken)
     {
-        if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedChatbotRole())
         {
             return Forbid();
         }
 
-        var customerId = this.GetCurrentUserId();
+        var customerId = await ResolveEffectiveCustomerIdAsync(cancellationToken);
         if (!customerId.HasValue)
         {
             return Unauthorized();
@@ -300,12 +303,12 @@ public class ChatbotController : ControllerBase
         [FromForm] UploadChatbotImageRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedChatbotRole())
         {
             return Forbid();
         }
 
-        var customerId = this.GetCurrentUserId();
+        var customerId = await ResolveEffectiveCustomerIdAsync(cancellationToken);
         if (!customerId.HasValue)
         {
             return Unauthorized();
@@ -390,5 +393,20 @@ public class ChatbotController : ControllerBase
             Attachments = request.Attachments ?? Array.Empty<ChatbotMessageAttachmentRequestDto>(),
             AllowSendToLockedSession = false
         };
+    }
+
+    private async Task<long?> ResolveEffectiveCustomerIdAsync(CancellationToken cancellationToken)
+    {
+        var userId = this.GetCurrentUserId();
+        if (!userId.HasValue) return null;
+        return await _customerResolver.ResolveCustomerIdAsync(userId.Value, this.GetCurrentRole(), cancellationToken);
+    }
+
+    private bool IsAllowedChatbotRole()
+    {
+        var role = this.GetCurrentRole();
+        return string.Equals(role, "Customer", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase);
     }
 }

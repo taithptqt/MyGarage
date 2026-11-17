@@ -1,0 +1,11 @@
+# Module 0 — xác thực và bảo mật: bằng chứng làm việc
+
+Trạng thái: **đang rà, chưa nghiệm thu toàn module**. Bằng chứng dưới đây áp dụng cho workspace tại thời điểm kiểm thử; cần ghi revision và chạy lại theo trạng thái phát hành.
+
+- [CODE/TEST] Request có Bearer rõ ràng được JwtBearer xử lý trước cookie; Bearer không hợp lệ không được rơi về cookie hợp lệ. Kiểm thử HTTP GET và PATCH có cookie/Bearer sai đã đạt trong nhóm kiểm thử bảo mật.
+- [CODE/TEST] Quên mật khẩu trả cùng phản hồi cho email tồn tại và không tồn tại khi gửi email thất bại; thông tin sự cố được ghi loại lỗi và trace ID, không ghi email/token/nội dung lỗi ở controller. Kiểm thử dùng email giả lập lỗi, không chứng minh gửi thư hoặc logging trên production.
+- [CODE/TEST] `UsedAt` và `RevokedAt` là concurrency token EF; khi trạng thái thay đổi, lưu token đã đọc cũ bị từ chối. LocalDB schema tối thiểu đã kiểm tra hai context lần lượt ghi cùng token sau khi dùng hoặc thu hồi. Snapshot được cập nhật; không có thay đổi cột trong lát cắt này.
+- [CODE/TEST] Đăng nhập Google không ghi đè Google ID đã liên kết bằng một subject khác; tài khoản khách không hoạt động được kiểm tra trước khi ghi liên kết. Kiểm thử thuần bao phủ subject trùng/khác và chưa liên kết; chưa kiểm thử tích hợp Google hay cạnh tranh liên kết.
+- [CODE/TEST] Tài khoản khách Google mới kiểm tra số điện thoại đã thuộc khách/nhân viên trước khi tạo, đồng thời gán loại khách `INDIVIDUAL`. Kiểm thử service với payload đã giả lập xác thực kiểm tra số trùng không tạo tài khoản và số hợp lệ tạo thành công; chưa thử chữ ký Google thực hoặc cạnh tranh cùng số trên SQL.
+- [OPEN] Test trên chưa kiểm thử toàn bộ luồng đổi mật khẩu dưới cạnh tranh HTTP, transaction ngoài, rollback/commit không rõ kết quả hoặc schema production; chưa coi bảo đảm dùng một lần là hoàn toàn nghiệm thu. Cần tiếp tục rà luồng đăng nhập Google/liên kết tài khoản, các chính sách đăng nhập/khóa tài khoản, quyền theo tài nguyên và tích hợp frontend.
+- [OPEN] Rate limit khôi phục theo email/token đang lưu trong bộ nhớ từng instance; chưa chứng minh giới hạn dùng chung nhiều instance, mức chịu tải hoặc chính sách lưu dọn dữ liệu. Các kiểm thử InMemory và HTTP không thay thế thử nghiệm SQL/production hay rà an ninh toàn diện.

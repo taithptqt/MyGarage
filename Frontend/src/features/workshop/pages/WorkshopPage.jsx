@@ -222,6 +222,10 @@ export default function WorkshopPage() {
   // Auto-redirect to the correct sub-route if at /workshop root
   useEffect(() => {
     if (location.pathname === "/workshop" || location.pathname === "/workshop/") {
+      if (userRole === "RECEPTIONIST") {
+        navigate("/admin/service-orders", { replace: true });
+        return;
+      }
       const target = ROLES_META[userRole]?.path;
       if (target) {
         navigate(`/workshop/${target}`, { replace: true });
@@ -318,6 +322,11 @@ export default function WorkshopPage() {
                 </div>
               </div>
             ))}
+            {["ADMIN", "MANAGER"].includes(userRole) && (
+              <button type="button" className={`role-sub-item ${currentNormalizedPath === "/workshop/custom-requests" ? "active" : ""}`} onClick={() => navigate("/workshop/custom-requests")}>
+                Yêu cầu custom xe
+              </button>
+            )}
             {isReceptionDashboard && (
               <div className="role-sub-nav">
                 <button

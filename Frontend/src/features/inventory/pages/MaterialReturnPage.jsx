@@ -32,7 +32,7 @@ export default function MaterialReturnPage() {
 
   // Fetch active SOs
   useEffect(() => {
-    request({ url: "/api/service-orders", method: "GET", params: { status: "IN_PROGRESS,READY_FOR_QC" } })
+    request({ url: "/api/v1/service-orders", method: "GET", params: { status: "IN_PROGRESS,READY_FOR_QC" } })
       .then(res => setServiceOrders(res?.items ?? res ?? []))
       .catch(console.error);
   }, []);
@@ -45,7 +45,7 @@ export default function MaterialReturnPage() {
       return;
     }
     // Lấy các chi tiết yêu cầu vật tư đã xuất (IssuedQuantity > 0)
-    request({ url: "/api/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } })
+    request({ url: "/api/v1/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } })
       .then(res => {
         const raw = res?.items ?? res ?? [];
         setRequestDetails(raw);
@@ -55,7 +55,7 @@ export default function MaterialReturnPage() {
 
   const loadHistory = useCallback(() => {
     setLoadingHistory(true);
-    request({ url: "/api/material-returns", method: "GET" })
+    request({ url: "/api/v1/material-returns", method: "GET" })
       .then(res => setHistory(res?.items ?? res ?? []))
       .catch(console.error)
       .finally(() => setLoadingHistory(false));
@@ -88,7 +88,7 @@ export default function MaterialReturnPage() {
 
     try {
       await request({
-        url: "/api/material-returns",
+        url: "/api/v1/material-returns",
         method: "POST",
         data: {
           serviceOrderId: selectedSo,
@@ -111,7 +111,7 @@ export default function MaterialReturnPage() {
         notes: ""
       });
       // Refresh list
-      const updatedDetails = await request({ url: "/api/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } });
+      const updatedDetails = await request({ url: "/api/v1/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } });
       setRequestDetails(updatedDetails?.items ?? updatedDetails ?? []);
     } catch (err) {
       setError(err?.response?.data?.message || "Lỗi khi xử lý hoàn trả.");

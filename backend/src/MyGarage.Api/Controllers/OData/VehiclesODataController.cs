@@ -11,7 +11,7 @@ namespace MyGarage.Controllers.OData;
 [Route("odata/Vehicles")]
 [Route("api/v1/odata/Vehicles")]
 [EnableRateLimiting("odata")]
-public sealed class VehiclesODataController(IODataQueryService queries) : ODataController
+public sealed class VehiclesODataController(IVehicleODataQuery queries) : ODataController
 {
     [HttpGet]
     [SafeEnableQuery]

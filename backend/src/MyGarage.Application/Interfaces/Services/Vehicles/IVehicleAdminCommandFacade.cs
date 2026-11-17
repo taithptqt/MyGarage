@@ -11,7 +11,6 @@ public sealed record VehicleAdminCommandResult(int StatusCode, object? Payload =
 }
 
 public sealed record VehicleAdminActorContext(
-    string ContentRootPath,
     long? UserId,
     string? UserDisplayName);
 

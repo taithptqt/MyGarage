@@ -35,6 +35,7 @@ namespace MyGarage.Services
         public async Task<MaterialRequestDetailResponseDto> CreateDtoAsync(MaterialRequestDetailCreateDto itemDto)
         {
             var entity = _mapper.Map<MaterialRequestDetail>(itemDto);
+            entity.ReservedQuantity = 0m;
             var createdItem = await AddAsync(entity);
             return _mapper.Map<MaterialRequestDetailResponseDto>(createdItem);
         }

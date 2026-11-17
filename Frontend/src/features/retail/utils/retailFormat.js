@@ -53,6 +53,16 @@ const RETAIL_ORDER_STATUS_META = {
     tone: "confirmed",
     description: "Đơn đã được xác nhận và sẵn sàng xử lý.",
   },
+  CANCELED: {
+    label: "Đã hủy",
+    tone: "canceled",
+    description: "Đơn hàng đã được hủy hoặc hết hạn thanh toán.",
+  },
+  CANCELLED: {
+    label: "Đã hủy",
+    tone: "canceled",
+    description: "Đơn hàng đã được hủy hoặc hết hạn thanh toán.",
+  },
 };
 
 export function formatVnd(value) {

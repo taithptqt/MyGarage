@@ -55,7 +55,9 @@ public class ChatbotTurnExecutionService : IChatbotTurnExecutionService
         var shouldHandoff = intentRouting.ShouldHandoff;
         var updatedIntentState = intentRouting.UpdatedIntentState;
 
-        var retrieval = await _retrievalService.RetrieveAsync(
+        var retrieval = guardrail.IsRejected
+            ? new ChatbotRetrievalResult { IsGrounded = false, MissingReason = "Request rejected by guardrails." }
+            : await _retrievalService.RetrieveAsync(
             customerId,
             session.BranchId,
             preparedTurn.ContextualUserInput,

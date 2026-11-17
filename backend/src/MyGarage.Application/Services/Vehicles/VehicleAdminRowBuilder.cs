@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Models;
 
 namespace MyGarage.Services;
@@ -7,15 +8,15 @@ internal static class VehicleAdminRowBuilder
 {
     internal static async Task<List<VehicleViewRow>> BuildVehicleRowsAsync(
         IVehicleAdminDataService dataService,
-        string contentRootPath,
+        IAppConfigFileStore configStore,
         bool includeHidden,
         VehicleAdminSettings? settings = null,
         BaySettingsSnapshot? baySettings = null,
         DateTime? nowUtc = null,
         CancellationToken ct = default)
     {
-        settings ??= await VehicleAdminSupport.ReadSettingsAsync(contentRootPath);
-        baySettings ??= await VehicleAdminSupport.ReadBaySettingsAsync(contentRootPath);
+        settings ??= await VehicleAdminSupport.ReadSettingsAsync(configStore, ct);
+        baySettings ??= await VehicleAdminSupport.ReadBaySettingsAsync(configStore, ct);
         var now = nowUtc ?? VietnamTime.Now;
 
         var activeSessionBayIds = baySettings.Sessions

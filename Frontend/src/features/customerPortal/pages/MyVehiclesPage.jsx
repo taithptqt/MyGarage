@@ -1,5 +1,17 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  MdDirectionsCar,
+  MdCheckCircle,
+  MdFingerprint,
+  MdColorLens,
+  MdCalendarToday,
+  MdSpeed,
+  MdAdd,
+  MdArrowForward,
+  MdEdit,
+  MdCarRepair,
+} from "react-icons/md";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import {
@@ -55,15 +67,6 @@ export default function MyVehiclesPage() {
     if (!Number.isFinite(brandId)) return models;
     return models.filter((model) => model.brandId === brandId);
   }, [brandFilter, lookups.models]);
-
-  const stats = useMemo(
-    () => [
-      { label: "Tổng số xe", value: list.length },
-      { label: "Đang là chủ sở hữu", value: list.filter((item) => item.isCurrentOwner).length },
-      { label: "Đã khai báo VIN", value: list.filter((item) => item.vin).length },
-    ],
-    [list]
-  );
 
   const openAdd = () => {
     setBrandFilter("");
@@ -130,30 +133,19 @@ export default function MyVehiclesPage() {
         <div className="cp-inner">
           <section className="cp-card cp-card--highlight cp-veh-hero">
             <div className="cp-veh-hero-copy">
-              <p className="cp-eyebrow">Garage của tôi</p>
               <h1 className="cp-title">Đội xe của tôi</h1>
               <p className="cp-desc">
-                Quản lý biển số, model, VIN và thông tin cơ bản của từng xe để theo dõi dịch vụ
-                nhanh hơn trong customer portal.
+                Quản lý thông tin xe, số khung VIN và chỉ số ODO để đặt hẹn và theo dõi tiến độ sửa chữa chuẩn xác.
               </p>
-
-              <div className="cp-veh-actions">
-                <button type="button" className="cp-btn" onClick={openAdd}>
-                  Thêm xe
-                </button>
-                <Link className="cp-btn cp-btn-ghost" to="/my-garage-dashboard">
-                  Theo dõi xe
-                </Link>
-              </div>
             </div>
 
-            <div className="cp-veh-summary">
-              {stats.map((stat) => (
-                <div key={stat.label} className="cp-stat-card">
-                  <span className="cp-stat-label">{stat.label}</span>
-                  <strong className="cp-stat-value">{stat.value}</strong>
-                </div>
-              ))}
+            <div className="cp-veh-actions">
+              <button type="button" className="cp-btn cp-btn-primary" onClick={openAdd}>
+                <MdAdd className="cp-btn-icon" /> Thêm xe
+              </button>
+              <Link className="cp-btn cp-btn-ghost" to="/my-garage-dashboard">
+                <MdDirectionsCar className="cp-btn-icon" /> Theo dõi xe đang sửa
+              </Link>
             </div>
           </section>
 
@@ -168,8 +160,8 @@ export default function MyVehiclesPage() {
                 đang có trong hệ thống.
               </p>
               <div className="cp-veh-actions">
-                <button type="button" className="cp-btn" onClick={openAdd}>
-                Khai báo xe đầu tiên
+                <button type="button" className="cp-btn cp-btn-primary" onClick={openAdd}>
+                  <MdAdd className="cp-btn-icon" /> Khai báo xe đầu tiên
                 </button>
               </div>
             </section>
@@ -180,46 +172,67 @@ export default function MyVehiclesPage() {
               {list.map((vehicle) => (
                 <article key={vehicle.vehicleId} className="cp-card cp-card--primary cp-veh-card">
                   <div className="cp-veh-card-head">
-                    <div>
-                      <h2 className="cp-veh-plate">{vehicle.licensePlate}</h2>
-                      <p className="cp-veh-model">
+                    <div className="cp-veh-identity">
+                      <div className="cp-license-plate-badge">
+                        <span className="cp-plate-screw" />
+                        <span className="cp-plate-number">{vehicle.licensePlate}</span>
+                        <span className="cp-plate-screw" />
+                      </div>
+                      <h2 className="cp-veh-model">
                         {[vehicle.brandName, vehicle.modelName].filter(Boolean).join(" ") || "Đang cập nhật model"}
-                      </p>
+                      </h2>
                     </div>
-                    <span className={`cp-chip ${vehicle.isCurrentOwner ? "cp-chip--success" : "cp-chip--soft"}`}>
-                      {vehicle.isCurrentOwner ? "Chủ sở hữu hiện tại" : "Lịch sử sở hữu"}
-                    </span>
+                    <div className="cp-veh-head-actions">
+                      <Link
+                        className="cp-btn cp-btn-accent cp-btn-sm"
+                        to="/booking/form"
+                      >
+                        <MdCarRepair className="cp-btn-icon" /> Đặt lịch bảo dưỡng
+                      </Link>
+                    </div>
                   </div>
 
-                  <dl className="cp-veh-dl">
-                    <div className="cp-veh-meta-item cp-veh-meta-item--wide">
-                      <dt>VIN</dt>
-                      <dd>{vehicle.vin || "—"}</dd>
+                  <div className="cp-veh-specs-grid">
+                    <div className="cp-veh-spec-item">
+                      <span className="cp-veh-spec-label">
+                        <MdFingerprint className="cp-meta-icon" /> SỐ KHUNG (VIN)
+                      </span>
+                      <span className={`cp-veh-spec-val ${vehicle.vin ? "cp-mono-vin" : "cp-veh-spec-empty"}`}>
+                        {vehicle.vin || "Chưa khai báo"}
+                      </span>
                     </div>
-                    <div className="cp-veh-meta-item">
-                      <dt>Màu xe</dt>
-                      <dd>{vehicle.color || "—"}</dd>
+                    <div className="cp-veh-spec-item">
+                      <span className="cp-veh-spec-label">
+                        <MdColorLens className="cp-meta-icon" /> MÀU XE
+                      </span>
+                      <span className="cp-veh-spec-val">{vehicle.color || "—"}</span>
                     </div>
-                    <div className="cp-veh-meta-item">
-                      <dt>Năm sản xuất</dt>
-                      <dd>{vehicle.manufactureYear || "—"}</dd>
+                    <div className="cp-veh-spec-item">
+                      <span className="cp-veh-spec-label">
+                        <MdCalendarToday className="cp-meta-icon" /> NĂM SẢN XUẤT
+                      </span>
+                      <span className="cp-veh-spec-val">{vehicle.manufactureYear || "—"}</span>
                     </div>
-                    <div className="cp-veh-meta-item">
-                      <dt>ODO hiện tại</dt>
-                      <dd>{vehicle.odo != null ? `${vehicle.odo.toLocaleString("vi-VN")} km` : "—"}</dd>
+                    <div className="cp-veh-spec-item">
+                      <span className="cp-veh-spec-label">
+                        <MdSpeed className="cp-meta-icon" /> ODO HIỆN TẠI
+                      </span>
+                      <span className="cp-veh-spec-val cp-odo-val">
+                        {vehicle.odo != null ? `${vehicle.odo.toLocaleString("vi-VN")} km` : "—"}
+                      </span>
                     </div>
-                  </dl>
+                  </div>
 
-                  <div className="cp-veh-card-actions">
-                    <Link className="cp-btn" to={`/my-vehicles/${vehicle.vehicleId}`}>
-                      Xem chi tiết
+                  <div className="cp-veh-card-footer">
+                    <Link className="cp-btn cp-btn-primary cp-btn-sm" to={`/my-vehicles/${vehicle.vehicleId}`}>
+                      Xem chi tiết <MdArrowForward className="cp-btn-icon-right" />
                     </Link>
                     <button
                       type="button"
-                      className="cp-btn cp-btn-ghost"
+                      className="cp-btn cp-btn-ghost cp-btn-sm"
                       onClick={() => openEdit(vehicle)}
                     >
-                      Sửa thông tin
+                      <MdEdit className="cp-btn-icon" /> Sửa thông tin
                     </button>
                   </div>
                 </article>

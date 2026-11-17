@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Divider,
+  Flex,
   FormControl,
   FormLabel,
   Grid,
@@ -217,8 +218,27 @@ function formatMinutes(value) {
   if (!Number.isFinite(minutes) || minutes <= 0) return "0 phút";
   if (minutes < 60) return `${Math.floor(minutes)} phút`;
   const hours = Math.floor(minutes / 60);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `> ${days} ngày`;
+  }
   const remain = Math.floor(minutes % 60);
   return remain > 0 ? `${hours} giờ ${remain} phút` : `${hours} giờ`;
+}
+
+function formatFriendlyBay(bayCode) {
+  if (!bayCode) return "Chưa chỉ định";
+  const str = String(bayCode).trim();
+  if (str.startsWith("SP_D_")) {
+    return `Khoang ${str.replace("SP_D_", "")}`;
+  }
+  if (str.startsWith("SP_")) {
+    return `Khoang ${str.replace("SP_", "")}`;
+  }
+  if (str.startsWith("BAY_")) {
+    return `Khoang ${str.replace("BAY_", "")}`;
+  }
+  return str;
 }
 
 function getItemNewestTimestamp(item) {
@@ -940,177 +960,241 @@ function DispatchQueueCard({
   isTeamLeaderMode = false,
   isManagerMode = false,
 }) {
-  const meta = COLOR_META[item.queueColor] || COLOR_META.WHITE;
   const alerts = extractAlertReasons(item);
   const queueStateMeta = getQueueStateMeta(item.queueState, item.queueColor);
   const vehicle = getVehicleDisplayParts(item);
   const canViewCancelRequest = Boolean(item?.isCancelPendingApproval) && typeof onViewCancelRequest === "function";
   const canViewQuote = canViewDiagnosisItem(item, { isTeamLeaderMode, isManagerMode }) && typeof onViewQuote === "function";
-  const statusBorderByColor = {
-    WHITE: "#cbd5e1",
-    YELLOW: "#f6d365",
-    RED: "#fca5a5",
-    GREEN: "#86efac",
-  };
-  const baseBorderColor = statusBorderByColor[item.queueColor] || "#dbe4f2";
+
+  const isUrgent = item.queueColor === "RED" || alerts.length > 0;
+  const hasTech = Boolean(item.technicianName);
+  const friendlyBay = formatFriendlyBay(item.assignedBayCode);
+
+  // Short clean order code (e.g. #5492)
+  const shortOrderCode = item.serviceOrderCode
+    ? item.serviceOrderCode.length > 8
+      ? `#${item.serviceOrderCode.slice(-4)}`
+      : item.serviceOrderCode
+    : "";
 
   return (
     <Box
-      border="2px solid"
-      borderColor={isSelected ? meta.activeBg : baseBorderColor}
-      borderLeftWidth="6px"
-      borderLeftColor={meta.cardAccent}
+      border="1px solid"
+      borderColor={isSelected ? "#2563eb" : "#e2e8f0"}
       borderRadius="xl"
       bg={isSelected ? "#f8fbff" : "white"}
-      p={{ base: 2.5, md: 3 }}
+      p={{ base: 3, sm: 3.5 }}
       cursor="pointer"
-      transition="all 0.18s ease"
-      boxShadow={isSelected ? "0 12px 26px rgba(37, 99, 235, 0.16)" : "0 4px 12px rgba(15,23,42,0.06)"}
-      _hover={{ borderColor: meta.activeBg, transform: "translateY(-1px)" }}
+      transition="all 0.16s ease"
+      boxShadow={isSelected ? "0 8px 20px rgba(37, 99, 235, 0.12)" : "0 1px 4px rgba(15,23,42,0.04)"}
+      _hover={{ borderColor: isSelected ? "#2563eb" : "#cbd5e1", transform: "translateY(-1px)", boxShadow: "0 6px 14px rgba(15,23,42,0.06)" }}
       onClick={() => onSelect(item.serviceOrderId)}
     >
-      <Stack spacing={2}>
-        <HStack justify="space-between" align="start" spacing={2.5} flexWrap="wrap">
-          <Box minW={0}>
-            <Text fontSize={{ base: "xl", md: "xl" }} fontWeight="800" color="gray.800" noOfLines={1} lineHeight="1.1">
-              {item.serviceOrderCode}
-            </Text>
-            <Text mt={0.5} fontSize="sm" color="gray.700" fontWeight="500" noOfLines={1}>
-              {item.customerName || "Khách hàng chưa rõ"}
-            </Text>
-            <HStack mt={1} spacing={1.5} flexWrap="wrap" align="center">
-              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-                Biển số: {vehicle.plate}
-              </Badge>
-              <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-                Dòng xe: {vehicle.descriptor}
-              </Badge>
-            </HStack>
-            <Text mt={1} fontSize={{ base: "sm", md: "md" }} color="gray.800" fontWeight="700" noOfLines={1}>
-              Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
-            </Text>
-            {vehicle.vin ? (
-              <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" fontWeight="700" noOfLines={1}>
-                VIN: {vehicle.vin}
+      <VStack align="stretch" spacing={2.5}>
+        {/* ROW 1: Hero Identity (Plate, Vehicle Descriptor, Status Pill) */}
+        <Flex justify="space-between" align="center" gap={2} wrap="wrap">
+          {/* Plate & Car */}
+          <HStack spacing={2.5} align="center" flex="1" minW="200px">
+            {/* Vietnamese Standard License Plate Style */}
+            <Box
+              display="inline-flex"
+              alignItems="center"
+              justifyContent="center"
+              bg="#ffffff"
+              border="2px solid #0f172a"
+              borderRadius="md"
+              px={2.5}
+              py={0.5}
+              boxShadow="0 1px 2px rgba(0,0,0,0.08)"
+              flexShrink={0}
+            >
+              <Text
+                fontSize={{ base: "sm", sm: "md" }}
+                fontWeight="900"
+                letterSpacing="0.06em"
+                color="#0f172a"
+                lineHeight="1.1"
+              >
+                {vehicle.plate || "CHƯA BIỂN"}
               </Text>
-            ) : null}
-          </Box>
+            </Box>
 
-          <VStack align={{ base: "start", md: "end" }} spacing={1.5} flexShrink={0}>
-            <HStack align="start" spacing={2} flexWrap="wrap" justify={{ base: "start", md: "end" }}>
-              {alerts.length > 0 && (
-                <Box
-                  maxW={{ base: "100%", md: "300px" }}
-                  border="1px solid"
-                  borderColor="red.200"
-                  bg="red.50"
-                  borderRadius="md"
-                  px={2.5}
-                  py={1.5}
-                >
-                  <VStack align="start" spacing={1}>
-                    {alerts.slice(0, 2).map((reason) => (
-                      <Text
-                        key={`${item.serviceOrderId}-top-${reason}`}
-                        fontSize={{ base: "sm", md: "md" }}
-                        color="red.700"
-                        fontWeight="700"
-                        lineHeight="1.25"
-                        noOfLines={2}
-                      >
-                        {reason}
-                      </Text>
-                    ))}
-                  </VStack>
-                </Box>
+            <Box minW={0}>
+              <Text
+                fontSize="sm"
+                fontWeight="800"
+                color="#0f172a"
+                noOfLines={1}
+              >
+                {vehicle.descriptor || "Xe tiếp nhận"}
+              </Text>
+              {(Boolean(item.customerName) || (vehicle.manufactureYear && vehicle.manufactureYear !== "—") || (vehicle.color && vehicle.color !== "—")) && (
+                <Text fontSize="xs" color="#64748b" noOfLines={1}>
+                  {item.customerName || ""}
+                  {vehicle.manufactureYear && vehicle.manufactureYear !== "—" ? `${item.customerName ? " · " : ""}Năm ${vehicle.manufactureYear}` : ""}
+                  {vehicle.color && vehicle.color !== "—" ? ` · ${vehicle.color}` : ""}
+                </Text>
               )}
-              <Badge colorScheme={queueStateMeta.colorScheme} borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-                {queueStateMeta.label}
+            </Box>
+          </HStack>
+
+          {/* Right Status Tags */}
+          <HStack spacing={1.5} align="center" flexShrink={0} wrap="wrap">
+            {isUrgent && alerts.length > 0 && (
+              <Badge
+                bg="#fee2e2"
+                color="#b91c1c"
+                border="1px solid #fecaca"
+                borderRadius="md"
+                px={2}
+                py={0.5}
+                fontSize="xs"
+                fontWeight="800"
+              >
+                ⚠️ {alerts[0]}
               </Badge>
-            </HStack>
-            {(canViewCancelRequest || canViewQuote) && (
-              <HStack spacing={2} justify={{ base: "start", md: "end" }} flexWrap="wrap">
-                {canViewCancelRequest && (
-                  <Button
-                    size="sm"
-                    colorScheme="red"
-                    variant="outline"
-                    borderRadius="full"
-                    fontWeight="700"
-                    animation={`${cancelAttentionPulse} 1.8s ease-in-out infinite`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onViewCancelRequest(item);
-                    }}
-                  >
-                    Xem yêu cầu hủy
-                  </Button>
-                )}
-                {canViewQuote && (
-                  <Button
-                    size="sm"
-                    colorScheme="blue"
-                    variant="solid"
-                    borderRadius="full"
-                    fontWeight="700"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onViewQuote(item);
-                    }}
-                  >
-                    Xem chuẩn đoán
-                  </Button>
-                )}
-              </HStack>
             )}
-          </VStack>
-        </HStack>
+            <Badge
+              bg={isUrgent ? "#fef2f2" : "#f1f5f9"}
+              color={isUrgent ? "#dc2626" : "#334155"}
+              border="1px solid"
+              borderColor={isUrgent ? "#fca5a5" : "#e2e8f0"}
+              borderRadius="md"
+              px={2}
+              py={0.5}
+              fontSize="xs"
+              fontWeight="700"
+            >
+              {isUrgent ? "CẦN CAN THIỆP" : queueStateMeta.label}
+            </Badge>
+          </HStack>
+        </Flex>
 
-        <HStack spacing={2} flexWrap="wrap" align="center">
-          <Badge colorScheme="purple" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-            Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
-          </Badge>
-          <Badge colorScheme="gray" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-            Chờ nhận: {formatMinutes(item.pendingMinutes)}
-          </Badge>
-          <Badge colorScheme="orange" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
-            Đang xử lý: {formatMinutes(item.assignedMinutes)}
-          </Badge>
-        </HStack>
+        {/* ROW 2: Workshop Scannable Metrics (3 clean columns on mobile/tablet) */}
+        <SimpleGrid
+          columns={{ base: 2, sm: 3 }}
+          spacing={2}
+          p={2}
+          borderRadius="lg"
+          bg="#f8fafc"
+          border="1px solid #f1f5f9"
+        >
+          {/* Khoang */}
+          <Box minW={0}>
+            <Text fontSize="10px" textTransform="uppercase" fontWeight="800" color="#64748b" letterSpacing="0.04em">
+              Khoang
+            </Text>
+            <Text fontSize="xs" fontWeight="700" color="#0f172a" noOfLines={1} mt={0.5}>
+              {friendlyBay}
+            </Text>
+          </Box>
 
-        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
-          <Box p={1.5} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
-            <Text fontSize="xs" color="gray.600" textTransform="uppercase" fontWeight="800">
-              Nhân sự
+          {/* KTV Phân công */}
+          <Box minW={0}>
+            <Text fontSize="10px" textTransform="uppercase" fontWeight="800" color="#64748b" letterSpacing="0.04em">
+              Kỹ thuật viên
             </Text>
-            <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
-              <Text as="span" fontWeight="700">Tổ chính:</Text> {item.primaryTeamName || item.teamName || "Chưa giao tổ"}
+            <Text
+              fontSize="xs"
+              fontWeight={hasTech ? "700" : "600"}
+              color={hasTech ? "#0f172a" : "#94a3b8"}
+              fontStyle={hasTech ? "normal" : "italic"}
+              noOfLines={1}
+              mt={0.5}
+            >
+              {item.technicianName || "Chưa phân công"}
             </Text>
-            {Array.isArray(item.supportingTeamNames) && item.supportingTeamNames.length > 0 && (
-              <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={2}>
-                <Text as="span" fontWeight="700">Tổ phối hợp:</Text> {item.supportingTeamNames.join(", ")}
+          </Box>
+
+          {/* Tiếp nhận / Thời gian chờ */}
+          <Box minW={0} gridColumn={{ base: "span 2", sm: "span 1" }}>
+            <Text fontSize="10px" textTransform="uppercase" fontWeight="800" color="#64748b" letterSpacing="0.04em">
+              Tiếp nhận lúc
+            </Text>
+            <HStack spacing={1.5} mt={0.5}>
+              <Text fontSize="xs" fontWeight="700" color="#0f172a" noOfLines={1}>
+                {formatDateTime(item.requestedAt)}
               </Text>
+              {item.pendingMinutes > 0 && (
+                <Text fontSize="11px" fontWeight="600" color={isUrgent ? "#dc2626" : "#64748b"}>
+                  ({formatMinutes(item.pendingMinutes)})
+                </Text>
+              )}
+            </HStack>
+          </Box>
+        </SimpleGrid>
+
+        {/* ROW 3: Single Tap Action */}
+        <Flex justify={{ base: "stretch", sm: "flex-end" }} align="center" gap={2} wrap="wrap" pt={0.5}>
+          {item.assistantTechnicianName && (
+            <Text fontSize="xs" color="#64748b" mr="auto">
+              Thợ phụ: {item.assistantTechnicianName}
+            </Text>
+          )}
+
+          <HStack spacing={1.5} flexWrap="wrap" justify="flex-end" w={{ base: "100%", sm: "auto" }}>
+            {canViewCancelRequest && (
+              <Button
+                size="sm"
+                colorScheme="red"
+                variant="outline"
+                borderRadius="lg"
+                fontWeight="700"
+                h="36px"
+                minH="36px"
+                px={3}
+                fontSize="xs"
+                animation={`${cancelAttentionPulse} 1.8s ease-in-out infinite`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewCancelRequest(item);
+                }}
+              >
+                Xem yêu cầu hủy
+              </Button>
             )}
-            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
-              <Text as="span" fontWeight="700">Thợ chính:</Text> {item.technicianName || "--"}
-            </Text>
-            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
-              <Text as="span" fontWeight="700">Thợ phụ:</Text> {item.assistantTechnicianName || "--"}
-            </Text>
-          </Box>
-          <Box p={1.5} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
-            <Text fontSize="xs" color="gray.600" textTransform="uppercase" fontWeight="800">
-              Tiến độ
-            </Text>
-            <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
-              <Text as="span" fontWeight="700">Khoang:</Text> {item.assignedBayCode || "Chưa chỉ định"}
-            </Text>
-            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
-              <Text as="span" fontWeight="700">Yêu cầu lúc:</Text> {formatDateTime(item.requestedAt)}
-            </Text>
-          </Box>
-        </Grid>
-      </Stack>
+
+            {canViewQuote && (
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="blue"
+                borderRadius="lg"
+                fontWeight="700"
+                h="36px"
+                minH="36px"
+                px={3}
+                fontSize="xs"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewQuote(item);
+                }}
+              >
+                Xem chẩn đoán
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              colorScheme="blue"
+              variant={hasTech ? "outline" : "solid"}
+              borderRadius="lg"
+              fontWeight="700"
+              h="36px"
+              minH="36px"
+              px={4}
+              fontSize="xs"
+              w={{ base: "100%", sm: "auto" }}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(item.serviceOrderId);
+              }}
+            >
+              {!hasTech ? "Phân công thợ" : "Chi tiết điều phối"}
+            </Button>
+          </HStack>
+        </Flex>
+      </VStack>
     </Box>
   );
 }
@@ -1200,6 +1284,7 @@ export default function DispatchOpsDashboard({
   const [leaderSupportResponseNote, setLeaderSupportResponseNote] = useState("");
   const [leaderCancelReason, setLeaderCancelReason] = useState(CANCEL_REASONS[0]);
   const [leaderCancelNote, setLeaderCancelNote] = useState("");
+  const [isLeaderCancelSectionExpanded, setIsLeaderCancelSectionExpanded] = useState(false);
 
   const [managerTeamId, setManagerTeamId] = useState("");
   const [managerSupportingTeamIds, setManagerSupportingTeamIds] = useState([]);
@@ -2180,7 +2265,7 @@ export default function DispatchOpsDashboard({
           setManagerBayId(toPositiveNumber(response?.suggestedBayId) ? String(response.suggestedBayId) : "");
         }
 
-        toast({ title: "Đã áp dụng gửi đi phân công", status: "success", duration: 2200, isClosable: true });
+        toast({ title: "Đã tự động điền thợ phù hợp nhất", status: "success", duration: 2200, isClosable: true });
       } catch (err) {
         toast({ title: "Không thể lấy gợi ý", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
       } finally {
@@ -2571,7 +2656,7 @@ export default function DispatchOpsDashboard({
     canCurrentTeamLeadPrimaryFlow &&
     !selectedItem?.approvedByTeamLeaderAt;
   const canLeaderCancel =
-    Boolean(selectedItem?.technicianId) &&
+    Boolean(selectedItem) &&
     canCurrentTeamLeadPrimaryFlow &&
     !selectedItem?.isCancelPendingApproval;
   const canManagerOverride = Boolean(selectedItem);
@@ -2681,39 +2766,36 @@ export default function DispatchOpsDashboard({
 
   return (
     <Box
-      p={{ base: 4, md: 6 }}
+      p={{ base: 2.5, sm: 3.5, md: 5 }}
       minH="100vh"
-      bg="linear-gradient(180deg, #f4f7ff 0%, #eef4ff 100%)"
+      bg="#f8fafc"
+      fontFamily='"Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     >
-      <VStack align="stretch" spacing={5}>
-        <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={3}>
-          <Box>
-            <Heading size="lg" color="#1b2559">
-              {isTeamLeaderMode ? "Điều phối chẩn đoán - Tổ trưởng" : "Điều phối chẩn đoán - Quản đốc"}
+      <VStack align="stretch" spacing={{ base: 2.5, md: 3.5 }}>
+        {/* Compact, Industrial-grade Shop Floor Header */}
+        <Flex
+          justify="space-between"
+          align="center"
+          gap={2}
+          wrap="wrap"
+          pb={0.5}
+        >
+          <HStack spacing={2.5} align="center" wrap="wrap" flex="1" minW="220px">
+            <Heading size={{ base: "md", md: "lg" }} color="#0f172a" fontWeight="900" letterSpacing="-0.02em">
+              {isTeamLeaderMode
+                ? (toText(readValue(currentTeam, "name", "Name")) || "Tổ phụ trách")
+                : "Điều phối Quản đốc"}
             </Heading>
-            <Text color="gray.600" mt={1}>
-              {isAssignmentPage
-                ? "Trang phân công chi tiết cho từng lệnh, tập trung thao tác điều phối và phê duyệt."
-                : "Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá."}
-            </Text>
-            {isTeamLeaderMode && (
-              <HStack mt={2} spacing={2} flexWrap="wrap">
-                <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={1}>
-                  Tổ phụ trách: {toText(readValue(currentTeam, "name", "Name")) || "Chưa xác định"}
-                </Badge>
-                <Badge colorScheme="purple" variant="subtle" borderRadius="full" px={2.5} py={1}>
-                  Chuyên môn quản lý: {currentTeamSpecialtyLabel}
-                </Badge>
-              </HStack>
-            )}
-          </Box>
+          </HStack>
 
           <HStack spacing={2} align="center">
             {isAssignmentPage && (
               <Button
                 leftIcon={<ArrowBackIcon />}
+                size="sm"
                 variant="ghost"
                 colorScheme="blue"
+                borderRadius="lg"
                 onClick={onBack}
               >
                 Quay lại
@@ -2721,71 +2803,87 @@ export default function DispatchOpsDashboard({
             )}
             {canViewSelectedQuote && (
               <Button
+                size="sm"
                 colorScheme="blue"
+                borderRadius="lg"
                 onClick={handleViewSelectedQuote}
               >
-                Xem chuẩn đoán
+                Xem chẩn đoán
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              colorScheme="blue"
+              borderRadius="lg"
+              onClick={fetchData}
+              isLoading={loading}
+              px={3.5}
+            >
+              ⟳ Làm mới
+            </Button>
           </HStack>
-        </HStack>
+        </Flex>
 
-        <HStack justify="flex-end" align="center" mt={1} mb={1}>
-          <Button
-            variant="outline"
-            colorScheme="blue"
-            onClick={fetchData}
-            isLoading={loading}
-          >
-            ⟳ Làm mới
-          </Button>
-        </HStack>
-
+        {/* Status Filter Pills: Touch-friendly horizontal strip on mobile/tablet */}
         {!isAssignmentPage && (
-          <Box
-            bg="white"
-            borderRadius="2xl"
-            border="1px solid"
-            borderColor="#d9e2f1"
-            p={{ base: 3, md: 4 }}
-            boxShadow="0 12px 30px rgba(15, 23, 42, 0.08)"
-          >
-            <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={2}>
-              <Box>
-                <Text fontSize="sm" fontWeight="700" color="#1e3a8a">
-                  Trạng thái điều phối
-                </Text>
-                <Text fontSize="sm" color="gray.500">
-                  Nhấn vào một trạng thái để phân loại danh sách lệnh.
-                </Text>
-              </Box>
-              <Badge
-                borderRadius="full"
-                px={3}
-                py={1}
-                bg="#e0ecff"
-                color="#1d4ed8"
-                fontSize="xs"
-                fontWeight="700"
-              >
-                Đang xem: {COLOR_META[activeColorTab]?.label || "--"} ({totalStats[activeColorTab] || 0})
-              </Badge>
-            </HStack>
-
-              <SimpleGrid
-                columns={{
-                  base: 1,
-                  sm: 2,
-                  md: useManagerStyleStatusCards ? 3 : 2,
-                  xl: useManagerStyleStatusCards ? 5 : 4,
-                }}
-                spacing={3}
-                mt={4}
-              >
+          <Box>
+            <Flex
+              overflowX="auto"
+              py={1}
+              gap={{ base: 1.5, sm: 2 }}
+              css={{
+                "&::-webkit-scrollbar": { display: "none" },
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
               {dashboardTabOrder.map((color) => {
                 const isActive = activeColorTab === color;
                 const meta = COLOR_META[color];
-                const theme = STATUS_CARD_THEME[color] || STATUS_CARD_THEME.WHITE;
+                const count = Number(totalStats[color] ?? 0);
+                const isUrgent = color === "RED" && count > 0;
+
+                const bg = isActive
+                  ? isUrgent
+                    ? "#dc2626"
+                    : "#0f172a"
+                  : isUrgent
+                  ? "#fef2f2"
+                  : "white";
+
+                const borderColor = isActive
+                  ? isUrgent
+                    ? "#b91c1c"
+                    : "#0f172a"
+                  : isUrgent
+                  ? "#fecaca"
+                  : "#e2e8f0";
+
+                const textColor = isActive
+                  ? "white"
+                  : isUrgent
+                  ? "#b91c1c"
+                  : "#475569";
+
+                const badgeBg = isActive
+                  ? "rgba(255, 255, 255, 0.2)"
+                  : isUrgent
+                  ? "#ef4444"
+                  : "#f1f5f9";
+
+                const badgeColor = isActive
+                  ? "white"
+                  : isUrgent
+                  ? "white"
+                  : "#475569";
+
+                const dotColor = isActive
+                  ? "white"
+                  : isUrgent
+                  ? "#ef4444"
+                  : "#64748b";
+
                 return (
                   <Box
                     as="button"
@@ -2793,151 +2891,119 @@ export default function DispatchOpsDashboard({
                     key={color}
                     aria-pressed={isActive}
                     onClick={() => setActiveColorTab(color)}
-                    minH={{ base: "112px", md: "124px" }}
-                    p={4}
-                    borderRadius="xl"
-                    border="2px solid"
-                    borderColor={isActive ? theme.activeBorder : "#dbe4f2"}
-                    bg={isActive ? theme.activeBg : "#ffffff"}
-                    textAlign="left"
-                    transition="all 0.18s ease"
-                    boxShadow={isActive ? theme.activeShadow : "0 4px 14px rgba(30, 64, 175, 0.08)"}
-                    _hover={{
-                      borderColor: theme.activeBorder,
-                      transform: "translateY(-2px)",
-                    }}
+                    flexShrink={0}
+                    minH="38px"
+                    px={{ base: 3, sm: 3.5 }}
+                    py={1.5}
+                    borderRadius="lg"
+                    border="1.5px solid"
+                    borderColor={borderColor}
+                    bg={bg}
+                    transition="all 0.15s ease"
+                    boxShadow={
+                      isActive
+                        ? "0 2px 6px rgba(15, 23, 42, 0.12)"
+                        : "0 1px 2px rgba(0,0,0,0.03)"
+                    }
+                    _active={{ transform: "scale(0.98)" }}
                   >
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <HStack spacing={2}>
-                          <Box
-                            w="10px"
-                            h="10px"
-                            borderRadius="full"
-                            bg={theme.dot}
-                            boxShadow={isActive ? "0 0 0 4px rgba(255, 255, 255, 0.72)" : "0 0 0 4px rgba(148, 163, 184, 0.2)"}
-                          />
-                          <Text fontSize={{ base: "sm", md: "md" }} fontWeight="700" color={isActive ? "#0f172a" : "#334155"}>
-                            {meta.label}
-                          </Text>
-                        </HStack>
-                      </VStack>
+                    <HStack spacing={2} align="center">
+                      <Box
+                        w="7px"
+                        h="7px"
+                        borderRadius="full"
+                        bg={dotColor}
+                      />
+                      <Text
+                        fontSize="xs"
+                        fontWeight={isActive ? "800" : "600"}
+                        color={textColor}
+                        whiteSpace="nowrap"
+                      >
+                        {meta.label}
+                      </Text>
+                      <Badge
+                        borderRadius="full"
+                        px={1.8}
+                        py={0.2}
+                        fontSize="11px"
+                        fontWeight="800"
+                        bg={badgeBg}
+                        color={badgeColor}
+                      >
+                        {count}
+                      </Badge>
                     </HStack>
-
-                    <Text mt={3} fontSize={{ base: "3xl", md: "4xl" }} lineHeight="1" fontWeight="800" letterSpacing="-0.02em" color={isActive ? theme.dot : "#0f172a"}>
-                        {Number(totalStats[color] ?? 0)}
-                    </Text>
                   </Box>
                 );
               })}
-            </SimpleGrid>
+            </Flex>
           </Box>
         )}
 
-        {!isAssignmentPage && (
-          isTeamLeaderMode && (
-            <Box bg="white" borderRadius="xl" border="1px solid" borderColor="#d9e2f1" p={3}>
-              <HStack spacing={2} align="center" flexWrap="wrap">
-                <Box
-                  as="button"
-                  type="button"
-                  onClick={() => setTeamLeaderBoardTab("dispatch")}
-                  h="40px"
-                  minH="40px"
-                  px={5}
-                  borderRadius="999px"
-                  border="1px solid"
-                  borderColor={teamLeaderBoardTab === "dispatch" ? "#2563eb" : "#93c5fd"}
-                  bg={teamLeaderBoardTab === "dispatch" ? "#2563eb" : "#ffffff"}
-                  color={teamLeaderBoardTab === "dispatch" ? "#ffffff" : "#1d4ed8"}
-                  fontWeight="700"
-                  fontSize="sm"
-                  lineHeight="1"
-                  display="inline-flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  boxSizing="border-box"
-                  appearance="none"
-                  verticalAlign="middle"
-                  m={0}
-                  alignSelf="center"
-                  transition="all 0.16s ease"
-                  _hover={{
-                    bg: teamLeaderBoardTab === "dispatch" ? "#1d4ed8" : "#eff6ff",
-                    borderColor: "#2563eb",
-                  }}
-                >
-                  <HStack spacing={2} align="center" h="100%">
-                    <Text as="span" fontSize="inherit" lineHeight="1">
-                      Danh sách điều phối
-                    </Text>
-                    <Badge
-                      visibility="hidden"
-                      borderRadius="full"
-                      px={2}
-                      py={0.5}
-                      lineHeight="1"
-                      display="inline-flex"
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      0
-                    </Badge>
-                  </HStack>
-                </Box>
-                <Box
-                  as="button"
-                  type="button"
-                  onClick={() => setTeamLeaderBoardTab("support_notifications")}
-                  h="40px"
-                  minH="40px"
-                  px={5}
-                  borderRadius="999px"
-                  border="1px solid"
-                  borderColor={teamLeaderBoardTab === "support_notifications" ? "#ea580c" : "#f97316"}
-                  bg={teamLeaderBoardTab === "support_notifications" ? "#ea580c" : "#ffffff"}
-                  color={teamLeaderBoardTab === "support_notifications" ? "#ffffff" : "#c2410c"}
-                  fontWeight="700"
-                  fontSize="sm"
-                  lineHeight="1"
-                  display="inline-flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  boxSizing="border-box"
-                  appearance="none"
-                  verticalAlign="middle"
-                  m={0}
-                  alignSelf="center"
-                  transition="all 0.16s ease"
-                  _hover={{
-                    bg: teamLeaderBoardTab === "support_notifications" ? "#c2410c" : "#fff7ed",
-                    borderColor: "#ea580c",
-                  }}
-                >
-                  <HStack spacing={2} align="center" h="100%">
-                    <Text as="span" fontSize="inherit" lineHeight="1">
-                      Thông báo hỗ trợ
-                    </Text>
-                    <Badge
-                      bg={teamLeaderBoardTab === "support_notifications" ? "white" : "orange.100"}
-                      color={teamLeaderBoardTab === "support_notifications" ? "orange.600" : "orange.700"}
-                      borderRadius="full"
-                      px={2}
-                      py={0.5}
-                      lineHeight="1"
-                      display="inline-flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      animation={teamLeaderSupportNotifications.length > 0 ? `${cancelAttentionPulse} 1.8s ease-in-out infinite` : "none"}
-                    >
-                      {teamLeaderSupportNotifications.length}
-                    </Badge>
-                  </HStack>
-                </Box>
-              </HStack>
+        {/* Segmented Sub-tabs for Team Leader: Mobile thumb-friendly */}
+        {!isAssignmentPage && isTeamLeaderMode && (
+          <Flex
+            bg="#f1f5f9"
+            p="3px"
+            borderRadius="lg"
+            border="1px solid #e2e8f0"
+            maxW={{ base: "100%", md: "420px" }}
+          >
+            <Box
+              as="button"
+              type="button"
+              onClick={() => setTeamLeaderBoardTab("dispatch")}
+              flex="1"
+              py={1.5}
+              px={3}
+              borderRadius="md"
+              bg={teamLeaderBoardTab === "dispatch" ? "white" : "transparent"}
+              color={teamLeaderBoardTab === "dispatch" ? "#0f172a" : "#64748b"}
+              boxShadow={teamLeaderBoardTab === "dispatch" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"}
+              fontWeight="700"
+              fontSize="xs"
+              transition="all 0.15s ease"
+              textAlign="center"
+            >
+              Danh sách điều phối ({totalStats[activeColorTab] || 0})
             </Box>
-          )
+            <Box
+              as="button"
+              type="button"
+              onClick={() => setTeamLeaderBoardTab("support_notifications")}
+              flex="1"
+              py={1.5}
+              px={3}
+              borderRadius="md"
+              bg={teamLeaderBoardTab === "support_notifications" ? "white" : "transparent"}
+              color={teamLeaderBoardTab === "support_notifications" ? "#b91c1c" : "#64748b"}
+              boxShadow={teamLeaderBoardTab === "support_notifications" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"}
+              fontWeight="700"
+              fontSize="xs"
+              transition="all 0.15s ease"
+              textAlign="center"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              gap={1.5}
+            >
+              <span>Yêu cầu hỗ trợ</span>
+              <Badge
+                bg={teamLeaderSupportNotifications.length > 0 ? "#ef4444" : "#e2e8f0"}
+                color={teamLeaderSupportNotifications.length > 0 ? "white" : "#64748b"}
+                borderRadius="full"
+                px={1.5}
+                py={0}
+                fontSize="10px"
+                fontWeight="800"
+              >
+                {teamLeaderSupportNotifications.length}
+              </Badge>
+            </Box>
+          </Flex>
         )}
+
 
         {!isAssignmentPage && !isTeamLeaderMode && (
           <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" p={3}>
@@ -2948,7 +3014,7 @@ export default function DispatchOpsDashboard({
                 value={teamFilter}
                 options={teamFilterOptions}
                 onChange={setTeamFilter}
-                minWidth={300}
+                minWidth={{ base: "100%", sm: "240px" }}
                 disabled={isTeamLeaderMode && !!currentStaffTeamId}
               />
               <FilterDropdown
@@ -2957,7 +3023,7 @@ export default function DispatchOpsDashboard({
                 value={dispatchTagFilter}
                 options={dispatchTagFilterOptions}
                 onChange={setDispatchTagFilter}
-                minWidth={260}
+                minWidth={{ base: "100%", sm: "220px" }}
               />
             </HStack>
           </Box>
@@ -3017,634 +3083,803 @@ export default function DispatchOpsDashboard({
 
           {isAssignmentPage && (
             <GridItem>
-            <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
               {!selectedItem ? (
-                <Box border="1px dashed" borderColor="gray.200" borderRadius="xl" p={8} textAlign="center" color="gray.500">
+                <Box bg="white" border="1px dashed" borderColor="gray.200" borderRadius="2xl" p={8} textAlign="center" color="gray.500">
                   Không tìm thấy lệnh cần phân công trong danh sách hiện tại.
                 </Box>
               ) : (
-                <VStack align="stretch" spacing={4}>
-                  <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50">
-                    <Text fontSize="xs" color="gray.500" mb={1}>LỆNH SỬA CHỮA</Text>
-                    <Heading size="md" color="#1b2559">{selectedItem.serviceOrderCode}</Heading>
-                    <HStack mt={2} spacing={2} flexWrap="wrap">
-                      <Badge colorScheme={(selectedItem.queueColor === "RED" ? "red" : selectedItem.queueColor === "YELLOW" ? "yellow" : selectedItem.queueColor === "GREEN" ? "green" : "gray")} borderRadius="full">
-                        {selectedItem.queueColor}
-                      </Badge>
-                      <Badge colorScheme="purple" borderRadius="full">Chuyên môn: {selectedDispatchTagLabel}</Badge>
-                      <Badge colorScheme={getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).colorScheme} borderRadius="full">
-                        {getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).label}
-                      </Badge>
-                    </HStack>
-                  </Box>
+                (() => {
+                  const assignVehicle = getVehicleDisplayParts(selectedItem);
+                  const alertReasons = extractAlertReasons(selectedItem);
+                  const isUrgent = selectedItem.queueColor === "RED" || alertReasons.length > 0;
+                  const friendlyBay = formatFriendlyBay(selectedItem.assignedBayCode);
+                  const requestedServiceText = selectedRequestedServicesLoading
+                    ? "Đang tải yêu cầu..."
+                    : (selectedRequestedServices || selectedItem.customerRequestedServices || "Kiểm tra chẩn đoán chung");
+                  const customerNotesText = selectedItem.customerMainNotes &&
+                    selectedItem.customerMainNotes !== "Không có" &&
+                    selectedItem.customerMainNotes !== "Không có ghi chú gì."
+                      ? selectedItem.customerMainNotes
+                      : "";
 
-                  <Box p={3} border="1px solid" borderColor="orange.100" borderRadius="xl" bg="#fffaf0">
-                    <Text fontSize="xs" color="orange.700" fontWeight="700" mb={2}>
-                      THÔNG TIN PHẢN HỒI TỪ KHÁCH HÀNG
-                    </Text>
-                    <Stack spacing={2} fontSize="sm" color="gray.700">
-                      <Text>
-                        <strong>Dịch vụ yêu cầu:</strong>{" "}
-                        {selectedRequestedServicesLoading
-                          ? "Đang tải..."
-                          : (selectedRequestedServices || selectedItem.customerRequestedServices || "Chưa ghi rõ")}
-                      </Text>
-                      <Text>
-                        <strong>Mô tả từ khách hàng:</strong>{" "}
-                        {selectedItem.customerMainNotes || "Không có"}
-                      </Text>
-                    </Stack>
-                  </Box>
+                  const yearPart = assignVehicle.manufactureYear &&
+                    !assignVehicle.manufactureYear.includes("-") &&
+                    assignVehicle.manufactureYear !== "—" &&
+                    assignVehicle.manufactureYear.trim() !== ""
+                      ? `Năm ${assignVehicle.manufactureYear}`
+                      : "";
 
-                  <Box p={3} border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff">
-                    <Text fontSize="sm" color="gray.600">Yêu cầu lúc: {formatDateTime(selectedItem.requestedAt)}</Text>
-                    <Text fontSize="sm" color="gray.600">Nhận ca lúc: {formatDateTime(selectedItem.assignedAt)}</Text>
-                    <Text fontSize="sm" color="gray.600">Tổ chính: {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa giao tổ"}</Text>
-                    {Array.isArray(selectedItem.supportingTeamNames) && selectedItem.supportingTeamNames.length > 0 && (
-                      <Text fontSize="sm" color="gray.600">Tổ phối hợp: {selectedItem.supportingTeamNames.join(", ")}</Text>
-                    )}
-                    <Text fontSize="sm" color="gray.600">Chờ nhận: {formatMinutes(selectedItem.pendingMinutes)}</Text>
-                    <Text fontSize="sm" color="gray.600">Đang xử lý: {formatMinutes(selectedItem.assignedMinutes)}</Text>
-                    <Text fontSize="sm" color="gray.600">Duyệt kỹ thuật: {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "Chưa duyệt"}</Text>
-                    <Text fontSize="sm" color="gray.600">Duyệt cuối: {selectedItem.finalApprovedAt ? formatDateTime(selectedItem.finalApprovedAt) : "Chưa duyệt"}</Text>
-                  </Box>
+                  const colorPart = assignVehicle.color &&
+                    !assignVehicle.color.includes("-") &&
+                    assignVehicle.color !== "—" &&
+                    assignVehicle.color.trim() !== ""
+                      ? assignVehicle.color
+                      : "";
 
-                  {extractAlertReasons(selectedItem).length > 0 && (
-                    <Alert status="error" borderRadius="xl" flexDirection="column" alignItems="start" gap={1}>
-                      <HStack>
-                        <AlertIcon />
-                        <Text fontWeight="700">Cảnh báo cần xử lý</Text>
-                      </HStack>
-                      {extractAlertReasons(selectedItem).map((reason) => (
-                        <Text key={`alert-${reason}`} fontSize="sm">- {reason}</Text>
-                      ))}
-                    </Alert>
-                  )}
-                  {isTeamLeaderMode ? (
-                    <VStack align="stretch" spacing={4}>
-                      <Divider />
-                      {!canCurrentTeamLeadPrimaryFlow && (
-                        <Alert status="info" borderRadius="xl" bg="blue.50" border="1px solid" borderColor="blue.100">
-                          <AlertIcon color="blue.500" />
-                          <Text fontSize="sm" color="blue.700">
-                            Lệnh này thuộc tổ chính{" "}
-                            <strong>{selectedItem.primaryTeamName || selectedItem.teamName || "--"}</strong>. Tổ của bạn chờ xử lý phần xác nhận nhân sự hỗ trợ nếu có yêu cầu.
-                          </Text>
-                        </Alert>
-                      )}
+                  const customerSubtitle = [yearPart, colorPart].filter(Boolean).join(" · ");
 
-                      {canCurrentTeamLeadPrimaryFlow && (
-                        <>
-                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và phân công cấp thợ</Text>
+                  return (
+                    <Box>
+                      {/* Unified Master Job Card: Top info and Bottom assignment are seamlessly connected */}
+                      <Box
+                        bg="white"
+                        border="1px solid #e2e8f0"
+                        borderRadius="2xl"
+                        position="relative"
+                        zIndex={20}
+                        overflow="visible"
+                        boxShadow="0 4px 20px rgba(15,23,42,0.04)"
+                      >
+                        {/* Top Header: Vehicle Identity & Request Info */}
+                        <Box p={{ base: 4, sm: 5 }} bg="#f8fafc" borderBottom="1.5px solid #e2e8f0" borderTopRadius="2xl">
+                          <VStack align="stretch" spacing={3.5}>
+                            {/* Row 1: Large License Plate + Vehicle Name + Urgent / State Badge */}
+                            <Flex justify="space-between" align="center" gap={3} wrap="wrap">
+                              <HStack spacing={3} align="center" wrap="wrap">
+                                <Box
+                                  display="inline-flex"
+                                  alignItems="center"
+                                  justifyContent="center"
+                                  bg="#ffffff"
+                                  border="2.5px solid #0f172a"
+                                  borderRadius="lg"
+                                  px={3.5}
+                                  py={1}
+                                  boxShadow="0 2px 4px rgba(0,0,0,0.08)"
+                                >
+                                  <Text
+                                    fontSize={{ base: "lg", md: "22px" }}
+                                    fontWeight="900"
+                                    letterSpacing="0.08em"
+                                    color="#0f172a"
+                                    lineHeight="1"
+                                  >
+                                    {assignVehicle.plate || "CHƯA BIỂN"}
+                                  </Text>
+                                </Box>
+                                <Box>
+                                  <Text
+                                    fontSize={{ base: "lg", md: "20px" }}
+                                    fontWeight="900"
+                                    color="#0f172a"
+                                    lineHeight="1.2"
+                                  >
+                                    {assignVehicle.descriptor || "Xe tiếp nhận"}
+                                  </Text>
+                                  {(Boolean(customerSubtitle) || Boolean(selectedItem.customerName)) && (
+                                    <Text fontSize={{ base: "xs", md: "sm" }} color="#475569" mt={0.5} fontWeight="600">
+                                      {selectedItem.customerName || ""}
+                                      {customerSubtitle ? `${selectedItem.customerName ? " · " : ""}${customerSubtitle}` : ""}
+                                    </Text>
+                                  )}
+                                </Box>
+                              </HStack>
 
-                            <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                              <FilterDropdown
-                                id="leader-assignment-team"
-                                value={leaderTeamId}
-                                options={assignmentTeamOptions}
-                                onChange={(nextValue) => {
-                                  if (String(nextValue || "") !== String(leaderTeamId || "")) {
-                                    setLeaderLeadTechnicianId("");
-                                    setLeaderAssistantTechnicianId("");
-                                  }
-                                  setLeaderTeamId(nextValue);
-                                }}
-                                minWidth={300}
-                                disabled={Boolean(currentStaffTeamId)}
-                              />
-                            </FormControl>
-
-                            <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
-                              <FilterDropdown
-                                id="leader-main-tech"
-                                value={leaderLeadTechnicianId}
-                                options={leaderPrimaryTechnicianOptions}
-                                onChange={(nextValue) => {
-                                  const nextLeadId = toPositiveNumber(nextValue);
-                                  const currentAssistantId = toPositiveNumber(leaderAssistantTechnicianId);
-                                  setLeaderLeadTechnicianId(nextValue);
-                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
-                                    setLeaderAssistantTechnicianId("");
-                                  }
-                                }}
-                                minWidth="100%"
-                                disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected}
-                              />
-                            </FormControl>
-
-                            <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
-                              <FilterDropdown
-                                id="leader-assistant-tech"
-                                value={leaderAssistantTechnicianId}
-                                options={leaderAssistantTechnicianOptions}
-                                onChange={(nextValue) => {
-                                  const nextAssistantId = toPositiveNumber(nextValue);
-                                  const currentLeadId = toPositiveNumber(leaderLeadTechnicianId);
-                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
-                                    setLeaderAssistantTechnicianId("");
-                                    return;
-                                  }
-                                  setLeaderAssistantTechnicianId(nextValue);
-                                }}
-                                minWidth="100%"
-                                disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected || !toPositiveNumber(leaderLeadTechnicianId)}
-                              />
-                            </FormControl>
-
-                            <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Khoang (chỉ xem)</FormLabel>
-                              <FilterDropdown
-                                id="leader-bay-select"
-                                value={leaderBayId}
-                                options={leaderBaySelectionOptions}
-                                onChange={setLeaderBayId}
-                                minWidth="100%"
-                                disabled
-                              />
-                              <Text mt={1} fontSize="xs" color="gray.500">
-                                Tổ trưởng không có quyền sửa khoang. Chỉ quản đốc được đổi khoang ở bước override.
-                              </Text>
-                            </FormControl>
-
-                            <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
-                              <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                                Lưu - phân quyền
-                              </Text>
-                              <Text mt={1} fontSize="sm" color="blue.700">
-                                Tổ trưởng tổ chính chỉ giao cặp thợ cho tổ chính. Nhu cầu tổ phụ sẽ được gửi riêng ở bước hỗ trợ bên dưới.
-                              </Text>
-                            </Box>
-
-                            <HStack mt={3} spacing={2} align="stretch">
-                              <Button
-                                variant="unstyled"
-                                {...actionButtonBaseProps}
-                                border="2px solid"
-                                borderColor="#2563eb"
-                                bg="white"
-                                color="#1d4ed8"
-                                _hover={{ bg: "#eff6ff" }}
-                                onClick={() => loadDispatchSuggestion("team_leader")}
-                                isLoading={suggestionLoading}
-                                isDisabled={!canLeaderUseSuggestion}
-                              >
-                                Gợi ý tự động
-                              </Button>
-                              <Button
-                                variant="unstyled"
-                                {...actionButtonBaseProps}
-                                border="2px solid"
-                                borderColor="#2563eb"
-                                bg="#2563eb"
-                                color="white"
-                                _hover={{ bg: "#1d4ed8" }}
-                                onClick={handleLeaderAssign}
-                                isLoading={saving}
-                                isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
-                              >
-                                Nhận xe và giao ca
-                              </Button>
-                            </HStack>
-                            {isLeaderAssignmentLocked && (
-                              <Text mt={2} fontSize="sm" color="gray.600">
-                                Tất cả thợ đã nhận việc nên cấm phân công và 2 nút đã bị khóa.
-                              </Text>
-                            )}
-
-                            <Box mt={3}>
-                              <SuggestionPreview suggestion={suggestion} />
-                            </Box>
-                          </Box>
-
-                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>2) Yêu cầu hỗ trợ hội chẩn</Text>
-                            <HStack justify="space-between" align="center" mb={2}>
-                              <Button
-                                size="sm"
-                                colorScheme="orange"
-                                variant="outline"
-                                onClick={() => setIsLeaderSupportSectionExpanded((prev) => !prev)}
-                              >
-                                {isLeaderSupportSectionExpanded ? "Thu gọn hỗ trợ tổ phụ" : "Cần tổ phụ hỗ trợ"}
-                              </Button>
-                              {leaderSupportTeamIds.length > 0 && (
-                                <Badge colorScheme="orange" borderRadius="full" px={2.5}>
-                                  {leaderSupportTeamIds.length} tổ đã chọn
+                              <HStack spacing={2} wrap="wrap">
+                                {isUrgent && alertReasons.length > 0 && (
+                                  <Badge
+                                    bg="#fee2e2"
+                                    color="#b91c1c"
+                                    borderRadius="md"
+                                    px={3}
+                                    py={1}
+                                    fontSize={{ base: "xs", md: "sm" }}
+                                    fontWeight="800"
+                                  >
+                                    ⚠️ {alertReasons[0]}
+                                  </Badge>
+                                )}
+                                <Badge
+                                  bg={isUrgent ? "#fee2e2" : "#f1f5f9"}
+                                  color={isUrgent ? "#dc2626" : "#334155"}
+                                  borderRadius="md"
+                                  px={3}
+                                  py={1}
+                                  fontSize={{ base: "xs", md: "sm" }}
+                                  fontWeight="800"
+                                >
+                                  {isUrgent ? "CẦN CAN THIỆP" : getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).label}
                                 </Badge>
-                              )}
-                            </HStack>
+                              </HStack>
+                            </Flex>
 
-                            {isLeaderSupportSectionExpanded ? (
-                              <>
-                                <SupportingTeamSelector
-                                  mode="request"
-                                  value={leaderSupportTeamIds}
-                                  onChange={(values) => setLeaderSupportTeamIds((values || []).map((value) => String(value)))}
-                                  options={leaderSupportingTeamOptions}
-                                  requestMap={leaderSupportRequestMap}
-                                  onRequestedCountChange={handleLeaderSupportRequestedCountChange}
-                                  emptyText="Không có tổ phụ phù hợp trong chi nhánh hiện tại."
-                                  helperText="Chọn tổ phụ và số lượng thợ cần hỗ trợ. Tổ trưởng tổ phụ sẽ tự chọn thợ của tổ mình."
-                                />
-                                <FormControl mt={2}>
-                                  <FormLabel fontSize="sm" mb={1}>Mô tả vấn đề cần phối hợp</FormLabel>
-                                  <Textarea
-                                    size="sm"
-                                    value={leaderSupportNote}
-                                    onChange={(event) => setLeaderSupportNote(event.target.value)}
-                                    placeholder="Ví dụ: cần phối hợp kiểm tra hệ thống điện khi chẩn đoán lại máy..."
+                            {/* Row 2: Customer Request & Notes */}
+                            <Box p={3} borderRadius="lg" bg="white" border="1px solid #e2e8f0" boxShadow="0 1px 2px rgba(0,0,0,0.02)">
+                              <Text fontSize={{ base: "sm", md: "15px" }} color="#0f172a" lineHeight="1.5">
+                                <Text as="span" color="#64748b" fontWeight="700">Yêu cầu:</Text>{" "}
+                                <Text as="span" fontWeight="800" color="#0f172a">{requestedServiceText}</Text>
+                              </Text>
+                              {customerNotesText && (
+                                <Text mt={1.5} fontSize={{ base: "xs", md: "sm" }} color="#475569" lineHeight="1.5">
+                                  <Text as="span" color="#64748b" fontWeight="700">Ghi chú khách:</Text> {customerNotesText}
+                                </Text>
+                              )}
+                            </Box>
+
+                            {/* Row 3: Meta Grid (High Contrast, Easily Readable on Tablets) */}
+                            <SimpleGrid columns={{ base: 2, sm: 4 }} spacing={3} pt={0.5}>
+                              <Box>
+                                <Text color="#64748b" fontWeight="700" fontSize={{ base: "xs", md: "sm" }}>Khoang đỗ</Text>
+                                <Text color="#1d4ed8" fontWeight="900" fontSize={{ base: "md", md: "18px" }} mt={0.5}>{friendlyBay}</Text>
+                              </Box>
+                              <Box>
+                                <Text color="#64748b" fontWeight="700" fontSize={{ base: "xs", md: "sm" }}>Tiếp nhận lúc</Text>
+                                <Text color="#0f172a" fontWeight="800" fontSize={{ base: "sm", md: "15px" }} mt={0.5}>{formatDateTime(selectedItem.requestedAt)}</Text>
+                              </Box>
+                              <Box>
+                                <Text color="#64748b" fontWeight="700" fontSize={{ base: "xs", md: "sm" }}>Duyệt kỹ thuật</Text>
+                                <Text color={selectedItem.technicalApprovedAt ? "#16a34a" : "#64748b"} fontWeight="800" fontSize={{ base: "sm", md: "15px" }} mt={0.5}>
+                                  {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "Chưa duyệt"}
+                                </Text>
+                              </Box>
+                              <Box>
+                                <Text color="#64748b" fontWeight="700" fontSize={{ base: "xs", md: "sm" }}>Duyệt quản đốc</Text>
+                                <Text color={selectedItem.finalApprovedAt ? "#16a34a" : "#64748b"} fontWeight="800" fontSize={{ base: "sm", md: "15px" }} mt={0.5}>
+                                  {selectedItem.finalApprovedAt ? formatDateTime(selectedItem.finalApprovedAt) : "Chưa duyệt"}
+                                </Text>
+                              </Box>
+                            </SimpleGrid>
+                          </VStack>
+                        </Box>
+
+                        {/* Bottom Section: Primary Action Form (Phân công thợ) */}
+                        <Box p={{ base: 4, sm: 5 }} bg="white" borderBottomRadius="2xl" position="relative" zIndex={20}>
+                          {isTeamLeaderMode ? (
+                            <VStack align="stretch" spacing={4}>
+                              {!canCurrentTeamLeadPrimaryFlow && (
+                                <Alert status="info" borderRadius="xl" bg="blue.50" border="1px solid" borderColor="blue.100">
+                                  <AlertIcon color="blue.500" />
+                                  <Text fontSize="sm" color="blue.700">
+                                    Lệnh này thuộc tổ chính{" "}
+                                    <strong>{selectedItem.primaryTeamName || selectedItem.teamName || "--"}</strong>. Tổ của bạn chờ xử lý phần xác nhận nhân sự hỗ trợ nếu có yêu cầu.
+                                  </Text>
+                                </Alert>
+                              )}
+
+                              {canCurrentTeamLeadPrimaryFlow && (
+                                <>
+                                  <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
+                                    <Text fontSize={{ base: "md", md: "17px" }} fontWeight="800" color="#0f172a">
+                                      1. Phân công thợ phụ trách
+                                    </Text>
+                                    <Badge bg="#f1f5f9" color="#1e293b" border="1px solid #cbd5e1" borderRadius="md" px={3} py={1} fontSize={{ base: "xs", md: "sm" }} fontWeight="800">
+                                      {toText(readValue(currentTeam, "name", "Name")) || selectedItem.primaryTeamName || "Tổ phụ trách"}
+                                    </Badge>
+                                  </Flex>
+
+                                  {!currentStaffTeamId && (
+                                    <FormControl>
+                                      <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Tổ thực hiện</FormLabel>
+                                      <FilterDropdown
+                                        id="leader-assignment-team"
+                                        value={leaderTeamId}
+                                        options={assignmentTeamOptions}
+                                        onChange={(nextValue) => {
+                                          if (String(nextValue || "") !== String(leaderTeamId || "")) {
+                                            setLeaderLeadTechnicianId("");
+                                            setLeaderAssistantTechnicianId("");
+                                          }
+                                          setLeaderTeamId(nextValue);
+                                        }}
+                                        minWidth="100%"
+                                      />
+                                    </FormControl>
+                                  )}
+
+                                  <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }}>
+                                    <FormControl isRequired>
+                                      <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>
+                                        Thợ chính
+                                      </FormLabel>
+                                      <FilterDropdown
+                                        id="leader-main-tech"
+                                        value={leaderLeadTechnicianId}
+                                        options={leaderPrimaryTechnicianOptions}
+                                        onChange={(nextValue) => {
+                                          const nextLeadId = toPositiveNumber(nextValue);
+                                          const currentAssistantId = toPositiveNumber(leaderAssistantTechnicianId);
+                                          setLeaderLeadTechnicianId(nextValue);
+                                          if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                            setLeaderAssistantTechnicianId("");
+                                          }
+                                        }}
+                                        minWidth="100%"
+                                        disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected}
+                                      />
+                                    </FormControl>
+
+                                    <FormControl>
+                                      <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>
+                                        Thợ phụ (tuỳ chọn)
+                                      </FormLabel>
+                                      <FilterDropdown
+                                        id="leader-assistant-tech"
+                                        value={leaderAssistantTechnicianId}
+                                        options={leaderAssistantTechnicianOptions}
+                                        onChange={(nextValue) => {
+                                          const nextAssistantId = toPositiveNumber(nextValue);
+                                          const currentLeadId = toPositiveNumber(leaderLeadTechnicianId);
+                                          if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                            setLeaderAssistantTechnicianId("");
+                                            return;
+                                          }
+                                          setLeaderAssistantTechnicianId(nextValue);
+                                        }}
+                                        minWidth="100%"
+                                        disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected || !toPositiveNumber(leaderLeadTechnicianId)}
+                                      />
+                                    </FormControl>
+                                  </SimpleGrid>
+
+                                  <HStack mt={1} spacing={3} align="center" wrap="wrap">
+                                    <Button
+                                      height="44px"
+                                      px={6}
+                                      fontSize={{ base: "sm", md: "15px" }}
+                                      fontWeight="800"
+                                      borderRadius="xl"
+                                      border="1.5px solid #2563eb"
+                                      bg="#2563eb"
+                                      color="white"
+                                      _hover={{ bg: "#1d4ed8", borderColor: "#1d4ed8" }}
+                                      _active={{ bg: "#1e40af" }}
+                                      boxShadow="0 2px 5px rgba(37,99,235,0.25)"
+                                      onClick={handleLeaderAssign}
+                                      isLoading={saving}
+                                      isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
+                                    >
+                                      Nhận xe & giao ca
+                                    </Button>
+
+                                    <Button
+                                      height="44px"
+                                      px={4}
+                                      fontSize={{ base: "sm", md: "14px" }}
+                                      fontWeight="700"
+                                      borderRadius="xl"
+                                      variant="outline"
+                                      borderColor="#cbd5e1"
+                                      bg="white"
+                                      color="#334155"
+                                      _hover={{ bg: "#f8fafc", borderColor: "#94a3b8" }}
+                                      _active={{ bg: "#f1f5f9" }}
+                                      onClick={() => loadDispatchSuggestion("team_leader")}
+                                      isLoading={suggestionLoading}
+                                      isDisabled={!canLeaderUseSuggestion}
+                                    >
+                                      ⚡ Gợi ý tự động
+                                    </Button>
+                                  </HStack>
+
+                                  {isLeaderAssignmentLocked && (
+                                    <Text fontSize="xs" color="#dc2626" fontWeight="700">
+                                      * Lệnh đã được bắt đầu thực hiện, nhân sự phân công đã được chốt.
+                                    </Text>
+                                  )}
+                                </>
+                              )}
+                            </VStack>
+                          ) : (
+                            <VStack align="stretch" spacing={4}>
+                              <Text fontSize={{ base: "md", md: "17px" }} fontWeight="800" color="#0f172a">
+                                1. Quản đốc override phân công
+                              </Text>
+
+                              <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }}>
+                                <FormControl isRequired>
+                                  <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Tổ thực hiện</FormLabel>
+                                  <FilterDropdown
+                                    id="manager-assignment-team"
+                                    value={managerTeamId}
+                                    options={assignmentTeamOptions}
+                                    onChange={(nextValue) => {
+                                      if (String(nextValue || "") !== String(managerTeamId || "")) {
+                                        setManagerLeadTechnicianId("");
+                                        setManagerAssistantTechnicianId("");
+                                        setManagerBayId("");
+                                      }
+                                      setManagerTeamId(nextValue);
+                                    }}
+                                    minWidth="100%"
                                   />
                                 </FormControl>
+
+                                <FormControl isRequired>
+                                  <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Khoang đỗ</FormLabel>
+                                  <FilterDropdown
+                                    id="manager-bay-select"
+                                    value={managerBayId}
+                                    options={baySelectionOptions}
+                                    onChange={setManagerBayId}
+                                    minWidth="100%"
+                                    disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
+                                  />
+                                </FormControl>
+
+                                <FormControl isRequired>
+                                  <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Thợ chính</FormLabel>
+                                  <FilterDropdown
+                                    id="manager-main-tech"
+                                    value={managerLeadTechnicianId}
+                                    options={managerPrimaryTechnicianOptions}
+                                    onChange={(nextValue) => {
+                                      const nextLeadId = toPositiveNumber(nextValue);
+                                      const currentAssistantId = toPositiveNumber(managerAssistantTechnicianId);
+                                      setManagerLeadTechnicianId(nextValue);
+                                      if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                        setManagerAssistantTechnicianId("");
+                                      }
+                                    }}
+                                    minWidth="100%"
+                                    disabled={!hasManagerTeamSelected}
+                                  />
+                                </FormControl>
+
+                                <FormControl>
+                                  <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Thợ phụ</FormLabel>
+                                  <FilterDropdown
+                                    id="manager-assistant-tech"
+                                    value={managerAssistantTechnicianId}
+                                    options={managerAssistantTechnicianOptions}
+                                    onChange={(nextValue) => {
+                                      const nextAssistantId = toPositiveNumber(nextValue);
+                                      const currentLeadId = toPositiveNumber(managerLeadTechnicianId);
+                                      if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                        setManagerAssistantTechnicianId("");
+                                        return;
+                                      }
+                                      setManagerAssistantTechnicianId(nextValue);
+                                    }}
+                                    minWidth="100%"
+                                    disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
+                                  />
+                                </FormControl>
+                              </SimpleGrid>
+
+                              <FormControl mt={1}>
+                                <FormLabel fontSize={{ base: "xs", md: "sm" }} fontWeight="700" color="#334155" mb={1.5}>Lý do điều phối / override</FormLabel>
+                                <Input
+                                  size="md"
+                                  borderRadius="xl"
+                                  value={managerOverrideReason}
+                                  onChange={(event) => setManagerOverrideReason(event.target.value)}
+                                  placeholder="Ví dụ: xe chờ quá 10 phút, cân bằng tải giữa các tổ..."
+                                />
+                              </FormControl>
+
+                              <HStack mt={1} spacing={3} align="center" wrap="wrap">
+                                <Button
+                                  height="44px"
+                                  px={6}
+                                  fontSize={{ base: "sm", md: "15px" }}
+                                  fontWeight="800"
+                                  borderRadius="xl"
+                                  border="1.5px solid #2563eb"
+                                  bg="#2563eb"
+                                  color="white"
+                                  _hover={{ bg: "#1d4ed8", borderColor: "#1d4ed8" }}
+                                  _active={{ bg: "#1e40af" }}
+                                  boxShadow="0 2px 5px rgba(37,99,235,0.25)"
+                                  onClick={handleManagerOverride}
+                                  isLoading={saving}
+                                  isDisabled={!canManagerOverride || !toPositiveNumber(managerTeamId) || !toPositiveNumber(managerLeadTechnicianId)}
+                                >
+                                  Giao lại ngay
+                                </Button>
+
+                                <Button
+                                  height="44px"
+                                  px={4}
+                                  fontSize={{ base: "sm", md: "14px" }}
+                                  fontWeight="700"
+                                  borderRadius="xl"
+                                  variant="outline"
+                                  borderColor="#cbd5e1"
+                                  bg="white"
+                                  color="#334155"
+                                  _hover={{ bg: "#f8fafc", borderColor: "#94a3b8" }}
+                                  _active={{ bg: "#f1f5f9" }}
+                                  onClick={() => loadDispatchSuggestion("manager")}
+                                  isLoading={suggestionLoading}
+                                  isDisabled={!selectedItem || !toPositiveNumber(managerTeamId)}
+                                >
+                                  ⚡ Gợi ý tự động
+                                </Button>
+                              </HStack>
+                            </VStack>
+                          )}
+                        </Box>
+                      </Box>
+
+                      {/* Secondary Collapsible Sections: Support request, Cancel request */}
+                      {isTeamLeaderMode ? (
+                        canCurrentTeamLeadPrimaryFlow && (
+                          <VStack align="stretch" spacing={3} mt={3.5} position="relative" zIndex={10}>
+                            {/* Section 2: Yêu cầu hỗ trợ hội chẩn (Tổ phụ) */}
+                            <Box
+                              border="1px solid"
+                              borderColor="#e2e8f0"
+                              borderRadius="xl"
+                              p={{ base: 3, sm: 3.5 }}
+                              bg="white"
+                              boxShadow="0 1px 2px rgba(0,0,0,0.03)"
+                              position="relative"
+                              zIndex={5}
+                            >
+                              <Flex
+                                justify="space-between"
+                                align="center"
+                                cursor="pointer"
+                                onClick={() => setIsLeaderSupportSectionExpanded((prev) => !prev)}
+                              >
+                                <HStack spacing={2}>
+                                  <Text fontSize="sm" fontWeight="800" color="#0f172a">
+                                    2. Yêu cầu hỗ trợ hội chẩn liên tổ (tuỳ chọn)
+                                  </Text>
+                                  {leaderSupportTeamIds.length > 0 && (
+                                    <Badge bg="#fef3c7" color="#92400e" border="1px solid #fde68a" borderRadius="md" px={2} py={0.5} fontSize="xs" fontWeight="700">
+                                      {leaderSupportTeamIds.length} tổ đã chọn
+                                    </Badge>
+                                  )}
+                                </HStack>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  color="#64748b"
+                                  fontSize="xs"
+                                  fontWeight="600"
+                                >
+                                  {isLeaderSupportSectionExpanded ? "Thu gọn ▲" : "+ Cần hỗ trợ ▼"}
+                                </Button>
+                              </Flex>
+
+                              {isLeaderSupportSectionExpanded && (
+                                <Box mt={3} pt={3} borderTop="1px solid #f1f5f9">
+                                  <SupportingTeamSelector
+                                    mode="request"
+                                    value={leaderSupportTeamIds}
+                                    onChange={(values) => setLeaderSupportTeamIds((values || []).map((value) => String(value)))}
+                                    options={leaderSupportingTeamOptions}
+                                    requestMap={leaderSupportRequestMap}
+                                    onRequestedCountChange={handleLeaderSupportRequestedCountChange}
+                                    emptyText="Không có tổ phụ phù hợp trong chi nhánh hiện tại."
+                                    helperText="Chọn tổ phụ và số lượng thợ cần hỗ trợ. Tổ trưởng tổ phụ sẽ tự chọn thợ của tổ mình."
+                                  />
+                                  <FormControl mt={2.5}>
+                                    <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Mô tả vấn đề cần phối hợp</FormLabel>
+                                    <Textarea
+                                      size="sm"
+                                      borderRadius="md"
+                                      value={leaderSupportNote}
+                                      onChange={(event) => setLeaderSupportNote(event.target.value)}
+                                      placeholder="Ví dụ: cần phối hợp kiểm tra hệ thống điện khi chẩn đoán lại máy..."
+                                    />
+                                  </FormControl>
+                                  <Button
+                                    mt={3}
+                                    size="sm"
+                                    colorScheme="orange"
+                                    variant="solid"
+                                    borderRadius="lg"
+                                    onClick={handleLeaderSupport}
+                                    isLoading={saving}
+                                    isDisabled={!canLeaderSupport || leaderSupportTeamIds.length === 0}
+                                  >
+                                    Gửi yêu cầu đến tổ phụ
+                                  </Button>
+                                </Box>
+                              )}
+                            </Box>
+
+                            {selectedIncomingSupportAssignment && (
+                              <Box border="1px solid" borderColor="#fde68a" borderRadius="xl" p={3} bg="#fffdf5">
+                                <Text fontWeight="800" color="#b45309" fontSize="sm" mb={2}>
+                                  Xác nhận nhân sự hỗ trợ của tổ phụ
+                                </Text>
+
+                                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
+                                  <Box p={2.5} border="1px solid" borderColor="#fef3c7" borderRadius="lg" bg="white">
+                                    <Text fontSize="11px" color="#b45309" fontWeight="700" textTransform="uppercase">
+                                      Tổ chính yêu cầu
+                                    </Text>
+                                    <Text mt={0.5} fontSize="sm" color="#1e293b" fontWeight="700">
+                                      {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa xác định"}
+                                    </Text>
+                                    <Text mt={0.5} fontSize="xs" color="#64748b">
+                                      Cần {selectedIncomingSupportAssignment.requestedTechnicianCount} thợ từ tổ của bạn
+                                    </Text>
+                                  </Box>
+                                  <Box p={2.5} border="1px solid" borderColor="#e2e8f0" borderRadius="lg" bg="white">
+                                    <Text fontSize="11px" color="#64748b" fontWeight="700" textTransform="uppercase">
+                                      Thời điểm yêu cầu
+                                    </Text>
+                                    <Text mt={0.5} fontSize="sm" color="#1e293b" fontWeight="700">
+                                      {formatDateTime(selectedItem.supportRequestedAt || selectedItem.requestedAt)}
+                                    </Text>
+                                    <Text mt={0.5} fontSize="xs" color="#64748b">
+                                      Chuyên môn: {selectedDispatchTagLabel}
+                                    </Text>
+                                  </Box>
+                                </SimpleGrid>
+
+                                {!canLeaderSelectSupportTeam && (
+                                  <Alert mt={2.5} status="success" borderRadius="lg" bg="green.50" border="1px solid" borderColor="green.100" py={2} px={3}>
+                                    <AlertIcon color="green.500" boxSize={4} />
+                                    <Text fontSize="xs" color="green.700">
+                                      Đã xác nhận thợ hỗ trợ:{" "}
+                                      <strong>{selectedIncomingSupportAssignment.technicianName || "Đã chọn"}</strong>
+                                      {selectedIncomingSupportAssignment.assistantTechnicianName
+                                        ? `, phụ: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
+                                        : ""}
+                                      .
+                                    </Text>
+                                  </Alert>
+                                )}
+
+                                <SimpleGrid mt={2.5} columns={{ base: 1, md: 2 }} spacing={2.5}>
+                                  <FormControl>
+                                    <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Thợ chính tổ phụ</FormLabel>
+                                    <FilterDropdown
+                                      id="leader-support-response-lead"
+                                      value={leaderSupportResponseLeadTechnicianId}
+                                      options={supportResponseLeadOptions}
+                                      onChange={(nextValue) => {
+                                        const nextLeadId = toPositiveNumber(nextValue);
+                                        const currentAssistantId = toPositiveNumber(leaderSupportResponseAssistantTechnicianId);
+                                        setLeaderSupportResponseLeadTechnicianId(nextValue);
+                                        if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                          setLeaderSupportResponseAssistantTechnicianId("");
+                                        }
+                                      }}
+                                      minWidth="100%"
+                                      disabled={!canLeaderSelectSupportTeam}
+                                    />
+                                  </FormControl>
+                                  <FormControl>
+                                    <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Thợ phụ tổ phụ</FormLabel>
+                                    <FilterDropdown
+                                      id="leader-support-response-assistant"
+                                      value={leaderSupportResponseAssistantTechnicianId}
+                                      options={supportResponseAssistantOptions}
+                                      onChange={(nextValue) => {
+                                        const nextAssistantId = toPositiveNumber(nextValue);
+                                        const currentLeadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
+                                        if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                          setLeaderSupportResponseAssistantTechnicianId("");
+                                          return;
+                                        }
+                                        setLeaderSupportResponseAssistantTechnicianId(nextValue);
+                                      }}
+                                      minWidth="100%"
+                                      disabled={!canLeaderSelectSupportTeam}
+                                    />
+                                  </FormControl>
+                                </SimpleGrid>
+
+                                <FormControl mt={2.5}>
+                                  <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Ghi chú phản hồi của tổ phụ</FormLabel>
+                                  <Textarea
+                                    size="sm"
+                                    borderRadius="md"
+                                    value={leaderSupportResponseNote}
+                                    onChange={(event) => setLeaderSupportResponseNote(event.target.value)}
+                                    placeholder="Ví dụ: tổ phụ tiếp nhận hỗ trợ tại khoang DN-001 trong 15 phút nữa..."
+                                    isDisabled={!canLeaderSelectSupportTeam}
+                                  />
+                                </FormControl>
+
                                 <Button
                                   mt={3}
                                   size="sm"
                                   colorScheme="orange"
-                                  variant="solid"
-                                  onClick={handleLeaderSupport}
+                                  borderRadius="lg"
+                                  onClick={handleLeaderSupportSelection}
                                   isLoading={saving}
-                                  isDisabled={!canLeaderSupport || leaderSupportTeamIds.length === 0}
-                                  bg={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.200" : "orange.500"}
-                                  color={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.500" : "white"}
-                                  borderWidth="1px"
-                                  borderColor={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.300" : "orange.600"}
-                                  _hover={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.600", transform: "translateY(-1px)" }}
-                                  _active={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.700" }}
-                                  _disabled={{ opacity: 1, cursor: "not-allowed" }}
+                                  isDisabled={!canLeaderSelectSupportTeam || !toPositiveNumber(leaderSupportResponseLeadTechnicianId)}
                                 >
-                                  Gửi yêu cầu đến tổ phụ
+                                  {canLeaderSelectSupportTeam ? "Xác nhận thợ hỗ trợ của tổ phụ" : "Đã xác nhận nhân sự hỗ trợ"}
                                 </Button>
-                              </>
+                              </Box>
+                            )}
+
+                            {/* Section 3: Gửi hủy lệnh (Collapsible) */}
+                            <Box
+                              border="1px dashed"
+                              borderColor="#cbd5e1"
+                              borderRadius="xl"
+                              p={3}
+                              bg="#f8fafc"
+                              position="relative"
+                              zIndex={2}
+                            >
+                              <Flex
+                                justify="space-between"
+                                align="center"
+                                cursor="pointer"
+                                onClick={() => setIsLeaderCancelSectionExpanded((prev) => !prev)}
+                              >
+                                <Text fontSize={{ base: "sm", md: "15px" }} fontWeight="800" color="#64748b">
+                                  3. Cần hủy lệnh hoặc từ chối nhận xe?
+                                </Text>
+                                <Button size="xs" variant="ghost" color="#94a3b8" fontSize="xs">
+                                  {isLeaderCancelSectionExpanded ? "Thu gọn ▲" : "Mở form hủy ▼"}
+                                </Button>
+                              </Flex>
+
+                              {isLeaderCancelSectionExpanded && (
+                                <Box mt={3} pt={3} borderTop="1px solid #e2e8f0">
+                                  <FormControl>
+                                    <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Lý do hủy</FormLabel>
+                                    <FilterDropdown
+                                      id="leader-cancel-reason"
+                                      value={leaderCancelReason}
+                                      options={cancelReasonOptions}
+                                      onChange={setLeaderCancelReason}
+                                      minWidth="100%"
+                                    />
+                                  </FormControl>
+                                  <FormControl mt={2}>
+                                    <FormLabel fontSize="xs" fontWeight="700" color="#475569" mb={1}>Ghi chú bổ sung</FormLabel>
+                                    <Textarea
+                                      size="sm"
+                                      borderRadius="md"
+                                      value={leaderCancelNote}
+                                      onChange={(event) => setLeaderCancelNote(event.target.value)}
+                                      placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
+                                    />
+                                  </FormControl>
+                                  <Button
+                                    mt={3}
+                                    height="40px"
+                                    fontSize="sm"
+                                    fontWeight="700"
+                                    colorScheme="red"
+                                    variant="outline"
+                                    borderRadius="lg"
+                                    onClick={handleLeaderCancelRequest}
+                                    isLoading={saving}
+                                    isDisabled={!canLeaderCancel}
+                                  >
+                                    Gửi yêu cầu hủy tới Quản đốc
+                                  </Button>
+                                  {selectedItem?.isCancelPendingApproval && (
+                                    <Text mt={2} fontSize="xs" color="#dc2626" fontWeight="700">
+                                      * Lệnh này đang có yêu cầu hủy chờ Quản đốc duyệt.
+                                    </Text>
+                                  )}
+                                </Box>
+                              )}
+                            </Box>
+                          </VStack>
+                        )
+                      ) : (
+                        <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={3.5} mt={3.5} position="relative" zIndex={10}>
+                          <Box
+                            border="1px solid"
+                            borderColor="#e2e8f0"
+                            borderRadius="xl"
+                            p={{ base: 3, sm: 3.5 }}
+                            bg="white"
+                            boxShadow="0 1px 2px rgba(0,0,0,0.03)"
+                            position="relative"
+                            zIndex={5}
+                          >
+                            <Flex justify="space-between" align="center" mb={2}>
+                              <HStack spacing={2}>
+                                <Text fontSize="sm" fontWeight="800" color="#0f172a">
+                                  2. Chỉ định tổ phối hợp
+                                </Text>
+                                {managerSupportingTeamIds.length > 0 && (
+                                  <Badge bg="#dbeafe" color="#1e40af" border="1px solid #bfdbfe" borderRadius="md" px={2} py={0.5} fontSize="xs" fontWeight="700">
+                                    {managerSupportingTeamIds.length} tổ đã chọn
+                                  </Badge>
+                                )}
+                              </HStack>
+                              <Button
+                                size="xs"
+                                colorScheme="blue"
+                                variant="outline"
+                                borderRadius="md"
+                                onClick={() => setIsManagerSupportSectionExpanded((prev) => !prev)}
+                                isDisabled={!canManagerConfigureSupportingTeams}
+                              >
+                                {isManagerSupportSectionExpanded ? "Thu gọn ▲" : "+ Thêm tổ phối hợp ▼"}
+                              </Button>
+                            </Flex>
+
+                            {isManagerSupportSectionExpanded ? (
+                              <SupportingTeamSelector
+                                value={managerSupportingTeamIds}
+                                onChange={(values) => setManagerSupportingTeamIds((values || []).map((value) => String(value)))}
+                                options={managerSupportingTeamOptions}
+                                assignmentMap={managerSupportingAssignmentMap}
+                                onAssignmentChange={handleManagerSupportingAssignmentChange}
+                                technicianOptionsByTeam={managerSupportingTechnicianOptionsByTeam}
+                                emptyText="Chưa có tổ phối hợp phù hợp."
+                                helperText="Tổ chính là tổ được giao trách nhiệm chính thức."
+                              />
                             ) : (
-                              <Text fontSize="sm" color="gray.500">
-                                Nhấn "Cần tổ phụ hỗ trợ" để mở danh sách tổ phụ và tạo yêu cầu phối hợp.
+                              <Text mt={1} fontSize="xs" color="#64748b">
+                                {canManagerConfigureSupportingTeams
+                                  ? 'Nhấn "Thêm tổ phối hợp" để chọn tổ phụ và chỉ định cặp thợ cho từng tổ.'
+                                  : "Vui lòng chọn tổ thực hiện trước khi chỉ định tổ phối hợp."}
                               </Text>
                             )}
                           </Box>
-                        </>
-                      )}
 
-                      {selectedIncomingSupportAssignment && (
-                        <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="#fffdf5">
-                          <Text fontWeight="700" color="orange.700" mb={2}>
-                            Xác nhận nhân sự hỗ trợ của tổ phụ
-                          </Text>
-
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
-                            <Box p={2.5} border="1px solid" borderColor="orange.100" borderRadius="lg" bg="white">
-                              <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase">
-                                Tổ chính yêu cầu
-                              </Text>
-                              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
-                                {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa xác định"}
-                              </Text>
-                              <Text mt={1} fontSize="sm" color="gray.600">
-                                Cần {selectedIncomingSupportAssignment.requestedTechnicianCount} thợ từ tổ của bạn
-                              </Text>
-                            </Box>
-                            <Box p={2.5} border="1px solid" borderColor="gray.200" borderRadius="lg" bg="white">
-                              <Text fontSize="xs" color="gray.600" fontWeight="700" textTransform="uppercase">
-                                Thời điểm yêu cầu
-                              </Text>
-                              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
-                                {formatDateTime(selectedItem.supportRequestedAt || selectedItem.requestedAt)}
-                              </Text>
-                              <Text mt={1} fontSize="xs" color="gray.500">
-                                Chuyên môn: {selectedDispatchTagLabel}
-                              </Text>
-                            </Box>
-                          </SimpleGrid>
-
-                          {!canLeaderSelectSupportTeam && (
-                            <Alert mt={2.5} status="success" borderRadius="lg" bg="green.50" border="1px solid" borderColor="green.100">
-                              <AlertIcon color="green.500" />
-                              <Text fontSize="sm" color="green.700">
-                                Đã xác nhận thợ hỗ trợ:{" "}
-                                <strong>{selectedIncomingSupportAssignment.technicianName || "Đã chọn"}</strong>
-                                {selectedIncomingSupportAssignment.assistantTechnicianName
-                                  ? `, phụ: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
-                                  : ""}
-                                .
-                              </Text>
-                            </Alert>
-                          )}
-
-                          <SimpleGrid mt={2.5} columns={{ base: 1, md: 2 }} spacing={2.5}>
-                            <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Thợ chính tổ phụ</FormLabel>
-                              <FilterDropdown
-                                id="leader-support-response-lead"
-                                value={leaderSupportResponseLeadTechnicianId}
-                                options={supportResponseLeadOptions}
-                                onChange={(nextValue) => {
-                                  const nextLeadId = toPositiveNumber(nextValue);
-                                  const currentAssistantId = toPositiveNumber(leaderSupportResponseAssistantTechnicianId);
-                                  setLeaderSupportResponseLeadTechnicianId(nextValue);
-                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
-                                    setLeaderSupportResponseAssistantTechnicianId("");
-                                  }
-                                }}
-                                minWidth="100%"
-                                disabled={!canLeaderSelectSupportTeam}
-                              />
-                            </FormControl>
-                            <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Thợ phụ tổ phụ</FormLabel>
-                              <FilterDropdown
-                                id="leader-support-response-assistant"
-                                value={leaderSupportResponseAssistantTechnicianId}
-                                options={supportResponseAssistantOptions}
-                                onChange={(nextValue) => {
-                                  const nextAssistantId = toPositiveNumber(nextValue);
-                                  const currentLeadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
-                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
-                                    setLeaderSupportResponseAssistantTechnicianId("");
-                                    return;
-                                  }
-                                  setLeaderSupportResponseAssistantTechnicianId(nextValue);
-                                }}
-                                minWidth="100%"
-                                disabled={!canLeaderSelectSupportTeam}
-                              />
-                            </FormControl>
-                          </SimpleGrid>
-
-                          <FormControl mt={2.5}>
-                            <FormLabel fontSize="sm" mb={1}>Ghi chú phản hồi của tổ phụ</FormLabel>
-                            <Textarea
-                              size="sm"
-                              value={leaderSupportResponseNote}
-                              onChange={(event) => setLeaderSupportResponseNote(event.target.value)}
-                              placeholder="Ví dụ: tổ phụ tiếp nhận hỗ trợ tại khoang DN-001 trong 15 phút nữa..."
-                              isDisabled={!canLeaderSelectSupportTeam}
-                            />
-                          </FormControl>
-
-                          <Button
-                            mt={3}
-                            size="sm"
-                            colorScheme="orange"
-                            onClick={handleLeaderSupportSelection}
-                            isLoading={saving}
-                            isDisabled={!canLeaderSelectSupportTeam || !toPositiveNumber(leaderSupportResponseLeadTechnicianId)}
-                          >
-                            {canLeaderSelectSupportTeam ? "Xác nhận thợ hỗ trợ của tổ phụ" : "Đã xác nhận nhân sự hỗ trợ"}
-                          </Button>
-                        </Box>
-                      )}
-
-                      {canCurrentTeamLeadPrimaryFlow && (
-                        <>
-                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
-                            <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
-                              <FilterDropdown
-                                id="leader-cancel-reason"
-                                value={leaderCancelReason}
-                                options={cancelReasonOptions}
-                                onChange={setLeaderCancelReason}
-                                minWidth="100%"
-                              />
-                            </FormControl>
-                            <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
-                              <Textarea
-                                size="sm"
-                                value={leaderCancelNote}
-                                onChange={(event) => setLeaderCancelNote(event.target.value)}
-                                placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
-                              />
-                            </FormControl>
-                            <Button
-                              mt={3}
-                              size="sm"
-                              colorScheme="red"
-                              variant="outline"
-                              onClick={handleLeaderCancelRequest}
-                              isLoading={saving}
-                              isDisabled={!canLeaderCancel}
-                            >
-                              Gửi yêu cầu hủy
-                            </Button>
-                          </Box>
-                        </>
-                      )}
-                    </VStack>
-                  ) : (
-                    <VStack align="stretch" spacing={4}>
-                      <Divider />
-                      <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
-
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và override phân công</Text>
-
-                        <FormControl>
-                          <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                              <FilterDropdown
-                                id="manager-assignment-team"
-                                value={managerTeamId}
-                                options={assignmentTeamOptions}
-                                onChange={(nextValue) => {
-                                  if (String(nextValue || "") !== String(managerTeamId || "")) {
-                                    setManagerLeadTechnicianId("");
-                                    setManagerAssistantTechnicianId("");
-                                    setManagerBayId("");
-                                  }
-                                  setManagerTeamId(nextValue);
-                                }}
-                                minWidth={300}
-                              />
-                            </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
-                          <FilterDropdown
-                            id="manager-main-tech"
-                            value={managerLeadTechnicianId}
-                            options={managerPrimaryTechnicianOptions}
-                                onChange={(nextValue) => {
-                                  const nextLeadId = toPositiveNumber(nextValue);
-                                  const currentAssistantId = toPositiveNumber(managerAssistantTechnicianId);
-                                  setManagerLeadTechnicianId(nextValue);
-                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
-                                    setManagerAssistantTechnicianId("");
-                                  }
-                                }}
-                                minWidth="100%"
-                                disabled={!hasManagerTeamSelected}
-                              />
-                            </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
-                          <FilterDropdown
-                            id="manager-assistant-tech"
-                            value={managerAssistantTechnicianId}
-                            options={managerAssistantTechnicianOptions}
-                                onChange={(nextValue) => {
-                                  const nextAssistantId = toPositiveNumber(nextValue);
-                                  const currentLeadId = toPositiveNumber(managerLeadTechnicianId);
-                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
-                                    setManagerAssistantTechnicianId("");
-                                    return;
-                                  }
-                                  setManagerAssistantTechnicianId(nextValue);
-                                }}
-                                minWidth="100%"
-                                disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
-                              />
-                            </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Khoang (bắt buộc)</FormLabel>
-                          <FilterDropdown
-                            id="manager-bay-select"
-                                value={managerBayId}
-                                options={baySelectionOptions}
-                                onChange={setManagerBayId}
-                                minWidth="100%"
-                                disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
-                              />
-                            </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Lý do override</FormLabel>
-                          <Input
-                            size="sm"
+                          <Box
+                            ref={cancelRequestSectionRef}
+                            border="1px solid"
+                            borderColor="#e2e8f0"
                             borderRadius="xl"
-                            value={managerOverrideReason}
-                            onChange={(event) => setManagerOverrideReason(event.target.value)}
-                            placeholder="Ví dụ: xe chờ quá 10 phút, cần điều tải..."
-                          />
-                        </FormControl>
-
-                        <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
-                          <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                            Lưu - phân quyền
-                          </Text>
-                          <Text mt={1} fontSize="sm" color="blue.700">
-                            Quản đốc có quyền override tổ, cặp thợ, khoang và chủ động điều phối tổ phù hợp để cân tải nhàn theo thực tế xưởng.
-                          </Text>
-                        </Box>
-                        <HStack mt={3} spacing={2} align="stretch">
-                          <Button
-                            variant="unstyled"
-                            {...actionButtonBaseProps}
-                            border="2px solid"
-                            borderColor="#2563eb"
+                            p={{ base: 3, sm: 3.5 }}
                             bg="white"
-                            color="#1d4ed8"
-                            _hover={{ bg: "#eff6ff" }}
-                            onClick={() => loadDispatchSuggestion("manager")}
-                            isLoading={suggestionLoading}
-                            isDisabled={!selectedItem || !toPositiveNumber(managerTeamId)}
+                            boxShadow="0 1px 2px rgba(0,0,0,0.03)"
+                            position="relative"
+                            zIndex={2}
                           >
-                            Gợi ý tự động
-                          </Button>
-                          <Button
-                            variant="unstyled"
-                            {...actionButtonBaseProps}
-                            border="2px solid"
-                            borderColor="#2563eb"
-                            bg="#2563eb"
-                            color="white"
-                            _hover={{ bg: "#1d4ed8" }}
-                            onClick={handleManagerOverride}
-                            isLoading={saving}
-                            isDisabled={!canManagerOverride || !toPositiveNumber(managerTeamId) || !toPositiveNumber(managerLeadTechnicianId)}
-                          >
-                            Giao lại ngay
-                          </Button>
-                        </HStack>
-
-                        <Box mt={3}>
-                          <SuggestionPreview suggestion={suggestion} />
-                        </Box>
-                      </Box>
-
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>2) Chỉ định tổ phối hợp (tuỳ chọn)</Text>
-                        <HStack justify="space-between" align="center" mb={2}>
-                          <Button
-                            size="sm"
-                            colorScheme="blue"
-                            variant="outline"
-                            onClick={() => setIsManagerSupportSectionExpanded((prev) => !prev)}
-                            isDisabled={!canManagerConfigureSupportingTeams}
-                          >
-                            {isManagerSupportSectionExpanded ? "Thu gọn tổ phối hợp" : "Thêm tổ phối hợp"}
-                          </Button>
-                          {managerSupportingTeamIds.length > 0 && (
-                            <Badge colorScheme="blue" borderRadius="full" px={2.5}>
-                              {managerSupportingTeamIds.length} tổ đã chọn
-                            </Badge>
-                          )}
-                        </HStack>
-
-                        {isManagerSupportSectionExpanded ? (
-                          <SupportingTeamSelector
-                            value={managerSupportingTeamIds}
-                            onChange={(values) => setManagerSupportingTeamIds((values || []).map((value) => String(value)))}
-                            options={managerSupportingTeamOptions}
-                            assignmentMap={managerSupportingAssignmentMap}
-                            onAssignmentChange={handleManagerSupportingAssignmentChange}
-                            technicianOptionsByTeam={managerSupportingTechnicianOptionsByTeam}
-                            emptyText="Chưa có tổ phối hợp phù hợp."
-                            helperText="Tổ chính là tổ được giao trách nhiệm chính thức."
-                          />
-                        ) : (
-                          <Text mt={1} fontSize="sm" color="gray.500">
-                            {canManagerConfigureSupportingTeams
-                              ? 'Nhấn "Thêm tổ phối hợp" để chọn tổ phụ và chỉ định cặp thợ cho từng tổ.'
-                              : "Vui lòng chọn tổ thực hiện trước khi chỉ định tổ phối hợp."}
-                          </Text>
-                        )}
-                      </Box>
-
-                      <Box ref={cancelRequestSectionRef} border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>3) Duyệt/Từ chối yêu cầu hủy</Text>
-                        {selectedItem.isCancelPendingApproval ? (
-                          <VStack align="stretch" spacing={3}>
-                            <Box p={3} border="1px solid" borderColor="orange.200" borderRadius="lg" bg="orange.50">
-                              <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase" mb={1}>
-                                Đang chờ quản đốc quyết định
-                              </Text>
-                              <VStack align="start" spacing={1}>
-                                <Text fontSize="sm" color="gray.700">
-                                  <strong>Lý do:</strong> {cancelRequestReasonText}
-                                </Text>
-                                <Text fontSize="sm" color="gray.700">
-                                  <strong>Người gửi:</strong> {cancelRequestDetailLoading ? "Đang tải..." : cancelRequestSenderText}
-                                </Text>
-                                <Text fontSize="sm" color="gray.700">
-                                  <strong>Thời điểm gửi:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
-                                </Text>
+                            <Text fontSize="sm" fontWeight="800" color="#0f172a" mb={2}>
+                              3. Duyệt / Từ chối yêu cầu hủy
+                            </Text>
+                            {selectedItem.isCancelPendingApproval ? (
+                              <VStack align="stretch" spacing={2.5}>
+                                <Box p={2.5} border="1px solid" borderColor="#fde68a" borderRadius="lg" bg="#fffdf5">
+                                  <Text fontSize="11px" color="#b45309" fontWeight="700" textTransform="uppercase" mb={1}>
+                                    Đang chờ quản đốc quyết định
+                                  </Text>
+                                  <VStack align="start" spacing={1}>
+                                    <Text fontSize="xs" color="#1e293b">
+                                      <strong>Lý do:</strong> {cancelRequestReasonText}
+                                    </Text>
+                                    <Text fontSize="xs" color="#1e293b">
+                                      <strong>Người gửi:</strong> {cancelRequestDetailLoading ? "Đang tải..." : cancelRequestSenderText}
+                                    </Text>
+                                    <Text fontSize="xs" color="#1e293b">
+                                      <strong>Thời điểm gửi:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
+                                    </Text>
+                                  </VStack>
+                                </Box>
+                                <Button
+                                  size="sm"
+                                  colorScheme="orange"
+                                  variant="outline"
+                                  borderRadius="lg"
+                                  onClick={handleOpenManagerCancelDecisionModal}
+                                >
+                                  Xem chi tiết và duyệt/hủy
+                                </Button>
                               </VStack>
-                            </Box>
-                            <Button
-                              size="sm"
-                              colorScheme="orange"
-                              variant="outline"
-                              onClick={handleOpenManagerCancelDecisionModal}
-                            >
-                              Xem chi tiết và duyệt/hủy
-                            </Button>
-                          </VStack>
-                        ) : (
-                          <Text mt={1} fontSize="sm" color="gray.500">Không có yêu cầu hủy chờ duyệt.</Text>
-                        )}
-                      </Box>
-                      </SimpleGrid>
-                    </VStack>
-                  )}
-                </VStack>
+                            ) : (
+                              <Text mt={1} fontSize="xs" color="#64748b">Không có yêu cầu hủy chờ duyệt.</Text>
+                            )}
+                          </Box>
+                        </SimpleGrid>
+                      )}
+                    </Box>
+                  );
+                })()
               )}
-            </Box>
-          </GridItem>
+            </GridItem>
           )}
         </Grid>
       </VStack>

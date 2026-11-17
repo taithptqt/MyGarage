@@ -9,7 +9,7 @@ import {
   ShoppingBag,
   X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   getCustomerConversationOrders,
@@ -209,8 +209,11 @@ function MessengerOrderCard({ orderCard, onClick }) {
 export default function CustomerMessengerWidget() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isStaffRoute = location.pathname.startsWith("/admin") || location.pathname.startsWith("/workshop");
+  const isPublicQuotationRoute = location.pathname.startsWith("/quote-access");
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
-  const isCustomer = isAuthenticated && roleCode === "CUSTOMER";
+  const isCustomer = !isStaffRoute && !isPublicQuotationRoute && isAuthenticated;
   const customerName = String(user?.fullName || user?.FullName || "Bạn");
 
   const [isOpen, setIsOpen] = useState(false);
@@ -594,7 +597,7 @@ export default function CustomerMessengerWidget() {
     );
   }
 
-  if (!isCustomer) return null;
+  if (isStaffRoute || isPublicQuotationRoute) return null;
 
   return (
     <>
@@ -901,7 +904,13 @@ export default function CustomerMessengerWidget() {
       <button
         type="button"
         className="messenger-floating-btn"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          if (!isAuthenticated) {
+            navigate("/login?redirect=" + encodeURIComponent(location.pathname));
+            return;
+          }
+          setIsOpen(true);
+        }}
         aria-label="Mở chat với lễ tân"
       >
         <MessengerBadgeIcon className="messenger-floating-icon" aria-hidden="true" />

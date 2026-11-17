@@ -91,6 +91,9 @@ public partial class GarageContext
             entity.HasIndex(e => e.Code, "UQ__ServiceO__A25C5AA7FBF72344").IsUnique();
 
             entity.Property(e => e.CancellationReason).HasMaxLength(500);
+            entity.Property(e => e.HandoverReceiverName).HasMaxLength(255);
+            entity.Property(e => e.HandoverReceiverPhone).HasMaxLength(30);
+            entity.Property(e => e.HandoverNotes).HasMaxLength(2000);
             entity.Property(e => e.ArrivalTime).HasColumnType("datetime2");
             entity.Property(e => e.Code)
                 .HasMaxLength(50)

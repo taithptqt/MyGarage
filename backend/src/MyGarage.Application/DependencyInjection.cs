@@ -82,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<IBayAdminQueryService, BayAdminQueryService>();
         services.AddScoped<IBayAdminManagementService, BayAdminManagementService>();
         services.AddScoped<IBayAdminVehicleAssignmentService, BayAdminVehicleAssignmentService>();
+        services.AddScoped<IBayOccupancySnapshotSource, BayOccupancySnapshotSource>();
         services.AddScoped<IBayAdminCommandFacade, BayAdminCommandFacade>();
         services.AddScoped<ICustomerService, CustomerService>();
 
@@ -118,7 +119,8 @@ public static class DependencyInjection
         services.AddScoped<IVehicleConditionLogCommandFacade, VehicleConditionLogCommandFacade>();
         services.AddScoped<IDiagnosisRoutingService, DiagnosisRoutingService>();
         services.AddScoped<IDiagnosisIntakeScoringService, DiagnosisIntakeScoringService>();
-        services.AddScoped<IDiagnosisHandoverSnapshotService, DiagnosisHandoverSnapshotService>();
+        services.AddScoped<IDiagnosisIntakeKpiService, DiagnosisIntakeKpiService>();
+        services.AddScoped<IDiagnosisHandoverSnapshotService>(sp => new DiagnosisHandoverSnapshotService(sp.GetRequiredService<MyGarage.Application.Interfaces.Stores.Workshop.IDiagnosisStore>(), sp.GetRequiredService<IDiagnosisIntakeKpiService>()));
         services.AddScoped<IDiagnosisIntakeHandoverService, DiagnosisIntakeHandoverService>();
         services.AddScoped<IDiagnosisDispatchBoardService, DiagnosisDispatchBoardService>();
         services.AddScoped<IDiagnosisDispatchSupportService, DiagnosisDispatchSupportService>();
@@ -183,12 +185,16 @@ public static class DependencyInjection
         services.AddScoped<IStaffService, StaffService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IAdminPartsImageService, AdminPartsImageService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IServiceCategoryService, ServiceCategoryService>();
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<IInventoryAdminReportingService, InventoryAdminReportingService>();
-        services.AddScoped<IInventoryAdminWorkflowService, InventoryAdminWorkflowService>();
+        services.AddScoped<IInventoryAdminStockAlertService, InventoryAdminStockAlertService>();
+        services.AddScoped<IInventoryAdminApprovalService, InventoryAdminApprovalService>();
+        services.AddScoped<IInventoryAdminWorkflowService>(sp => new InventoryAdminWorkflowService(sp.GetRequiredService<IInventoryAdminStockAlertService>(), sp.GetRequiredService<IInventoryAdminApprovalService>()));
         services.AddScoped<IInventoryAdminService, InventoryAdminService>();
+        services.AddScoped<IInventoryAdminSettingsService, InventoryAdminSettingsService>();
         services.AddScoped<IStockAlertSyncService>(sp => sp.GetRequiredService<IInventoryAdminService>());
         services.AddScoped<IStaffScheduleService, StaffScheduleService>();
         services.AddScoped<IAiForecastService, AiForecastService>();
@@ -197,6 +203,8 @@ public static class DependencyInjection
         services.AddScoped<IAiSmartDispatchingService, AiSmartDispatchingService>();
         services.AddScoped<IApprovalRequestService, ApprovalRequestService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IAuditLogReader>(sp => (IAuditLogReader)sp.GetRequiredService<IAuditLogService>());
+        services.AddScoped<IAuditLogWriter>(sp => (IAuditLogWriter)sp.GetRequiredService<IAuditLogService>());
 
         services.AddScoped<IBayService, BayService>();
         services.AddScoped<IBayAuthorizationService, BayAuthorizationService>();

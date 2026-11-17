@@ -38,6 +38,12 @@ namespace MyGarage.Services
                         "Thiếu ServiceOrderId hợp lệ để tạo phiếu xuất cổng.");
                 }
 
+                if (HasScanConfirmation(itemDto.Status, itemDto.ScannedBy, itemDto.SecurityCheckedAt, itemDto.PassedAt))
+                {
+                    return GatePassCommandResult<GatePassResponseDto>.BadRequest(
+                        "Thông tin xác nhận ra cổng phải được ghi qua thao tác quét phiếu.");
+                }
+
                 var lockError = await ValidateGatePassMutationAsync(
                     itemDto.ServiceOrderId,
                     existingStatus: null,
@@ -87,6 +93,12 @@ namespace MyGarage.Services
                         "Dữ liệu cập nhật phiếu xuất cổng không hợp lệ.");
                 }
 
+                if (HasScanConfirmation(itemDto.Status, itemDto.ScannedBy, itemDto.SecurityCheckedAt, itemDto.PassedAt))
+                {
+                    return GatePassCommandResult<GatePassResponseDto>.BadRequest(
+                        "Thông tin xác nhận ra cổng phải được ghi qua thao tác quét phiếu.");
+                }
+
                 var responseDto = await _gatePassService.UpdateDtoAsync(id, itemDto);
                 if (responseDto == null)
                 {
@@ -133,6 +145,9 @@ namespace MyGarage.Services
                 return GatePassCommandResult.BadRequest(ex.Message);
             }
         }
+
+        private static bool HasScanConfirmation(string? status, long? scannedBy, DateTime? checkedAt, DateTime? passedAt)
+            => SharedOperationsDomainRules.IsGatePassFinalized(status, passedAt) || scannedBy.HasValue || checkedAt.HasValue;
 
         private async Task<string?> ValidateGatePassMutationAsync(
             long serviceOrderId,

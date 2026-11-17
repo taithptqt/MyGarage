@@ -28,80 +28,80 @@ async function requestSafeWithDualRoute(v1Url, legacyUrl, options = {}) {
 
 export const voucherApi = {
   getDashboard: () =>
-    requestWithDualRoute("/api/v1/vouchers/dashboard", "/api/vouchers/dashboard", { method: "GET" }),
+    requestWithDualRoute("/api/v1/vouchers/dashboard", "/api/v1/vouchers/dashboard", { method: "GET" }),
 
   getVouchers: (params) =>
-    requestWithDualRoute("/api/v1/vouchers", "/api/vouchers", { method: "GET", params }),
+    requestWithDualRoute("/api/v1/vouchers", "/api/v1/vouchers", { method: "GET", params }),
 
   getVoucherById: (id) =>
-    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/vouchers/${id}`, { method: "GET" }),
+    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/v1/vouchers/${id}`, { method: "GET" }),
 
   createVoucher: (data) =>
-    requestWithDualRoute("/api/v1/vouchers", "/api/vouchers", { method: "POST", data }),
+    requestWithDualRoute("/api/v1/vouchers", "/api/v1/vouchers", { method: "POST", data }),
 
   updateVoucher: (id, data) =>
-    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/vouchers/${id}`, { method: "PUT", data }),
+    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/v1/vouchers/${id}`, { method: "PUT", data }),
 
   activateVoucher: (id) =>
-    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/vouchers/${id}`, { method: "PATCH", data: { status: "ACTIVE" } }),
+    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/v1/vouchers/${id}`, { method: "PATCH", data: { status: "ACTIVE" } }),
 
   pauseVoucher: (id) =>
-    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/vouchers/${id}`, { method: "PATCH", data: { status: "PAUSED" } }),
+    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/v1/vouchers/${id}`, { method: "PATCH", data: { status: "PAUSED" } }),
 
   revokeVoucher: (id) =>
-    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/vouchers/${id}`, { method: "PATCH", data: { status: "REVOKED" } }),
+    requestWithDualRoute(`/api/v1/vouchers/${id}`, `/api/v1/vouchers/${id}`, { method: "PATCH", data: { status: "REVOKED" } }),
 
   getCampaigns: (params) =>
-    requestWithDualRoute("/api/v1/voucher-campaigns", "/api/voucher-campaigns", { method: "GET", params }),
+    requestWithDualRoute("/api/v1/voucher-campaigns", "/api/v1/voucher-campaigns", { method: "GET", params }),
 
   getCampaignSummary: (id) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/summary`, `/api/voucher-campaigns/${id}/summary`, { method: "GET" }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/summary`, `/api/v1/voucher-campaigns/${id}/summary`, { method: "GET" }),
 
   getCampaignVoucherPage: (id, params) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/voucher-page`, `/api/voucher-campaigns/${id}/voucher-page`, { method: "GET", params }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/vouchers`, `/api/v1/voucher-campaigns/${id}/voucher-page`, { method: "GET", params }),
 
   getCampaignById: (id) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/voucher-campaigns/${id}`, { method: "GET" }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/v1/voucher-campaigns/${id}`, { method: "GET" }),
 
   createCampaign: (data) =>
-    requestWithDualRoute("/api/v1/voucher-campaigns", "/api/voucher-campaigns", { method: "POST", data }),
+    requestWithDualRoute("/api/v1/voucher-campaigns", "/api/v1/voucher-campaigns", { method: "POST", data }),
 
   updateCampaign: (id, data) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/voucher-campaigns/${id}`, { method: "PUT", data }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/v1/voucher-campaigns/${id}`, { method: "PUT", data }),
 
   deleteCampaign: (id) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/voucher-campaigns/${id}`, { method: "DELETE" }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}`, `/api/v1/voucher-campaigns/${id}`, { method: "DELETE" }),
 
   assignCampaignVouchers: (id, data) =>
-    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/voucher-links`, `/api/voucher-campaigns/${id}/voucher-links`, { method: "POST", data }),
+    requestWithDualRoute(`/api/v1/voucher-campaigns/${id}/voucher-links`, `/api/v1/voucher-campaigns/${id}/voucher-links`, { method: "POST", data }),
 
   getRedemptions: (params) =>
-    requestWithDualRoute("/api/v1/voucher-redemptions", "/api/voucher-redemptions", {
+    requestWithDualRoute("/api/v1/voucher-redemptions", "/api/v1/voucher-redemptions", {
       method: "GET",
       params: typeof params === "string" ? { status: params } : params
     }),
 
   checkVoucher: (data) =>
-    requestSafeWithDualRoute("/api/v1/voucher-redemptions/validations", "/api/voucher-redemptions/validations", { method: "POST", data }),
+    requestSafeWithDualRoute("/api/v1/voucher-redemptions/validations", "/api/v1/voucher-redemptions/validations", { method: "POST", data }),
 
   redeemVoucher: (data) =>
-    requestSafeWithDualRoute("/api/v1/voucher-redemptions/transactions", "/api/voucher-redemptions/transactions", { method: "POST", data }),
+    requestSafeWithDualRoute("/api/v1/voucher-redemptions/transactions", "/api/v1/voucher-redemptions/transactions", { method: "POST", data }),
 
   reverseRedemption: (id, data) =>
-    requestSafeWithDualRoute(`/api/v1/voucher-redemptions/transactions/${id}/reversals`, `/api/voucher-redemptions/transactions/${id}/reversals`, { method: "POST", data }),
+    requestSafeWithDualRoute(`/api/v1/voucher-redemptions/transactions/${id}/reversals`, `/api/v1/voucher-redemptions/transactions/${id}/reversals`, { method: "POST", data }),
 
   getApprovalRequests: (params) =>
-    requestWithDualRoute("/api/v1/voucher-approval-requests", "/api/voucher-approval-requests", {
+    requestWithDualRoute("/api/v1/voucher-approval-requests", "/api/v1/voucher-approval-requests", {
       method: "GET",
       params: typeof params === "string" ? { status: params } : params
     }),
 
   createApprovalRequest: (data) =>
-    requestWithDualRoute("/api/v1/voucher-approval-requests", "/api/voucher-approval-requests", { method: "POST", data }),
+    requestWithDualRoute("/api/v1/voucher-approval-requests", "/api/v1/voucher-approval-requests", { method: "POST", data }),
 
   approveRequest: (id, data) =>
-    requestWithDualRoute(`/api/v1/voucher-approval-requests/${id}`, `/api/voucher-approval-requests/${id}`, { method: "PATCH", data: { ...data, decision: "APPROVE" } }),
+    requestWithDualRoute(`/api/v1/voucher-approval-requests/${id}`, `/api/v1/voucher-approval-requests/${id}`, { method: "PATCH", data: { ...data, decision: "APPROVE" } }),
 
   rejectRequest: (id, data) =>
-    requestWithDualRoute(`/api/v1/voucher-approval-requests/${id}`, `/api/voucher-approval-requests/${id}`, { method: "PATCH", data: { ...data, decision: "REJECT" } })
+    requestWithDualRoute(`/api/v1/voucher-approval-requests/${id}`, `/api/v1/voucher-approval-requests/${id}`, { method: "PATCH", data: { ...data, decision: "REJECT" } })
 };

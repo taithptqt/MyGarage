@@ -259,8 +259,9 @@ public sealed partial class EfDiagnosisStore
             .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
             .Where(x => x.IsActive == true)
             .Where(x => x.BayType == bayTypeSpDiagnose)
-            .Select(x => new DiagnosisBayIdCodeNameRow(x.Id, x.Code, x.Name))
             .OrderBy(x => x.Code ?? x.Name ?? string.Empty)
+            .ThenBy(x => x.Id)
+            .Select(x => new DiagnosisBayIdCodeNameRow(x.Id, x.Code, x.Name))
             .ToListAsync();
     }
 

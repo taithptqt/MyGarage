@@ -29,6 +29,24 @@ import {
   toPositiveInt,
   writeStoredRetailBranchId,
 } from "@features/retail/utils/retailFormat";
+import {
+  ShoppingCart,
+  ShoppingBag,
+  Package,
+  CheckCircle2,
+  AlertCircle,
+  Trash2,
+  CreditCard,
+  Store,
+  Truck,
+  Tag,
+  ArrowRight,
+  X,
+  MapPin,
+  Receipt,
+  FileText,
+  ShieldCheck,
+} from "lucide-react";
 import "./RetailShared.css";
 import "./RetailCartPage.css";
 
@@ -849,48 +867,92 @@ export default function RetailCartPage() {
       <section className="parts-shop-hero retail-cart-hero">
         <img
           className="parts-shop-hero-image"
-          src="/assets/booking/showcase-2.jpg"
+          src="https://images.unsplash.com/photo-1778757949657-615fe09f063b?auto=format&fit=crop&w=2400&q=90"
           alt="Khu vực phụ tùng và hậu mãi MyGarage"
+          loading="eager"
         />
         <div className="parts-shop-hero-overlay retail-cart-hero-overlay" />
+        <div className="parts-shop-hero-fade" />
         <Header overlay />
         <div className="parts-shop-hero-content retail-cart-hero-content">
-          <p className="parts-shop-hero-kicker">MYGARAGE RETAIL CART</p>
-          <h1>Giỏ phụ tùng của bạn</h1>
-          <p className="parts-shop-hero-sub">
-            Chọn đúng sản phẩm cần checkout, chỉnh số lượng nhanh, rồi chốt chi nhánh và ghi chú trong một flow retail rõ ràng hơn.
-          </p>
-          <div className="parts-shop-hero-actions">
-            <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost">
-              Tiếp tục mua phụ tùng
-            </Link>
-            <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
-              Xem đơn phụ tùng
-            </Link>
+          <div className="retail-cart-hero-left">
+            <div className="retail-cart-hero-badge">
+              <span className="retail-cart-hero-badge-dot" />
+              <span>MYGARAGE RETAIL CART</span>
+            </div>
+            <h1 className="retail-cart-hero-title">Giỏ Phụ Tùng Của Bạn</h1>
+            <p className="retail-cart-hero-desc">
+              Chọn đúng sản phẩm cần checkout, chỉnh số lượng nhanh, rồi chốt chi nhánh và ghi chú trong một flow retail rõ ràng hơn.
+            </p>
+            <div className="retail-cart-hero-actions">
+              <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-primary">
+                <ShoppingBag size={17} />
+                Tiếp tục mua phụ tùng
+              </Link>
+              <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
+                <Package size={17} />
+                Xem đơn phụ tùng
+              </Link>
+            </div>
           </div>
-          <div className="parts-shop-hero-stats retail-cart-hero-stats">
-            <article className="parts-shop-hero-stat">
-              <strong>{totalLineItems}</strong>
-              <span>mặt hàng đang nằm trong cart</span>
-            </article>
-            <article className="parts-shop-hero-stat">
-              <strong>{selectedQuantity}</strong>
-              <span>sản phẩm đang được chọn để checkout</span>
-            </article>
-            <article className="parts-shop-hero-stat">
-              <strong>{formatVnd(selectedSubtotal)}</strong>
-              <span>tạm tính của các sản phẩm đã chọn</span>
-            </article>
+
+          <div className="retail-cart-hero-right">
+            <div className="retail-cart-dashboard-card">
+              <div className="retail-dash-header">
+                <div className="retail-dash-title">
+                  <ShoppingCart size={18} color="var(--parts-gold, #c5a059)" />
+                  <span>Tổng Quan Giỏ Hàng</span>
+                </div>
+                <span className="retail-dash-badge">
+                  <span className="retail-dash-dot" />
+                  {selectedLineCount > 0 ? "Sẵn sàng checkout" : "Đang duyệt giỏ"}
+                </span>
+              </div>
+
+              <div className="retail-dash-grid">
+                <div className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap" style={{ background: "rgba(197, 160, 89, 0.12)", color: "#dfbe7d" }}>
+                    <Package size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <span className="retail-dash-label">Mặt hàng trong giỏ</span>
+                    <strong className="retail-dash-value">{totalLineItems}</strong>
+                  </div>
+                </div>
+
+                <div className="retail-dash-item">
+                  <div className="retail-dash-icon-wrap" style={{ background: "rgba(50, 213, 131, 0.12)", color: "#4ee09b" }}>
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div className="retail-dash-info">
+                    <span className="retail-dash-label">Đã chọn checkout</span>
+                    <strong className="retail-dash-value">{selectedQuantity}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="retail-dash-summary-row">
+                <div className="retail-dash-summary-label">
+                  <span>Tạm tính đã chọn</span>
+                  <small>{selectedLineCount} sản phẩm được đánh dấu</small>
+                </div>
+                <div className="retail-dash-summary-price">
+                  {formatVnd(selectedSubtotal)}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <div className="parts-shop">
-        <section className="parts-shop-header">
-          <h2>Cart retail của tôi</h2>
+      <div className="parts-shop retail-cart-container">
+        <section className="parts-shop-header retail-cart-main-header">
+          <div className="retail-cart-header-meta">
+            <span className="parts-shop-section-kicker">Chi tiết giỏ hàng</span>
+            <h2>Danh sách sản phẩm trong giỏ</h2>
+          </div>
           <p>
-            Trang này giữ UX mua hàng theo kiểu cart thực dụng: chọn từng item, chọn tất cả,
-            cập nhật số lượng, bỏ item không cần checkout và chỉ gửi selected items vào đơn bán lẻ.
+            Chọn đúng sản phẩm cần checkout, chỉnh số lượng nhanh, rồi chốt chi nhánh và ghi chú trong một flow retail rõ ràng hơn.
           </p>
         </section>
 
@@ -905,14 +967,19 @@ export default function RetailCartPage() {
 
         {cart.length === 0 ? (
           <section className="parts-shop-card retail-cart-empty">
+            <div className="retail-cart-empty-icon">
+              <ShoppingCart size={44} strokeWidth={1.5} />
+            </div>
             <span className="parts-shop-section-kicker">Cart trống</span>
             <h3>Giỏ phụ tùng hiện chưa có sản phẩm nào.</h3>
             <p>Quay lại Part Shop để thêm phụ tùng rồi checkout khi bạn đã sẵn sàng.</p>
             <div className="retail-cart-empty-actions">
               <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-primary">
+                <ShoppingBag size={17} />
                 Mở Part Shop
               </Link>
               <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
+                <Package size={17} />
                 Xem đơn phụ tùng
               </Link>
             </div>
@@ -937,11 +1004,12 @@ export default function RetailCartPage() {
                   </label>
                   <button
                     type="button"
-                    className="parts-shop-btn parts-shop-btn-ghost"
+                    className="parts-shop-btn parts-shop-btn-ghost retail-cart-btn-danger"
                     onClick={removeSelectedItems}
                     disabled={!selectedItems.length}
                   >
-                    Xóa đã chọn
+                    <Trash2 size={15} />
+                    <span>Xóa đã chọn</span>
                   </button>
                 </div>
               </div>
@@ -965,11 +1033,22 @@ export default function RetailCartPage() {
                       key={item.id}
                       className={`retail-cart-item ${item.selected !== false ? "is-selected" : ""}`}
                     >
-                      <label className="retail-cart-item-check">
+                      <button
+                        type="button"
+                        className="retail-cart-item-remove-btn"
+                        onClick={() => removeFromCart(item.id)}
+                        title="Xóa phụ tùng khỏi giỏ hàng"
+                        aria-label={`Xóa ${getProductName(item)} khỏi giỏ hàng`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+
+                      <label className="retail-cart-item-check" title={`Chọn phụ tùng ${getProductName(item)}`}>
                         <input
                           type="checkbox"
                           checked={item.selected !== false}
                           onChange={(event) => setItemSelected(item.id, event.target.checked)}
+                          aria-label={`Chọn phụ tùng ${getProductName(item)}`}
                         />
                         <span className="sr-only">
                           Chọn phụ tùng {getProductName(item)}
@@ -1012,10 +1091,10 @@ export default function RetailCartPage() {
 
                         <div className="retail-cart-item-qty">
                           <span>Số lượng</span>
-                          <div className="parts-shop-qty">
+                          <div className="retail-cart-qty-stepper">
                             <button
                               type="button"
-                              className="parts-shop-btn parts-shop-btn-ghost"
+                              className="retail-cart-qty-btn"
                               onClick={() => handleCartQuantityStep(item, -1)}
                               aria-label={`Giảm số lượng ${getProductName(item)}`}
                               disabled={isOutOfStock}
@@ -1026,7 +1105,7 @@ export default function RetailCartPage() {
                               type="number"
                               min="1"
                               max={Math.max(availableQuantity ?? Number(item.qty || 1), 1)}
-                              className="parts-shop-cart-qty-input"
+                              className="retail-cart-qty-input"
                               value={item.qty}
                               onChange={(event) => handleCartQuantityChange(item, event.target.value)}
                               aria-label={`Số lượng ${getProductName(item)}`}
@@ -1034,7 +1113,7 @@ export default function RetailCartPage() {
                             />
                             <button
                               type="button"
-                              className="parts-shop-btn parts-shop-btn-ghost"
+                              className="retail-cart-qty-btn"
                               onClick={() => handleCartQuantityStep(item, 1)}
                               aria-label={`Tăng số lượng ${getProductName(item)}`}
                               disabled={isOutOfStock || isAtStockLimit}
@@ -1047,16 +1126,6 @@ export default function RetailCartPage() {
                         <div className="retail-cart-item-total">
                           <span>Thành tiền</span>
                           <strong>{formatVnd(lineTotal)}</strong>
-                        </div>
-
-                        <div className="retail-cart-item-actions">
-                          <button
-                            type="button"
-                            className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() => removeFromCart(item.id)}
-                          >
-                            Xóa
-                          </button>
                         </div>
                       </div>
                     </article>
@@ -1150,27 +1219,15 @@ export default function RetailCartPage() {
                     </div>
                   ) : null}
                 </div>
-                <label className="retail-cart-field">
+                <div className="retail-cart-field">
                   <span>Chi nhánh tiếp nhận</span>
-                  <div className="retail-cart-branch-shortcuts" role="radiogroup" aria-label="Chi nhánh tiếp nhận">
-                    {branchShortcutOptions.map((branch) => {
-                      const isActive = String(branchId) === branch.id;
-                      return (
-                        <button
-                          key={branch.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={isActive}
-                          className={`retail-cart-branch-chip${isActive ? " is-active" : ""}`}
-                          onClick={() => setBranchId(branch.id)}
-                          title={branch.fullLabel}
-                        >
-                          {branch.label}
-                        </button>
-                      );
-                    })}
+                  <div className="retail-cart-branch-fixed">
+                    <Store size={15} />
+                    <span className="retail-cart-branch-fixed-name">
+                      {selectedBranch ? getBranchLabel(selectedBranch) : "Chưa chọn chi nhánh"}
+                    </span>
                   </div>
-                </label>
+                </div>
 
                 <div className="retail-cart-field">
                   <span>Hình thức nhận hàng</span>
@@ -1182,7 +1239,8 @@ export default function RetailCartPage() {
                       className={`retail-cart-fulfillment-option${fulfillmentMethod === FULFILLMENT_METHOD.PICKUP ? " is-active" : ""}`}
                       onClick={() => setFulfillmentMethod(FULFILLMENT_METHOD.PICKUP)}
                     >
-                      Lấy tại cửa hàng
+                      <Store size={15} />
+                      <span>Lấy tại cửa hàng</span>
                     </button>
                     <button
                       type="button"
@@ -1191,7 +1249,8 @@ export default function RetailCartPage() {
                       className={`retail-cart-fulfillment-option${fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY ? " is-active" : ""}`}
                       onClick={() => setFulfillmentMethod(FULFILLMENT_METHOD.DELIVERY)}
                     >
-                      Giao hàng tận nơi
+                      <Truck size={15} />
+                      <span>Giao hàng tận nơi</span>
                     </button>
                   </div>
                   <div className="retail-cart-fulfillment-hint">{fulfillmentPreviewText}</div>
@@ -1232,14 +1291,18 @@ export default function RetailCartPage() {
                   disabled={submitting || payingOrder || !selectedItems.length || !branchId}
                   onClick={handleCheckout}
                 >
-                  {submitting
-                    ? "Đang tạo đơn..."
-                    : payingOrder
-                      ? "Đang mở PayOS..."
-                      : "Checkout sản phẩm đã chọn"}
+                  <CreditCard size={18} />
+                  <span>
+                    {submitting
+                      ? "Đang tạo đơn..."
+                      : payingOrder
+                        ? "Đang mở PayOS..."
+                        : "Checkout sản phẩm đã chọn"}
+                  </span>
                 </button>
                 <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost retail-cart-checkout-btn">
-                  Quay lại mua tiếp
+                  <ArrowRight size={16} />
+                  <span>Quay lại mua tiếp</span>
                 </Link>
               </div>
 
@@ -1264,101 +1327,183 @@ export default function RetailCartPage() {
           }}
         >
           <section
-            className="parts-shop-modal"
+            className="parts-shop-modal retail-cart-payos-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="parts-shop-modal-title"
           >
-            <div className="parts-shop-modal-head">
-              <span className="parts-shop-section-kicker">Chi tiết đơn vừa tạo</span>
-              <h3 id="parts-shop-modal-title">Xác nhận trước khi mở PayOS</h3>
-              <p>
-                Đơn {pendingOrder.orderCode} đã tạo thành công từ cart. Kiểm tra tổng tiền và thuế
-                trước khi chuyển đến cổng thanh toán.
-              </p>
-            </div>
-
-            <div className="parts-shop-modal-summary">
-              <div className="parts-shop-modal-row">
-                <span>Mã đơn</span>
-                <strong>{pendingOrder.orderCode}</strong>
-              </div>
-              <div className="parts-shop-modal-row">
-                <span>Chi nhánh</span>
-                <strong>{pendingOrder.branchLabel}</strong>
-              </div>
-              <div className="parts-shop-modal-row">
-                <span>Hình thức nhận</span>
-                <strong>
-                  {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY
-                    ? "Giao hàng tận nơi"
-                    : "Lấy tại cửa hàng"}
-                </strong>
-              </div>
-              <div className="parts-shop-modal-row">
-                <span>Chi nhánh ưu tiên</span>
-                <strong>{pendingOrder.preferredBranchLabel}</strong>
-              </div>
-              <div className="parts-shop-modal-row">
-                <span>Dự kiến nhận</span>
-                <strong>{pendingOrder.leadTimeDays} ngày</strong>
-              </div>
-              <div className="parts-shop-modal-row">
-                <span>Tạm tính</span>
-                <strong>{formatVnd(pendingOrder.subTotal)}</strong>
-              </div>
-              {pendingOrder.voucherDiscountAmount > 0 ? (
-                <div className="parts-shop-modal-row">
-                  <span>{VOUCHER_UI.CONFIRM_DISCOUNT_LABEL(pendingOrder.appliedVoucherCode || "VOUCHER")}</span>
-                  <strong style={{ color: "var(--parts-emerald, #059669)" }}>
-                    -{formatVnd(pendingOrder.voucherDiscountAmount)}
-                  </strong>
+            {/* Modal Header (Fixed at top) */}
+            <div className="retail-cart-modal-header">
+              <div className="retail-cart-modal-header-info">
+                <div className="retail-cart-modal-badge">
+                  <span className="retail-cart-modal-badge-dot"></span>
+                  <span>Đơn hàng đã khởi tạo</span>
                 </div>
-              ) : null}
-              <div className="parts-shop-modal-row">
-                <span>Thuế VAT</span>
-                <strong>{formatVnd(pendingOrder.taxAmount)}</strong>
+                <h3 id="parts-shop-modal-title" className="retail-cart-modal-title">
+                  Xác nhận &amp; Thanh toán
+                </h3>
               </div>
-              <div className="parts-shop-modal-row parts-shop-modal-row-total">
-                <span>Tổng thanh toán</span>
-                <strong>{formatVnd(pendingOrder.finalAmount)}</strong>
-              </div>
-            </div>
-
-            {pendingOrder.customerNotes ? (
-              <div className="parts-shop-modal-note">
-                <span>Ghi chú đơn</span>
-                <p>{pendingOrder.customerNotes}</p>
-              </div>
-            ) : null}
-
-            {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY && pendingOrder.deliveryAddress ? (
-              <div className="parts-shop-modal-note">
-                <span>Địa chỉ giao hàng</span>
-                <p>{pendingOrder.deliveryAddress}</p>
-              </div>
-            ) : null}
-
-            <div className="parts-shop-modal-actions">
               <button
                 type="button"
-                className="parts-shop-btn parts-shop-btn-primary"
+                className="retail-cart-modal-close"
+                onClick={() => setPendingOrder(null)}
+                disabled={payingOrder}
+                aria-label="Đóng popup"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable!) */}
+            <div className="retail-cart-modal-body">
+              {/* Order Code Callout Banner */}
+              <div className="retail-cart-modal-order-banner">
+                <div className="retail-cart-modal-order-meta">
+                  <span className="retail-cart-modal-order-label">MÃ ĐƠN HÀNG</span>
+                  <strong className="retail-cart-modal-order-code">{pendingOrder.orderCode}</strong>
+                </div>
+                <div className="retail-cart-modal-order-status">
+                  <CheckCircle2 size={16} />
+                  <span>Sẵn sàng thanh toán</span>
+                </div>
+              </div>
+
+              {/* Group 1: Fulfillment / Delivery Info */}
+              <div className="retail-cart-modal-section">
+                <h4 className="retail-cart-modal-section-title">
+                  <Store size={15} />
+                  <span>Thông tin nhận hàng</span>
+                </h4>
+                <div className="retail-cart-modal-grid">
+                  <div className="retail-cart-modal-info-item">
+                    <span className="retail-cart-modal-info-label">Chi nhánh xuất kho</span>
+                    <strong className="retail-cart-modal-info-val">{pendingOrder.branchLabel}</strong>
+                  </div>
+                  <div className="retail-cart-modal-info-item">
+                    <span className="retail-cart-modal-info-label">Hình thức</span>
+                    <strong className="retail-cart-modal-info-val">
+                      {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY
+                        ? "Giao tận nơi"
+                        : "Lấy tại cửa hàng"}
+                    </strong>
+                  </div>
+                  <div className="retail-cart-modal-info-item">
+                    <span className="retail-cart-modal-info-label">Chi nhánh ưu tiên</span>
+                    <strong className="retail-cart-modal-info-val">{pendingOrder.preferredBranchLabel}</strong>
+                  </div>
+                  <div className="retail-cart-modal-info-item">
+                    <span className="retail-cart-modal-info-label">Dự kiến hoàn thành</span>
+                    <strong className="retail-cart-modal-info-val retail-highlight-amber">
+                      {pendingOrder.leadTimeDays} ngày
+                    </strong>
+                  </div>
+                </div>
+
+                {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY && pendingOrder.deliveryAddress ? (
+                  <div className="retail-cart-modal-address-box">
+                    <MapPin size={15} />
+                    <div>
+                      <span>Địa chỉ nhận hàng</span>
+                      <p>{pendingOrder.deliveryAddress}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Group 2: Payment Breakdown */}
+              <div className="retail-cart-modal-section">
+                <h4 className="retail-cart-modal-section-title">
+                  <Receipt size={15} />
+                  <span>Chi tiết thanh toán</span>
+                </h4>
+                <div className="retail-cart-modal-breakdown">
+                  <div className="retail-cart-modal-line">
+                    <span>Tạm tính</span>
+                    <strong>{formatVnd(pendingOrder.subTotal)}</strong>
+                  </div>
+
+                  {pendingOrder.voucherDiscountAmount > 0 ? (
+                    <div className="retail-cart-modal-line is-discount">
+                      <span>{VOUCHER_UI.CONFIRM_DISCOUNT_LABEL(pendingOrder.appliedVoucherCode || "VOUCHER")}</span>
+                      <strong>-{formatVnd(pendingOrder.voucherDiscountAmount)}</strong>
+                    </div>
+                  ) : null}
+
+                  <div className="retail-cart-modal-line">
+                    <span>Thuế VAT (10%)</span>
+                    <strong>{formatVnd(pendingOrder.taxAmount)}</strong>
+                  </div>
+
+                  <div className="retail-cart-modal-line is-total">
+                    <div>
+                      <span>Tổng thanh toán</span>
+                      <small>Đã bao gồm thuế và chiết khấu</small>
+                    </div>
+                    <strong>{formatVnd(pendingOrder.finalAmount)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 3: Customer Personal Notes (Suppress internal [FULFILLMENT] serialization) */}
+              {(() => {
+                const customerNotesText = pendingOrder.customerNotes || "";
+                const cleanNote = customerNotesText
+                  .split(" || ")
+                  .filter((p) => !p.trim().startsWith("[FULFILLMENT]"))
+                  .join(" || ")
+                  .trim();
+                return cleanNote ? (
+                  <div className="retail-cart-modal-section">
+                    <h4 className="retail-cart-modal-section-title">
+                      <FileText size={15} />
+                      <span>Ghi chú của bạn</span>
+                    </h4>
+                    <div className="retail-cart-modal-note-box">
+                      <p>{cleanNote}</p>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Gateway Assurance */}
+              <div className="retail-cart-modal-gateway-info">
+                <ShieldCheck size={16} />
+                <span>
+                  Thanh toán bảo mật qua cổng <strong>PayOS</strong> (Hỗ trợ quét mã VietQR, thẻ ATM &amp; Internet Banking).
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Footer (Fixed at bottom) */}
+            <div className="retail-cart-modal-footer">
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-primary retail-cart-modal-btn-pay"
                 onClick={handleConfirmPendingOrderPayment}
                 disabled={payingOrder}
               >
-                {payingOrder ? "Đang tạo link PayOS..." : "Xác nhận và thanh toán"}
+                <CreditCard size={18} />
+                <span>{payingOrder ? "Đang tạo liên kết PayOS..." : "Xác nhận và thanh toán"}</span>
               </button>
-              <button
-                type="button"
-                className="parts-shop-btn parts-shop-btn-ghost"
-                onClick={() => setPendingOrder(null)}
-                disabled={payingOrder}
-              >
-                Đóng
-              </button>
-              <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
-                Xem đơn của tôi
-              </Link>
+
+              <div className="retail-cart-modal-footer-secondary">
+                <Link
+                  to="/my-retail-orders"
+                  className="parts-shop-btn parts-shop-btn-ghost"
+                  onClick={() => setPendingOrder(null)}
+                >
+                  <ArrowRight size={15} />
+                  <span>Xem đơn của tôi</span>
+                </Link>
+                <button
+                  type="button"
+                  className="parts-shop-btn parts-shop-btn-ghost"
+                  onClick={() => setPendingOrder(null)}
+                  disabled={payingOrder}
+                >
+                  <span>Đóng</span>
+                </button>
+              </div>
             </div>
           </section>
         </div>

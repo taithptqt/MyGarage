@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Application.Interfaces.Queries;
 using MyGarage.Interfaces;
 using MyGarage.Security;
 
@@ -21,19 +20,16 @@ public class AdminPartsController : ControllerBase
         "image/webp",
     };
 
-    private readonly IAdminPartsDataService _dataService;
-    private readonly ICloudStorageService _cloudStorageService;
+    private readonly IAdminPartsImageService _imageService;
     private readonly IFileSecurityScanner _fileSecurityScanner;
     private readonly ILogger<AdminPartsController> _logger;
 
     public AdminPartsController(
-        IAdminPartsDataService dataService,
-        ICloudStorageService cloudStorageService,
+        IAdminPartsImageService imageService,
         IFileSecurityScanner fileSecurityScanner,
         ILogger<AdminPartsController> logger)
     {
-        _dataService = dataService;
-        _cloudStorageService = cloudStorageService;
+        _imageService = imageService;
         _fileSecurityScanner = fileSecurityScanner;
         _logger = logger;
     }
@@ -45,69 +41,77 @@ public class AdminPartsController : ControllerBase
     [HttpPost("parts/{id:long}/image")]
     [HttpPost("products/{id:long}/image")]
     public Task<IActionResult> UploadProductImage(long id, IFormFile? file, CancellationToken cancellationToken) =>
-        UploadPrimaryProductImageAsync(id, file, cancellationToken);
+        UploadImageAsync(id, file, isGallery: false, cancellationToken);
 
     /// <summary>
     /// Thêm một ảnh phụ vào gallery (luôn tạo dòng mới). Ảnh đầu tiên của sản phẩm được đánh dấu IsMain.
     /// </summary>
     [HttpPost("parts/{id:long}/gallery-image")]
     [HttpPost("products/{id:long}/gallery-image")]
+    [HttpPost("products/{id:long}/images")]
     public Task<IActionResult> AppendProductGalleryImage(long id, IFormFile? file, CancellationToken cancellationToken) =>
-        AppendGalleryImageAsync(id, file, cancellationToken);
+        UploadImageAsync(id, file, isGallery: true, cancellationToken);
 
-    private async Task<IActionResult> UploadPrimaryProductImageAsync(long id, IFormFile? file, CancellationToken cancellationToken)
+    private async Task<IActionResult> UploadImageAsync(
+        long id,
+        IFormFile? file,
+        bool isGallery,
+        CancellationToken cancellationToken)
     {
-        if (!TryValidateImageFile(file, out var badRequest))
+        var (bytes, errorResult) = await ValidateAndScanImageAsync(file, cancellationToken);
+        if (errorResult != null)
         {
-            return badRequest!;
-        }
-
-        var scan = await _fileSecurityScanner.ScanFormFileAsync(
-            file,
-            fileNameOverride: string.IsNullOrWhiteSpace(Path.GetExtension(file!.FileName))
-                ? $"part{ResolveExtension(file.ContentType)}"
-                : file.FileName,
-            maxBytes: MaxUploadBytes,
-            cancellationToken: cancellationToken);
-        if (!scan.IsClean)
-        {
-            return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
-        }
-
-        var product = await _dataService.GetActiveProductSummaryAsync(id, cancellationToken);
-        if (!product.Found)
-        {
-            return this.NotFoundProblem("Không tìm thấy sản phẩm.");
+            return errorResult;
         }
 
         try
         {
-            var imageUrl = await UploadToBlobAsync(id, file!, scan.Bytes, cancellationToken);
-            await _dataService.SavePrimaryProductImageAsync(id, imageUrl, cancellationToken);
+            var result = isGallery
+                ? await _imageService.AppendGalleryImageAsync(id, file!.ContentType, bytes!, cancellationToken)
+                : await _imageService.UploadPrimaryImageAsync(id, file!.ContentType, bytes!, cancellationToken);
+
+            if (!result.Found)
+            {
+                return this.NotFoundProblem("Không tìm thấy sản phẩm.");
+            }
+
+            if (isGallery)
+            {
+                return Ok(new
+                {
+                    id = result.ProductImageId,
+                    productId = result.ProductId,
+                    imageUrl = result.ImageUrl,
+                    isMain = result.IsMain,
+                    sortOrder = result.SortOrder
+                });
+            }
 
             return Ok(new
             {
-                id = product.Id,
-                name = product.Name,
-                imageUrl
+                id = result.ProductId,
+                name = result.ProductName,
+                imageUrl = result.ImageUrl
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to upload image for product {ProductId}", id);
+            _logger.LogError(ex, "Failed to upload image for product {ProductId} (isGallery={IsGallery})", id, isGallery);
             return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Không thể tải ảnh lên lúc này.");
         }
     }
 
-    private async Task<IActionResult> AppendGalleryImageAsync(long id, IFormFile? file, CancellationToken cancellationToken)
+    private async Task<(byte[]? Bytes, IActionResult? ErrorResult)> ValidateAndScanImageAsync(
+        IFormFile? file,
+        CancellationToken cancellationToken)
     {
         if (!TryValidateImageFile(file, out var badRequest))
         {
-            return badRequest!;
+            return (null, badRequest);
         }
 
         var scan = await _fileSecurityScanner.ScanFormFileAsync(
-            file,
+            file!,
             fileNameOverride: string.IsNullOrWhiteSpace(Path.GetExtension(file!.FileName))
                 ? $"part{ResolveExtension(file.ContentType)}"
                 : file.FileName,
@@ -115,34 +119,10 @@ public class AdminPartsController : ControllerBase
             cancellationToken: cancellationToken);
         if (!scan.IsClean)
         {
-            return this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ.");
+            return (null, this.BadRequestProblem(scan.ErrorMessage ?? "Tệp không hợp lệ."));
         }
 
-        var product = await _dataService.GetActiveProductSummaryAsync(id, cancellationToken);
-        if (!product.Found)
-        {
-            return this.NotFoundProblem("Không tìm thấy sản phẩm.");
-        }
-
-        try
-        {
-            var imageUrl = await UploadToBlobAsync(id, file!, scan.Bytes, cancellationToken);
-            var row = await _dataService.AppendGalleryProductImageAsync(id, imageUrl, cancellationToken);
-
-            return Ok(new
-            {
-                id = row.Id,
-                productId = id,
-                imageUrl,
-                isMain = row.IsMain,
-                sortOrder = row.SortOrder
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to append gallery image for product {ProductId}", id);
-            return this.ProblemMessage(StatusCodes.Status500InternalServerError, "Không thể tải ảnh lên lúc này.");
-        }
+        return (scan.Bytes, null);
     }
 
     private bool TryValidateImageFile(IFormFile? file, out IActionResult? errorResult)
@@ -167,21 +147,6 @@ public class AdminPartsController : ControllerBase
         }
 
         return true;
-    }
-
-    private async Task<string> UploadToBlobAsync(long productId, IFormFile file, byte[] fileBytes, CancellationToken cancellationToken)
-    {
-        var extension = ResolveExtension(file.ContentType);
-        var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-        var folderName = $"products/{productId}";
-
-        await using var stream = new MemoryStream(fileBytes);
-        return await _cloudStorageService.UploadAsync(
-            stream,
-            folderName,
-            fileName,
-            file.ContentType,
-            cancellationToken);
     }
 
     private static string ResolveExtension(string contentType) =>

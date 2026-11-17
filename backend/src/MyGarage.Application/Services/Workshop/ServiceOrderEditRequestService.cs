@@ -20,12 +20,12 @@ namespace MyGarage.Services
         };
 
         private readonly IServiceOrderService _serviceOrderService;
-        private readonly IAuditLogService _auditLogService;
+        private readonly IAuditLogWriter _auditLogService;
         private readonly IServiceOrderDataService _dataService;
 
         public ServiceOrderEditRequestService(
             IServiceOrderService serviceOrderService,
-            IAuditLogService auditLogService,
+            IAuditLogWriter auditLogService,
             IServiceOrderDataService dataService)
         {
             _serviceOrderService = serviceOrderService;

@@ -1,19 +1,37 @@
+/* ==========================================================================
+   MYGARAGE - MY APPOINTMENTS PAGE (LUXURY AUTOMOTIVE STYLING)
+   Theme: Deep Charcoal (#16221f), Luxury Gold (#c5a059), Creamy Canvas (#fef9ee)
+   ========================================================================== */
+
 .my-appt-page {
-  --primary: #1d2a26;
-  --primary-deep: #081512;
-  --surface: #fef9ee;
-  --surface-low: #f8f3e8;
-  --surface-mid: #f2ede3;
+  --primary: #16221f;
+  --primary-deep: #0e1715;
   --gold: #c5a059;
-  --text: #1d1c15;
-  --appt-bg: #fef9ee;
-  --appt-bg-soft: #f3f8ff;
-  --appt-surface: #ffffff;
+  --gold-dark: #b38e5d;
+  --gold-light: #dfba73;
+  --gold-subtle: rgba(197, 160, 89, 0.15);
+  --surface: #ffffff;
+  --surface-warm: #fcfbf7;
+  --surface-tile: #fbf9f4;
+  --border-subtle: rgba(197, 160, 89, 0.22);
+  --border-card: rgba(22, 34, 31, 0.08);
+  --text-main: #16221f;
+  --text-muted: #5e6b66;
+  --text-soft: #8a9691;
   position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-top: 0;
-  background: linear-gradient(180deg, var(--appt-bg) 0%, #f8f3e8 58%, #f2ede3 100%);
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at top left, rgba(197, 160, 89, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(22, 34, 31, 0.08), transparent 26%),
+    linear-gradient(180deg, #fef9ee 0%, #f8f3e8 48%, #f2ede3 100%);
+  color: var(--text-main);
+  font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
 }
 
 .my-appt-page::before {
@@ -22,16 +40,13 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 220px;
-  background: linear-gradient(180deg, rgba(126, 130, 122, 0.34) 0%, rgba(126, 130, 122, 0.18) 56%, rgba(126, 130, 122, 0) 100%);
+  height: 240px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
   z-index: 0;
 }
 
-.my-appt-page .mg-header-wrap.solid {
-  background: transparent;
-}
-
+.my-appt-page .mg-header-wrap.solid,
 .my-appt-page .mg-header-main {
   background: transparent;
   backdrop-filter: none;
@@ -42,136 +57,270 @@
 
 .my-appt-shell {
   min-height: 100vh;
-  padding-top: 156px;
+  padding-top: 148px;
   position: relative;
   z-index: 1;
 }
 
 .my-appt-content {
-  max-width: 1180px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 52px 24px 48px;
+  padding: 44px 24px 64px;
+}
+
+/* ==========================================================================
+   HERO CARD & STATS
+   ========================================================================== */
+
+.my-appt-hero-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(254, 249, 238, 0.92) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  padding: 32px 36px;
+  box-shadow: 0 16px 42px rgba(22, 34, 31, 0.06);
+  margin-bottom: 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.my-appt-hero-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 36px;
+  right: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--gold) 50%, transparent 100%);
+  opacity: 0.7;
 }
 
 .my-appt-head {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
-  align-items: flex-end;
-  margin-bottom: 20px;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 28px;
   flex-wrap: wrap;
 }
 
-.my-appt-eyebrow {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: #2858aa;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.my-appt-head-copy {
+  flex: 1 1 520px;
+}
+
+.my-appt-eyebrow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: rgba(197, 160, 89, 0.14);
+  border: 1px solid rgba(197, 160, 89, 0.35);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #8f6b28;
   text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.my-appt-eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(197, 160, 89, 0.7);
+  animation: my-appt-pulse 2s infinite ease-in-out;
+}
+
+@keyframes my-appt-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
 }
 
 .my-appt-head h1 {
   margin: 0;
-  font-size: 34px;
-  line-height: 1.15;
-  color: #10243f;
-  letter-spacing: -0.02em;
+  font-family: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(30px, 3.4vw, 42px);
+  line-height: 1.1;
+  color: #16221f;
+  letter-spacing: -0.03em;
+  font-weight: 800;
 }
 
 .my-appt-description {
-  margin: 12px 0 0;
-  max-width: 640px;
-  color: #4d5f79;
+  margin: 10px 0 0;
+  max-width: 680px;
+  color: #52605b;
   font-size: 15px;
+  line-height: 1.6;
+}
+
+.my-appt-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .my-appt-primary-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: linear-gradient(140deg, #2858aa 0%, #1f4a93 100%);
-  color: #fff;
+  gap: 8px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1b2622 0%, #111a17 100%);
+  color: #fef9ee;
+  border: 1px solid rgba(197, 160, 89, 0.4);
   text-decoration: none;
-  padding: 11px 18px;
+  padding: 12px 22px;
   font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 8px 24px rgba(31, 74, 147, 0.28);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 24px rgba(22, 34, 31, 0.22);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
 }
 
 .my-appt-primary-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 28px rgba(31, 74, 147, 0.32);
+  transform: translateY(-2px);
+  border-color: var(--gold);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(22, 34, 31, 0.32), 0 0 16px rgba(197, 160, 89, 0.25);
 }
 
+.my-appt-btn-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Stats Cards */
 .my-appt-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 16px;
 }
 
+.my-appt-stat-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 34, 31, 0.08);
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(22, 34, 31, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.my-appt-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(197, 160, 89, 0.35);
+  box-shadow: 0 10px 24px rgba(22, 34, 31, 0.06);
+}
+
+.my-appt-stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.my-appt-stat-head span {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7773;
+}
+
+.my-appt-stat-icon {
+  font-size: 20px;
+  color: #798782;
+}
+
+.my-appt-stat-icon--gold {
+  color: var(--gold-dark);
+}
+
+.my-appt-stat-icon--success {
+  color: #166534;
+}
+
+.my-appt-stat-icon--danger {
+  color: #dc2626;
+}
+
+.my-appt-stat-card strong {
+  display: block;
+  font-family: "Space Grotesk", "Barlow", sans-serif;
+  font-size: clamp(26px, 2.4vw, 34px);
+  font-weight: 800;
+  line-height: 1;
+  color: #16221f;
+}
+
+/* ==========================================================================
+   VIEW TABS (Lịch hẹn thường / Lịch hẹn nhóm)
+   ========================================================================== */
+
 .my-appt-view-tabs {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  background: #edf3fb;
-  border: 1px solid #d3e0f1;
-  border-radius: 12px;
-  padding: 6px;
-  margin-bottom: 14px;
+  display: inline-flex;
+  gap: 6px;
+  background: rgba(22, 34, 31, 0.06);
+  border: 1px solid rgba(22, 34, 31, 0.08);
+  border-radius: 14px;
+  padding: 5px;
+  margin-bottom: 18px;
 }
 
 .my-appt-view-tabs button {
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #446286;
+  color: #55625e;
   font-size: 13px;
-  font-weight: 600;
-  padding: 8px 14px;
+  font-weight: 700;
+  padding: 9px 18px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   transition: all 0.18s ease;
 }
 
+.my-appt-view-tabs button:hover:not(.active) {
+  color: #16221f;
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .my-appt-view-tabs button.active {
-  background: #ffffff;
-  color: #173c73;
-  border-color: #c3d4ed;
-  box-shadow: 0 3px 10px rgba(23, 60, 115, 0.12);
+  background: #16221f;
+  color: #fdfaf3;
+  border-color: #16221f;
+  box-shadow: 0 4px 14px rgba(22, 34, 31, 0.16);
 }
 
-.my-appt-stat-card {
-  background: var(--appt-surface);
-  border-radius: 14px;
-  border: 1px solid #dde5f2;
-  padding: 16px 18px;
-  box-shadow: 0 2px 14px rgba(10, 28, 54, 0.05);
+.my-appt-tab-icon {
+  font-size: 16px;
 }
 
-.my-appt-stat-card span {
-  display: block;
-  font-size: 12px;
-  color: #5e6f87;
-  margin-bottom: 8px;
-}
-
-.my-appt-stat-card strong {
-  font-size: 26px;
-  line-height: 1;
-  color: #142a47;
-}
+/* ==========================================================================
+   TOOLBAR (Filter Pills + Search)
+   ========================================================================== */
 
 .my-appt-toolbar {
-  background: var(--appt-surface);
-  border: 1px solid #dde5f2;
-  border-radius: 14px;
-  padding: 14px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  padding: 16px 20px;
   display: grid;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(22, 34, 31, 0.04);
 }
 
 .my-appt-filter-list {
@@ -181,229 +330,372 @@
 }
 
 .my-appt-filter-list button {
-  border: 1px solid #d4deed;
-  background: var(--appt-bg-soft);
-  color: #435a78;
+  border: 1px solid rgba(22, 34, 31, 0.1);
+  background: #fbf9f4;
+  color: #4a5752;
   border-radius: 999px;
-  padding: 7px 14px;
+  padding: 7px 16px;
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .my-appt-filter-list button:hover {
-  border-color: #7392bf;
-  color: #1f4a93;
+  background: #f3efe7;
+  color: #16221f;
+  border-color: rgba(197, 160, 89, 0.4);
 }
 
 .my-appt-filter-list button.active {
-  border-color: #1f4a93;
-  background: #1f4a93;
-  color: #fff;
+  background: #16221f;
+  border-color: #16221f;
+  color: #fef9ee;
+  box-shadow: 0 4px 12px rgba(22, 34, 31, 0.15);
+}
+
+.my-appt-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.my-appt-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: #8a9691;
+  pointer-events: none;
 }
 
 .my-appt-search {
   width: 100%;
-  border: 1px solid #d4deed;
-  border-radius: 10px;
-  padding: 10px 12px;
+  border: 1.5px solid rgba(22, 34, 31, 0.12);
+  border-radius: 12px;
+  padding: 11px 14px 11px 42px;
   font-size: 14px;
-  color: #22364f;
+  color: #16221f;
+  background: #fbf9f4;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: all 0.18s ease;
 }
 
 .my-appt-search:focus {
-  border-color: #1f4a93;
-  box-shadow: 0 0 0 3px rgba(31, 74, 147, 0.12);
+  background: #ffffff;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.18);
 }
 
-.my-appt-alert {
-  border-radius: 10px;
-  padding: 11px 14px;
-  margin-bottom: 12px;
-  font-size: 14px;
+.my-appt-search::placeholder {
+  color: #929d99;
 }
 
-.my-appt-alert-error {
-  background: #fee2e2;
-  color: #9f1d1d;
-}
+/* ==========================================================================
+   APPOINTMENT CARDS & LIST
+   ========================================================================== */
 
 .my-appt-list {
   display: grid;
-  gap: 12px;
-}
-
-.my-appt-group-list {
-  display: grid;
-  gap: 14px;
-}
-
-.my-appt-group-block {
-  border: 1px solid #d8e3f3;
-  border-radius: 16px;
-  background: #f7fbff;
-  box-shadow: 0 2px 16px rgba(13, 33, 61, 0.05);
-  padding: 14px;
-}
-
-.my-appt-group-block-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.my-appt-group-block-head h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #17325b;
-}
-
-.my-appt-group-block-head p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #5b6f8c;
-}
-
-.my-appt-group-appointments {
-  display: grid;
-  gap: 10px;
-}
-
-.my-appt-card {
-  background: var(--appt-surface);
-  border: 1px solid #dbe3f0;
-  border-radius: 16px;
-  box-shadow: 0 2px 16px rgba(13, 33, 61, 0.06);
-  padding: 18px;
-  display: grid;
-  grid-template-columns: 1fr auto;
   gap: 16px;
 }
 
-.my-appt-card-in-group {
-  box-shadow: none;
+.my-appt-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  padding: 24px 26px;
+  box-shadow: 0 10px 32px rgba(22, 34, 31, 0.05);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
+.my-appt-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(197, 160, 89, 0.45);
+  box-shadow: 0 16px 40px rgba(22, 34, 31, 0.08), 0 0 16px rgba(197, 160, 89, 0.1);
+}
+
+.my-appt-card-in-group {
+  box-shadow: 0 4px 14px rgba(22, 34, 31, 0.03);
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.my-appt-card-main {
+  min-width: 0;
+}
+
+/* Card Head */
 .my-appt-card-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 14px;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
   flex-wrap: wrap;
 }
 
-.my-appt-card-head h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #132c4f;
+.my-appt-branch-info {
+  display: flex;
+  flex-direction: column;
 }
 
+.my-appt-branch-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--gold-dark);
+  text-transform: uppercase;
+}
+
+.my-appt-branch-icon {
+  font-size: 15px;
+}
+
+.my-appt-branch-name {
+  margin: 4px 0 0;
+  font-family: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #16221f;
+  letter-spacing: -0.01em;
+}
+
+/* Status Badges */
 .my-appt-status {
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 700;
-  padding: 6px 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
 }
 
-.my-appt-status.pending {
-  color: #8d4a00;
-  background: #ffefc7;
+.my-appt-status--pending {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
 }
 
-.my-appt-status.confirmed {
-  color: #115f3f;
-  background: #d9f9ea;
+.my-appt-status--confirmed {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
 }
 
-.my-appt-status.arrived {
-  color: #0f4f80;
-  background: #d8eeff;
+.my-appt-status--arrived {
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
 }
 
-.my-appt-status.canceled {
-  color: #8f1f1f;
-  background: #fee2e2;
+.my-appt-status--canceled {
+  color: #9f1239;
+  background: #ffe4e6;
+  border: 1px solid #fecdd3;
 }
 
-.my-appt-status.no-show {
-  color: #444f63;
-  background: #e4e8f0;
+.my-appt-status--no-show {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
+/* Card Telemetry Grid */
 .my-appt-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+  margin-bottom: 14px;
 }
 
-.my-appt-card-grid label {
-  display: block;
-  color: #647a98;
-  font-size: 12px;
-  margin-bottom: 5px;
+.my-appt-grid-tile {
+  background: var(--surface-tile);
+  border: 1px solid rgba(22, 34, 31, 0.06);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: background-color 0.18s ease;
 }
 
-.my-appt-card-grid p {
-  margin: 0;
-  color: #1c3354;
-  font-weight: 600;
+.my-appt-grid-tile:hover {
+  background: #f7f4ec;
+}
+
+.my-appt-tile-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #798782;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.my-appt-tile-icon {
   font-size: 14px;
+  color: var(--gold-dark);
 }
 
-.my-appt-service-list {
+.my-appt-tile-val {
+  margin: 0;
+  color: #16221f;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+/* License Plate Badge */
+.my-appt-plate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1.5px solid #1a2320;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  width: fit-content;
+}
+
+.my-appt-plate-screw {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #b4bcba;
+  border: 1px solid #7c8582;
+}
+
+.my-appt-plate-number {
+  font-family: "Space Grotesk", "Barlow", monospace;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #111a17;
+  line-height: 1;
+}
+
+/* Services Block */
+.my-appt-services-block {
+  margin-top: 14px;
+}
+
+.my-appt-services-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #55625e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.my-appt-services-icon {
+  font-size: 14px;
+  color: var(--gold-dark);
+}
+
+.my-appt-service-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 13px;
 }
 
-.my-appt-service-list span {
+.my-appt-service-tag {
   font-size: 12px;
-  color: #23508e;
-  background: #e6f0ff;
-  border: 1px solid #c7daf7;
-  border-radius: 999px;
-  padding: 5px 10px;
+  font-weight: 700;
+  color: #7a5818;
+  background: rgba(197, 160, 89, 0.12);
+  border: 1px solid rgba(197, 160, 89, 0.32);
+  border-radius: 8px;
+  padding: 5px 12px;
 }
 
-.my-appt-note {
-  margin: 12px 0 0;
+/* Callouts (Notes & Cancel Reason) */
+.my-appt-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 12px;
   font-size: 13px;
-  color: #4d5f79;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-.my-appt-note.cancel {
-  color: #8f1f1f;
+.my-appt-callout-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
+.my-appt-callout-content strong {
+  margin-right: 4px;
+}
+
+.my-appt-callout-note {
+  background: #fbf9f4;
+  border-left: 3px solid var(--gold);
+  color: #3e4a46;
+}
+
+.my-appt-callout-note .my-appt-callout-icon {
+  color: var(--gold-dark);
+}
+
+.my-appt-callout-cancel {
+  background: #fdf2f2;
+  border-left: 3px solid #dc2626;
+  color: #991b1b;
+}
+
+.my-appt-callout-cancel .my-appt-callout-icon {
+  color: #dc2626;
+}
+
+/* Card Actions */
 .my-appt-card-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .my-appt-cancel-btn {
-  border: 1px solid #d14343;
-  background: var(--appt-surface);
-  color: #b82828;
-  border-radius: 10px;
-  padding: 9px 14px;
-  min-width: 98px;
+  border: 1.5px solid #ef4444;
+  background: #ffffff;
+  color: #dc2626;
+  border-radius: 12px;
+  padding: 9px 16px;
+  min-width: 108px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   transition: all 0.18s ease;
 }
 
 .my-appt-cancel-btn:hover:not(:disabled) {
-  background: #b82828;
-  color: #fff;
-  border-color: #b82828;
+  background: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.28);
 }
 
 .my-appt-cancel-btn:disabled {
@@ -411,84 +703,389 @@
   cursor: not-allowed;
 }
 
+/* ==========================================================================
+   GROUP SESSIONS BLOCK
+   ========================================================================== */
+
+.my-appt-group-list {
+  display: grid;
+  gap: 20px;
+}
+
+.my-appt-group-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(254, 249, 238, 0.95) 100%);
+  box-shadow: 0 12px 36px rgba(22, 34, 31, 0.05);
+  padding: 22px 24px;
+}
+
+.my-appt-group-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(22, 34, 31, 0.08);
+}
+
+.my-appt-group-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--gold-dark);
+  text-transform: uppercase;
+}
+
+.my-appt-group-block-head h3 {
+  margin: 3px 0 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #16221f;
+}
+
+.my-appt-group-meta {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6a7772;
+}
+
+.my-appt-group-appointments {
+  display: grid;
+  gap: 12px;
+}
+
+/* ==========================================================================
+   EMPTY STATE, SPINNER & ALERTS
+   ========================================================================== */
+
 .my-appt-empty {
-  background: var(--appt-surface);
-  border: 1px dashed #c4d3e7;
-  border-radius: 14px;
+  background: #ffffff;
+  border: 1.5px dashed rgba(197, 160, 89, 0.35);
+  border-radius: 22px;
   text-align: center;
-  padding: 40px 20px;
+  padding: 56px 24px;
+  box-shadow: 0 8px 24px rgba(22, 34, 31, 0.03);
+}
+
+.my-appt-empty-icon-wrap {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: rgba(197, 160, 89, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.my-appt-empty-icon {
+  font-size: 28px;
+  color: var(--gold-dark);
 }
 
 .my-appt-empty h3 {
   margin: 0 0 8px;
-  color: #17325b;
+  font-size: 20px;
+  font-weight: 800;
+  color: #16221f;
 }
 
 .my-appt-empty p {
-  margin: 0;
-  color: #5f7390;
+  margin: 0 auto;
+  max-width: 480px;
+  color: #64726d;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.my-appt-secondary-btn {
-  margin-top: 18px;
+.my-appt-empty-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.my-appt-ghost-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  border: 1px solid #2a5db0;
-  color: #2a5db0;
-  border-radius: 10px;
-  padding: 9px 14px;
+  gap: 8px;
+  border: 1.5px solid rgba(22, 34, 31, 0.15);
+  background: transparent;
+  color: #374440;
+  border-radius: 14px;
+  padding: 11px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-appt-ghost-btn:hover {
+  background: #fbf9f4;
+  border-color: rgba(197, 160, 89, 0.45);
+  color: #16221f;
+}
+
+.my-appt-alert {
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.my-appt-cancel-desc {
-  color: #546683;
+.my-appt-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.my-appt-spinner-wrap {
+  text-align: center;
+  padding: 48px 20px;
+  color: #6b7773;
   font-size: 14px;
-  line-height: 1.5;
-  margin: 10px 0 14px;
+}
+
+.my-appt-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(197, 160, 89, 0.25);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: my-appt-spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes my-appt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   CANCEL POPUP MODAL
+   ========================================================================== */
+
+.my-appt-cancel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 21, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  animation: my-appt-fade-in 0.2s ease;
+}
+
+@keyframes my-appt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.my-appt-cancel-popup {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  padding: 28px 30px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 24px 56px rgba(15, 23, 21, 0.28);
+  animation: my-appt-scale-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes my-appt-scale-up {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.my-appt-cancel-popup-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.my-appt-cancel-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.my-appt-cancel-icon {
+  font-size: 24px;
+  color: #dc2626;
+}
+
+.my-appt-cancel-popup h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #16221f;
+}
+
+.my-appt-cancel-desc {
+  color: #55625e;
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.my-appt-cancel-form {
+  margin-top: 18px;
 }
 
 .my-appt-cancel-form label {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
   font-size: 13px;
-  color: #425878;
-  font-weight: 600;
+  color: #374440;
+  font-weight: 700;
+}
+
+.my-appt-cancel-reason-input {
+  width: 100%;
+  border: 1.5px solid rgba(22, 34, 31, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #16221f;
+  background: #fbf9f4;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: all 0.18s ease;
+}
+
+.my-appt-cancel-reason-input:focus {
+  background: #ffffff;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.18);
 }
 
 .my-appt-popup-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 22px;
 }
+
+.my-appt-btn-popup-secondary {
+  border: 1.5px solid rgba(22, 34, 31, 0.14);
+  background: #ffffff;
+  color: #3d4a46;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-appt-btn-popup-secondary:hover:not(:disabled) {
+  background: #f5f2eb;
+  color: #16221f;
+}
+
+.my-appt-btn-popup-danger {
+  border: 1.5px solid #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
+  transition: all 0.18s ease;
+}
+
+.my-appt-btn-popup-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35);
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
 
 @media (max-width: 1024px) {
   .my-appt-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .my-appt-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
-  .my-appt-content {
-    padding: 36px 16px 34px;
+  .my-appt-shell {
+    padding-top: 130px;
   }
 
-  .my-appt-head h1 {
-    font-size: 27px;
+  .my-appt-content {
+    padding: 24px 16px 48px;
+  }
+
+  .my-appt-hero-card {
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+
+  .my-appt-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .my-appt-head-actions {
+    width: 100%;
+  }
+
+  .my-appt-primary-btn {
+    width: 100%;
   }
 
   .my-appt-card {
     grid-template-columns: 1fr;
+    padding: 20px 18px;
+  }
+
+  .my-appt-card-actions {
+    justify-content: stretch;
+  }
+
+  .my-appt-cancel-btn {
+    width: 100%;
+  }
+
+  .my-appt-view-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .my-appt-card-grid {
     grid-template-columns: 1fr;
-  }
-  .my-appt-view-tabs {
-    display: grid;
-    width: 100%;
   }
 }
 

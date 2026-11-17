@@ -22,8 +22,8 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 
 export async function getMyPayslips(params = {}, requester) {
   return requestWithDualRoute(
+    "/api/v1/staff/current/payslips",
     "/api/v1/payslips/my",
-    "/api/payslips/my",
     { method: "GET", params },
     requester
   );

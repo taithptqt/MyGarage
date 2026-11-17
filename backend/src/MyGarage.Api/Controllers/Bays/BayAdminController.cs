@@ -10,12 +10,10 @@ namespace MyGarage.Controllers;
 public partial class BayAdminController : ControllerBase
 {
     private readonly IBayAdminCommandFacade _facade;
-    private readonly IWebHostEnvironment _environment;
 
-    public BayAdminController(IBayAdminCommandFacade facade, IWebHostEnvironment environment)
+    public BayAdminController(IBayAdminCommandFacade facade)
     {
         _facade = facade;
-        _environment = environment;
     }
 
     private IActionResult ToActionResult(BayAdminCommandResult result) => result.StatusCode switch
@@ -27,11 +25,13 @@ public partial class BayAdminController : ControllerBase
     };
 
     [HttpGet("lookups")]
+    [HttpGet("/api/v1/admin/bays/lookups")]
     public async Task<IActionResult> GetLookups([FromQuery] int takeVehicles = 500) =>
-        ToActionResult(await _facade.GetLookupsAsync(takeVehicles, _environment.ContentRootPath, HttpContext.RequestAborted));
+        ToActionResult(await _facade.GetLookupsAsync(takeVehicles, HttpContext.RequestAborted));
 
     [HttpGet("list")]
     [HttpGet("bays")]
+    [HttpGet("/api/v1/admin/bays")]
     public async Task<IActionResult> GetList(
         [FromQuery] long? branchId,
         [FromQuery] string? search,
@@ -42,21 +42,25 @@ public partial class BayAdminController : ControllerBase
         [FromQuery] bool includeHidden = false) =>
         ToActionResult(await _facade.GetListAsync(
             branchId, search, area, status, sortBy, sortDirection, includeHidden,
-            _environment.ContentRootPath, HttpContext.RequestAborted));
+            HttpContext.RequestAborted));
 
     [HttpGet("bays/{id:long}")]
+    [HttpGet("/api/v1/admin/bays/{id:long}")]
     public async Task<IActionResult> GetById(long id) =>
-        ToActionResult(await _facade.GetByIdAsync(id, _environment.ContentRootPath, HttpContext.RequestAborted));
+        ToActionResult(await _facade.GetByIdAsync(id, HttpContext.RequestAborted));
 
     [HttpGet("summary")]
+    [HttpGet("/api/v1/admin/bays/summary")]
     public async Task<IActionResult> GetSummary([FromQuery] long? branchId) =>
-        ToActionResult(await _facade.GetSummaryAsync(branchId, _environment.ContentRootPath, HttpContext.RequestAborted));
+        ToActionResult(await _facade.GetSummaryAsync(branchId, HttpContext.RequestAborted));
 
     [HttpGet("bays/{id:long}/vehicles")]
+    [HttpGet("/api/v1/admin/bays/{id:long}/vehicles")]
     public async Task<IActionResult> GetBayVehicles(long id) =>
-        ToActionResult(await _facade.GetBayVehiclesAsync(id, _environment.ContentRootPath, HttpContext.RequestAborted));
+        ToActionResult(await _facade.GetBayVehiclesAsync(id, HttpContext.RequestAborted));
 
     [HttpGet("bays/{id:long}/history")]
+    [HttpGet("/api/v1/admin/bays/{id:long}/history")]
     public async Task<IActionResult> GetBayHistory(long id, [FromQuery] int take = 200) =>
-        ToActionResult(await _facade.GetBayHistoryAsync(id, take, _environment.ContentRootPath, HttpContext.RequestAborted));
+        ToActionResult(await _facade.GetBayHistoryAsync(id, take, HttpContext.RequestAborted));
 }

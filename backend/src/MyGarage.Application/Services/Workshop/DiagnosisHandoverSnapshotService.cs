@@ -11,94 +11,31 @@ using MyGarage.Interfaces;
 using MyGarage.Models;
 using static MyGarage.Services.DiagnosisIntakeScoringHelpers;
 using static MyGarage.Services.DiagnosisRoutingHelpers;
+using static MyGarage.Services.DiagnosisSnapshotCodec;
 
 namespace MyGarage.Services
 {
     public sealed class DiagnosisHandoverSnapshotService : IDiagnosisHandoverSnapshotService
     {
         private readonly IDiagnosisStore _store;
-        private readonly IDiagnosisIntakeScoringService _intakeScoringService;
+        private readonly IDiagnosisIntakeKpiService _kpiService;
 
         public DiagnosisHandoverSnapshotService(
             IDiagnosisStore store,
-            IDiagnosisIntakeScoringService intakeScoringService)
+            IDiagnosisIntakeKpiService kpiService)
         {
             _store = store;
-            _intakeScoringService = intakeScoringService;
+            _kpiService = kpiService;
         }
 
-        private const string SnapshotStageCheckInT1 = "CHECK_IN_T1";
-        private const string SnapshotStageAfterDiagnosisV1 = "AFTER_DIAGNOSIS_V1";
-
-        private const string ApprovalStatePending = "PENDING";
-        private const string ApprovalStateApproved = "APPROVED";
-        private const string ApprovalStateRejected = "REJECTED";
+        // Compatibility constructor for direct callers; the container uses the injected KPI service.
+        public DiagnosisHandoverSnapshotService(IDiagnosisStore store, IDiagnosisIntakeScoringService intakeScoringService)
+            : this(store, new DiagnosisIntakeKpiService(store, intakeScoringService))
+        {
+        }
 
         private const string ServiceOrderStatusWaitingApproval = nameof(ServiceOrderLifecycleStatus.WAITING_APPROVAL);
         private const string ServiceOrderStatusApproved = nameof(ServiceOrderLifecycleStatus.APPROVED);
-
-        private static readonly JsonSerializerOptions SnapshotReadOptions = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
-        private static readonly JsonSerializerOptions SnapshotWriteOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
-        private sealed class DiagnosisIntakeSnapshotPayload
-        {
-            public string Stage { get; set; } = SnapshotStageCheckInT1;
-            public long ServiceOrderId { get; set; }
-            public string? DispatchTag { get; set; }
-            public DateTime CheckInTime { get; set; }
-            public int BufferMinutes { get; set; }
-            public int MainServiceMinutes { get; set; }
-            public int PackageEffectiveMinutes { get; set; }
-            public DateTime T1EstimatedHandover { get; set; }
-            public string IntakePackageCode { get; set; } = string.Empty;
-            public string IntakePackageName { get; set; } = string.Empty;
-            public bool RequiresCustomerConsent { get; set; }
-            public bool CustomerConsentAccepted { get; set; }
-            public string? CustomerConsentChannel { get; set; }
-            public string? CustomerConsentNote { get; set; }
-            public bool BypassConflictGuard { get; set; }
-            public string ConflictLevel { get; set; } = "GREEN";
-            public int ConflictMinutes { get; set; }
-            public long? AssignedTeamId { get; set; }
-            public long? LeadTechnicianId { get; set; }
-            public long? AssistantTechnicianId { get; set; }
-            public DateTime CreatedAt { get; set; }
-        }
-
-        private sealed class DiagnosisHandoverSnapshotPayload
-        {
-            public string Stage { get; set; } = SnapshotStageAfterDiagnosisV1;
-            public long ServiceOrderId { get; set; }
-            public DateTime T1EstimatedHandover { get; set; }
-            public int AdditionalRepairMinutes { get; set; }
-            public DateTime T2EstimatedHandover { get; set; }
-            public string ApprovalState { get; set; } = ApprovalStatePending;
-            public bool? CustomerApproved { get; set; }
-            public string? DecisionChannel { get; set; }
-            public string? DecisionNote { get; set; }
-            public DateTime? CustomerDecisionAt { get; set; }
-            public long? DecidedByStaffId { get; set; }
-            public string? QuoteChannel { get; set; }
-            public string? QuoteSummary { get; set; }
-            public string? QuoteAttachmentUrl { get; set; }
-            public DateTime CreatedAt { get; set; }
-            public long? CreatedByStaffId { get; set; }
-        }
-
-        private sealed class IntakeKpiBucket
-        {
-            public int Total { get; set; }
-            public int Approved { get; set; }
-            public int Rejected { get; set; }
-            public int Pending { get; set; }
-        }
 
         public async Task RecordIntakeSnapshotAsync(
             ServiceOrder serviceOrder,
@@ -239,6 +176,12 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Snapshot không thuộc luồng T2 sau chẩn đoán.");
             }
 
+            var latest = await GetLatestHandoverSnapshotAsync(serviceOrderId);
+            if (latest == null || latest.SnapshotId != snapshotId)
+                throw new InvalidOperationException("Bản bàn giao không còn là phiên bản mới nhất.");
+            if (payload.CustomerApproved.HasValue)
+                throw new InvalidOperationException("Bản bàn giao đã có quyết định của khách hàng.");
+
             var serviceOrder = await _store.GetServiceOrderByIdAsync(serviceOrderId);
             if (serviceOrder == null)
             {
@@ -274,132 +217,8 @@ namespace MyGarage.Services
             return ToHandoverResponse(snapshot, payload);
         }
 
-        public async Task<DiagnosisIntakeKpiResponseDto> GetIntakeConversionKpiAsync(long? branchId, DateTime? startDate, DateTime? endDate)
-        {
-            var utcStart = (startDate ?? VietnamTime.Now.Date.AddDays(-30)).Date;
-            var utcEndDate = (endDate ?? VietnamTime.Now.Date).Date;
-            if (utcEndDate < utcStart)
-            {
-                (utcStart, utcEndDate) = (utcEndDate, utcStart);
-            }
-
-            var utcEnd = utcEndDate.AddDays(1).AddTicks(-1);
-
-            var snapshotRows = await _store.GetSnapshotsInRangeNoTrackingAsync(utcStart, utcEnd);
-
-            if (snapshotRows.Count == 0)
-            {
-                return new DiagnosisIntakeKpiResponseDto
-                {
-                    StartDate = utcStart,
-                    EndDate = utcEnd,
-                    BranchId = branchId
-                };
-            }
-
-            var orderIds = snapshotRows.Select(x => x.ServiceOrderId).Distinct().ToList();
-            var orderBranches = await _store.GetServiceOrderExecuteBranchMapAsync(orderIds);
-
-            var scopedSnapshots = snapshotRows
-                .Where(x => orderBranches.TryGetValue(x.ServiceOrderId, out var executeBranchId) && (!branchId.HasValue || executeBranchId == branchId.Value))
-                .OrderByDescending(x => x.RevisionNumber)
-                .ThenByDescending(x => x.CreatedAt ?? DateTime.MinValue)
-                .ToList();
-
-            var latestIntakeByOrder = new Dictionary<long, DiagnosisIntakeSnapshotPayload>();
-            var latestHandoverByOrder = new Dictionary<long, DiagnosisHandoverSnapshotPayload>();
-
-            foreach (var row in scopedSnapshots)
-            {
-                if (!latestIntakeByOrder.ContainsKey(row.ServiceOrderId) && TryParseIntakeSnapshot(row.SnapshotData, out var intakePayload))
-                {
-                    latestIntakeByOrder[row.ServiceOrderId] = intakePayload!;
-                }
-
-                if (!latestHandoverByOrder.ContainsKey(row.ServiceOrderId) && TryParseHandoverSnapshot(row.SnapshotData, out var handoverPayload))
-                {
-                    latestHandoverByOrder[row.ServiceOrderId] = handoverPayload!;
-                }
-            }
-
-            var intakePackages = await _intakeScoringService.GetIntakePackagesAsync();
-            var packageBuckets = intakePackages.ToDictionary(
-                package => package.Code,
-                _ => new IntakeKpiBucket(),
-                StringComparer.OrdinalIgnoreCase);
-
-            var teamBuckets = new Dictionary<long, IntakeKpiBucket>();
-
-            foreach (var (serviceOrderId, intakePayload) in latestIntakeByOrder)
-            {
-                latestHandoverByOrder.TryGetValue(serviceOrderId, out var handoverPayload);
-                var decisionState = ResolveDecisionState(handoverPayload);
-
-                var packageCode = NormalizePackageCode(intakePayload.IntakePackageCode, intakePackages);
-                if (!packageBuckets.TryGetValue(packageCode, out var packageBucket))
-                {
-                    packageBucket = new IntakeKpiBucket();
-                    packageBuckets[packageCode] = packageBucket;
-                }
-                ApplyDecisionState(packageBucket, decisionState);
-
-                var teamKey = intakePayload.AssignedTeamId ?? 0;
-                if (!teamBuckets.TryGetValue(teamKey, out var teamBucket))
-                {
-                    teamBucket = new IntakeKpiBucket();
-                    teamBuckets[teamKey] = teamBucket;
-                }
-                ApplyDecisionState(teamBucket, decisionState);
-            }
-
-            var teamIds = teamBuckets.Keys.Where(x => x > 0).Distinct().ToList();
-            var teamNameMap = teamIds.Count == 0
-                ? new Dictionary<long, string>()
-                : (await _store.GetTeamNameMapAsync(teamIds))
-                    .ToDictionary(x => x.Key, x => string.IsNullOrWhiteSpace(x.Value) ? $"Tổ #{x.Key}" : x.Value);
-
-            var packageConversions = packageBuckets
-                .Select(pair => new DiagnosisIntakePackageKpiItemDto
-                {
-                    PackageCode = pair.Key,
-                    PackageName = ResolvePackageName(pair.Key, intakePackages),
-                    TotalOrders = pair.Value.Total,
-                    ApprovedAdditionalRepairOrders = pair.Value.Approved,
-                    RejectedAdditionalRepairOrders = pair.Value.Rejected,
-                    PendingDecisionOrders = pair.Value.Pending,
-                    ApprovalRatePercent = ComputePercent(pair.Value.Approved, pair.Value.Total)
-                })
-                .OrderBy(x => ResolvePackageRank(x.PackageCode, intakePackages))
-                .ToList();
-
-            var teamConversions = teamBuckets
-                .Select(pair => new DiagnosisIntakeTeamKpiItemDto
-                {
-                    TeamId = pair.Key > 0 ? pair.Key : null,
-                    TeamName = pair.Key > 0 && teamNameMap.TryGetValue(pair.Key, out var teamName)
-                        ? teamName
-                        : "Chưa phân tổ",
-                    TotalOrders = pair.Value.Total,
-                    ApprovedAdditionalRepairOrders = pair.Value.Approved,
-                    RejectedAdditionalRepairOrders = pair.Value.Rejected,
-                    PendingDecisionOrders = pair.Value.Pending,
-                    ApprovalRatePercent = ComputePercent(pair.Value.Approved, pair.Value.Total)
-                })
-                .OrderByDescending(x => x.TotalOrders)
-                .ThenBy(x => x.TeamName)
-                .ToList();
-
-            return new DiagnosisIntakeKpiResponseDto
-            {
-                StartDate = utcStart,
-                EndDate = utcEnd,
-                BranchId = branchId,
-                TotalIntakeOrders = latestIntakeByOrder.Count,
-                TotalApprovedAdditionalRepairOrders = packageBuckets.Values.Sum(x => x.Approved),
-                PackageConversions = packageConversions,
-                TeamConversions = teamConversions
-            };
-        }
+        public Task<DiagnosisIntakeKpiResponseDto> GetIntakeConversionKpiAsync(long? branchId, DateTime? startDate, DateTime? endDate)
+            => _kpiService.GetIntakeConversionKpiAsync(branchId, startDate, endDate);
 
         private async Task<DateTime> ResolveLatestT1Async(long serviceOrderId, ServiceOrder serviceOrder)
         {
@@ -469,108 +288,11 @@ namespace MyGarage.Services
             };
         }
 
-        private static bool TryParseIntakeSnapshot(string? snapshotData, out DiagnosisIntakeSnapshotPayload? payload)
-        {
-            payload = null;
-            if (string.IsNullOrWhiteSpace(snapshotData))
-            {
-                return false;
-            }
-
-            try
-            {
-                payload = JsonSerializer.Deserialize<DiagnosisIntakeSnapshotPayload>(snapshotData, SnapshotReadOptions);
-                return payload != null &&
-                    string.Equals(payload.Stage, SnapshotStageCheckInT1, StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                payload = null;
-                return false;
-            }
-        }
-
-        private static bool TryParseHandoverSnapshot(string? snapshotData, out DiagnosisHandoverSnapshotPayload? payload)
-        {
-            payload = null;
-            if (string.IsNullOrWhiteSpace(snapshotData))
-            {
-                return false;
-            }
-
-            try
-            {
-                payload = JsonSerializer.Deserialize<DiagnosisHandoverSnapshotPayload>(snapshotData, SnapshotReadOptions);
-                return payload != null &&
-                    string.Equals(payload.Stage, SnapshotStageAfterDiagnosisV1, StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                payload = null;
-                return false;
-            }
-        }
-
-        private static void ApplyDecisionState(IntakeKpiBucket bucket, string decisionState)
-        {
-            bucket.Total += 1;
-
-            if (decisionState == ApprovalStateApproved)
-            {
-                bucket.Approved += 1;
-                return;
-            }
-
-            if (decisionState == ApprovalStateRejected)
-            {
-                bucket.Rejected += 1;
-                return;
-            }
-
-            bucket.Pending += 1;
-        }
-
-        private static string ResolveDecisionState(DiagnosisHandoverSnapshotPayload? payload)
-        {
-            if (payload == null)
-            {
-                return ApprovalStatePending;
-            }
-
-            if (payload.CustomerApproved == true)
-            {
-                return ApprovalStateApproved;
-            }
-
-            if (payload.CustomerApproved == false)
-            {
-                return ApprovalStateRejected;
-            }
-
-            var normalizedState = NormalizeText(payload.ApprovalState)?.ToUpperInvariant();
-            return normalizedState switch
-            {
-                ApprovalStateApproved => ApprovalStateApproved,
-                ApprovalStateRejected => ApprovalStateRejected,
-                _ => ApprovalStatePending
-            };
-        }
-
         private static string? NormalizeText(string? value)
         {
             var text = (value ?? string.Empty).Trim();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
-        private static decimal ComputePercent(int numerator, int denominator)
-        {
-            if (denominator <= 0)
-            {
-                return 0m;
-            }
-
-            var ratio = (decimal)numerator / denominator * 100m;
-            return Math.Round(ratio, 2, MidpointRounding.AwayFromZero);
-        }
     }
 }

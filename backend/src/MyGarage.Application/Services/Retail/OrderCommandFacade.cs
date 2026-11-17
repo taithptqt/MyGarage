@@ -81,32 +81,57 @@ namespace MyGarage.Services
                         return OrderCommandResult<PreparedOrderPaymentContext>.Forbid();
                     }
                 }
-
-                if (request.InvoiceId.HasValue && request.InvoiceId.Value > 0)
-                {
-                    var invScope = await _dataService.GetInvoiceScopeAsync(request.InvoiceId.Value);
-                    if (invScope == null ||
-                        (invScope.ServiceCustomerId != currentUserId.Value &&
-                         invScope.RetailCustomerId != (currentUserId ?? 0)))
-                    {
-                        return OrderCommandResult<PreparedOrderPaymentContext>.Forbid();
-                    }
-
-                    effectiveServiceOrderId ??= invScope.ServiceOrderId;
-                    effectiveRetailOrderId ??= invScope.RetailOrderId;
-                }
             }
 
-            var resolvedInvoiceId = request.InvoiceId.HasValue && request.InvoiceId.Value > 0
-                ? request.InvoiceId.Value
-                : (await _invoiceService.EnsureForPaymentContextAsync(
-                    effectiveServiceOrderId,
-                    effectiveRetailOrderId,
-                    normalizedPayerType,
-                    effectivePayerId))?.Id ?? await _dataService.ResolveInvoiceIdAsync(
-                    request.InvoiceId,
-                    request.ServiceOrderId,
-                    request.RetailOrderId);
+            if (request.InvoiceId.HasValue && request.InvoiceId.Value > 0)
+            {
+                var invoiceScope = await _dataService.GetInvoiceScopeAsync(request.InvoiceId.Value);
+                if (invoiceScope == null)
+                {
+                    return OrderCommandResult<PreparedOrderPaymentContext>.BadRequest(new { message = "Không tìm thấy hóa đơn." });
+                }
+
+                var invoiceHasServiceOrder = invoiceScope.ServiceOrderId is > 0;
+                var invoiceHasRetailOrder = invoiceScope.RetailOrderId is > 0;
+                if (invoiceHasServiceOrder == invoiceHasRetailOrder ||
+                    (invoiceHasServiceOrder && (invoiceScope.RetailOrderId.HasValue || invoiceScope.ServiceCustomerId is not > 0)) ||
+                    (invoiceHasRetailOrder && (invoiceScope.ServiceOrderId.HasValue || invoiceScope.RetailCustomerId is not > 0)) ||
+                    (request.ServiceOrderId.HasValue && request.ServiceOrderId != invoiceScope.ServiceOrderId) ||
+                    (request.RetailOrderId.HasValue && request.RetailOrderId != invoiceScope.RetailOrderId) ||
+                    string.IsNullOrWhiteSpace(normalizedPayerType) || effectivePayerId is not > 0 ||
+                    invoiceScope.PayerId != effectivePayerId ||
+                    !string.Equals(invoiceScope.PayerType?.Trim(), normalizedPayerType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return OrderCommandResult<PreparedOrderPaymentContext>.BadRequest(new { message = "Hóa đơn không khớp nguồn đơn hàng hoặc người thanh toán." });
+                }
+
+                if (!isStaff && invoiceScope.ServiceCustomerId != currentUserId && invoiceScope.RetailCustomerId != currentUserId)
+                {
+                    return OrderCommandResult<PreparedOrderPaymentContext>.Forbid();
+                }
+
+                effectiveServiceOrderId = invoiceScope.ServiceOrderId;
+                effectiveRetailOrderId = invoiceScope.RetailOrderId;
+            }
+
+            long? resolvedInvoiceId;
+            try
+            {
+                resolvedInvoiceId = request.InvoiceId.HasValue && request.InvoiceId.Value > 0
+                    ? request.InvoiceId.Value
+                    : (await _invoiceService.EnsureForPaymentContextAsync(
+                        effectiveServiceOrderId,
+                        effectiveRetailOrderId,
+                        normalizedPayerType,
+                        effectivePayerId))?.Id;
+            }
+            catch (InvalidOperationException)
+            {
+                return OrderCommandResult<PreparedOrderPaymentContext>.BadRequest(new
+                {
+                    message = "Không thể xác định hóa đơn phù hợp; vui lòng chọn hóa đơn hoặc đối soát trước khi thanh toán."
+                });
+            }
 
             if (!effectiveRetailOrderId.HasValue && !resolvedInvoiceId.HasValue)
             {

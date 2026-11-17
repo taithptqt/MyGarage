@@ -23,7 +23,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 export async function getAllSalaryCoefficients(options = {}, requester) {
   return requestWithDualRoute(
     "/api/v1/salary-coefficients",
-    "/api/salary-coefficients",
+    "/api/v1/salary-coefficients",
     { ...options, method: "GET" },
     requester
   );
@@ -32,7 +32,7 @@ export async function getAllSalaryCoefficients(options = {}, requester) {
 export async function createSalaryCoefficient(payload, requester) {
   return requestWithDualRoute(
     "/api/v1/salary-coefficients",
-    "/api/salary-coefficients",
+    "/api/v1/salary-coefficients",
     { method: "POST", data: payload },
     requester
   );
@@ -41,7 +41,7 @@ export async function createSalaryCoefficient(payload, requester) {
 export async function updateSalaryCoefficient(id, payload, requester) {
   return requestWithDualRoute(
     `/api/v1/salary-coefficients/${id}`,
-    `/api/salary-coefficients/${id}`,
+    `/api/v1/salary-coefficients/${id}`,
     { method: "PUT", data: payload },
     requester
   );
@@ -50,7 +50,7 @@ export async function updateSalaryCoefficient(id, payload, requester) {
 export async function deleteSalaryCoefficient(id, requester) {
   await requestWithDualRoute(
     `/api/v1/salary-coefficients/${id}`,
-    `/api/salary-coefficients/${id}`,
+    `/api/v1/salary-coefficients/${id}`,
     { method: "DELETE" },
     requester
   );

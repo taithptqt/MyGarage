@@ -8,7 +8,7 @@ namespace MyGarage.Infrastructure.Queries;
 
 public sealed class EfAppointmentDataService(
     IGarageContext db,
-    IAuditLogService auditLogService) : IAppointmentDataService
+    IAuditLogWriter auditLogService) : IAppointmentDataService
 {
     public async Task<(bool Found, long CustomerId, long BranchId)> GetScopeMetaAsync(long id, CancellationToken ct = default)
     {

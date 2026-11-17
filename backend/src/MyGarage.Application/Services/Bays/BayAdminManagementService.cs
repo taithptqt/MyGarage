@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Models;
 
 namespace MyGarage.Application.Bays;
@@ -6,16 +7,17 @@ namespace MyGarage.Application.Bays;
 public sealed class BayAdminManagementService : IBayAdminManagementService
 {
     private readonly IBayAdminWriteDataService _dataService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public BayAdminManagementService(IBayAdminWriteDataService dataService)
+    public BayAdminManagementService(IBayAdminWriteDataService dataService, IAppConfigFileStore configStore)
     {
         _dataService = dataService;
+        _configStore = configStore;
     }
 
     public async Task<BayAdminCommandResult> CreateBayAsync(
         BayUpsertRequest? request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         if (request == null) return BayAdminCommandResult.BadRequest("Payload is required.");
@@ -64,7 +66,7 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
 
         await _dataService.AddBayAsync(bay, ct);
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         settings.BayMetadata[bay.Id] = new BayMetadata
         {
             Area = BayAdminSettingsHelper.NormalizeArea(request.Area),
@@ -72,7 +74,7 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
             SupportedSegments = BayAdminSettingsHelper.NormalizeSegments(request.SupportedSegments)
         };
 
-        await BayAdminSettingsHelper.WriteSettingsAsync(contentRootPath, settings);
+        await BayAdminSettingsHelper.WriteSettingsAsync(_configStore, settings, ct);
 
         return BayAdminCommandResult.Ok(new
         {
@@ -86,7 +88,6 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
         long id,
         BayUpsertRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         var bay = await _dataService.GetBayByIdAsync(id, ct);
@@ -137,7 +138,7 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
         bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = currentUserId;
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         settings.BayMetadata[id] = new BayMetadata
         {
             Area = BayAdminSettingsHelper.NormalizeArea(request.Area),
@@ -146,7 +147,7 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
         };
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await BayAdminSettingsHelper.WriteSettingsAsync(contentRootPath, settings);
+        await BayAdminSettingsHelper.WriteSettingsAsync(_configStore, settings, ct);
 
         return BayAdminCommandResult.Ok(new
         {
@@ -208,7 +209,6 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
         long id,
         UpdateBayStatusRequest request,
         long? currentUserId,
-        string contentRootPath,
         CancellationToken ct = default)
     {
         var bay = await _dataService.GetBayByIdAsync(id, ct);
@@ -220,7 +220,7 @@ public sealed class BayAdminManagementService : IBayAdminManagementService
             return BayAdminCommandResult.BadRequest("Trạng thái khoang không hợp lệ.");
         }
 
-        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(contentRootPath);
+        var settings = await BayAdminSettingsHelper.ReadSettingsAsync(_configStore, ct);
         var activeSessions = settings.Sessions.Where(s => s.BayId == id && s.ReleasedAt == null).ToList();
         var activeVehicleCount = activeSessions.Select(s => s.VehicleId).Distinct().Count();
         if (bay.CurrentOccupiedVehicleId.HasValue)

@@ -104,6 +104,7 @@ namespace MyGarage.Controllers
             return Ok(result);
         }
 
+        [HttpGet("{id:long}/vouchers")]
         [HttpGet("{id:long}/voucher-page")]
         public async Task<IActionResult> GetVoucherPage(long id, [FromQuery] int? page, [FromQuery] int? pageSize,
             System.Threading.CancellationToken cancellationToken)

@@ -98,6 +98,13 @@ export default function DashboardPage() {
   }, [historyLimit]);
 
   const summary = dashboard?.summary || {};
+  const detailsAvailable = dashboard?.detailsAvailable === true;
+  const payablesAvailable = dashboard?.payablesAvailable === true;
+  const receivablesAvailable = dashboard?.receivablesAvailable === true;
+  const paymentHistoryAvailable = dashboard?.paymentHistoryAvailable === true;
+  const refundTrailAvailable = dashboard?.refundTrailAvailable === true;
+  const approvalTrailAvailable = dashboard?.approvalTrailAvailable === true;
+  const unavailableText = "Chưa có dữ liệu";
   const agingBuckets = Array.isArray(dashboard?.agingBuckets) ? dashboard.agingBuckets : [];
   const invoiceWatchlist = Array.isArray(dashboard?.invoiceWatchlist) ? dashboard.invoiceWatchlist : [];
   const apWatchlist = Array.isArray(dashboard?.apWatchlist) ? dashboard.apWatchlist : [];
@@ -158,7 +165,13 @@ export default function DashboardPage() {
         detail: "Approval backlog có thể chặn dòng xử lý nghiệp vụ kế toán."
       });
     }
-    if (!rows.length) {
+    if (!detailsAvailable) {
+      rows.push({
+        level: "MEDIUM",
+        title: "Chưa đủ dữ liệu cảnh báo",
+        detail: approvalTrailAvailable ? "Chưa có ngày đến hạn để tính công nợ quá hạn." : "Chưa có ngày đến hạn và dữ liệu phê duyệt theo phạm vi hiện tại."
+      });
+    } else if (!rows.length) {
       rows.push({
         level: "OK",
         title: "Không có cảnh báo trọng yếu",
@@ -166,7 +179,7 @@ export default function DashboardPage() {
       });
     }
     return rows;
-  }, [summary]);
+  }, [summary, detailsAvailable, approvalTrailAvailable]);
 
   async function handleExportCsv() {
     setExporting(true);
@@ -228,11 +241,13 @@ export default function DashboardPage() {
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: 6 }} gap='20px' mb='20px'>
         <MiniStatistics name='Doanh thu' value={formatCurrency(summary.revenue)} />
         <MiniStatistics name='Đã thu' value={formatCurrency(summary.collected)} />
-        <MiniStatistics name='Công nợ AR' value={formatCurrency(summary.totalOutstandingAr)} />
-        <MiniStatistics name='Công nợ AP' value={formatCurrency(summary.totalOutstandingAp)} />
+        <MiniStatistics name='Công nợ AR' value={summary.totalOutstandingAr == null ? unavailableText : formatCurrency(summary.totalOutstandingAr)} />
+        <MiniStatistics name='Công nợ AP' value={summary.totalOutstandingAp == null ? unavailableText : formatCurrency(summary.totalOutstandingAp)} />
         <MiniStatistics name='Refund + reversal' value={formatCurrency(toNumber(summary.refund) + toNumber(summary.reversal))} />
-        <MiniStatistics name='Approval chờ xử lý' value={String(toNumber(summary.pendingApprovalCount))} />
+        <MiniStatistics name='Approval chờ xử lý' value={summary.pendingApprovalCount == null ? unavailableText : String(toNumber(summary.pendingApprovalCount))} />
       </SimpleGrid>
+
+      {!detailsAvailable ? <Text color={textColorSecondary} mb="20px">Một số hóa đơn chưa có hạn thanh toán; số lượng quá hạn chưa thể xác định đầy đủ.</Text> : null}
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
         <Card p='20px' bg={panelBg}>
@@ -278,6 +293,8 @@ export default function DashboardPage() {
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
         <Card p='20px' bg={panelBg}>
           <Text color={textColor} fontWeight='700' mb='12px'>AR watchlist</Text>
+          {!receivablesAvailable ? <Text color={textColorSecondary}>Chưa có nguồn dữ liệu công nợ khách hàng.</Text> : null}
+          {receivablesAvailable && invoiceWatchlist.length === 0 ? <Text color={textColorSecondary}>Không có hóa đơn khách hàng còn nợ.</Text> : null}
           <Table size='sm'>
             <Thead>
               <Tr>
@@ -294,9 +311,11 @@ export default function DashboardPage() {
                   <Td color={textColorSecondary}>{formatDate(fieldOf(item, "dueDate"))}</Td>
                   <Td isNumeric color={textColor}>{formatCurrency(fieldOf(item, "outstandingAmount"))}</Td>
                   <Td isNumeric>
-                    <Badge colorScheme={toNumber(fieldOf(item, "daysPastDue")) > 0 ? "red" : "green"}>
-                      {toNumber(fieldOf(item, "daysPastDue"))}
-                    </Badge>
+                    {fieldOf(item, "daysPastDue") == null ? "--" : (
+                      <Badge colorScheme={toNumber(fieldOf(item, "daysPastDue")) > 0 ? "red" : "green"}>
+                        {toNumber(fieldOf(item, "daysPastDue"))}
+                      </Badge>
+                    )}
                   </Td>
                 </Tr>
               ))}
@@ -306,6 +325,8 @@ export default function DashboardPage() {
 
         <Card p='20px' bg={panelBg}>
           <Text color={textColor} fontWeight='700' mb='12px'>AP watchlist</Text>
+          {!payablesAvailable ? <Text color={textColorSecondary}>Chưa có nguồn dữ liệu công nợ nhà cung cấp.</Text> : null}
+          {payablesAvailable && apWatchlist.length === 0 ? <Text color={textColorSecondary}>Không có công nợ nhà cung cấp đang mở.</Text> : null}
           <Table size='sm'>
             <Thead>
               <Tr>
@@ -336,6 +357,8 @@ export default function DashboardPage() {
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap='20px'>
         <Card p='20px' bg={panelBg}>
           <Text color={textColor} fontWeight='700' mb='12px'>Lịch sử thanh toán</Text>
+          {!paymentHistoryAvailable ? <Text color={textColorSecondary}>Chưa có nguồn dữ liệu lịch sử thanh toán.</Text> : null}
+          {paymentHistoryAvailable && paymentHistory.length === 0 ? <Text color={textColorSecondary}>Không có thanh toán trong khoảng thời gian đã chọn.</Text> : null}
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>
@@ -372,6 +395,8 @@ export default function DashboardPage() {
 
         <Card p='20px' bg={panelBg}>
           <Text color={textColor} fontWeight='700' mb='12px'>Truy vết hoàn tiền</Text>
+          {!refundTrailAvailable ? <Text color={textColorSecondary}>Chưa có nguồn dữ liệu hoàn tiền.</Text> : null}
+          {refundTrailAvailable && refundTrail.length === 0 ? <Text color={textColorSecondary}>Không có hoàn tiền trong khoảng thời gian đã chọn.</Text> : null}
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>
@@ -408,6 +433,8 @@ export default function DashboardPage() {
 
         <Card p='20px' bg={panelBg}>
           <Text color={textColor} fontWeight='700' mb='12px'>Truy vết phê duyệt</Text>
+          {!approvalTrailAvailable ? <Text color={textColorSecondary}>Chưa có dữ liệu phê duyệt theo phạm vi hiện tại.</Text> : null}
+          {approvalTrailAvailable && approvalTrail.length === 0 ? <Text color={textColorSecondary}>Không có phê duyệt trong khoảng thời gian đã chọn.</Text> : null}
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>

@@ -24,28 +24,28 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 
 export const vehicleAdminApi = {
   getLookups: (params = {}, requester) =>
-    requestWithDualRoute("/api/v1/vehicle-admin/lookups", "/api/vehicle-admin/lookups", {
+    requestWithDualRoute("/api/v1/admin/vehicles/lookups", "/api/v1/admin/vehicles/lookups", {
       method: "GET",
       params,
     }, requester),
 
   getList: (params = {}, requester) => {
     const boundedParams = buildBoundedPaginationParams(params, 20, 200);
-    return requestWithDualRoute("/api/v1/vehicle-admin/list", "/api/vehicle-admin/list", {
+    return requestWithDualRoute("/api/v1/admin/vehicles", "/api/v1/admin/vehicles", {
       method: "GET",
       params: boundedParams,
     }, requester);
   },
 
   getSummary: (params = {}, requester) =>
-    requestWithDualRoute("/api/v1/vehicle-admin/summary", "/api/vehicle-admin/summary", {
+    requestWithDualRoute("/api/v1/admin/vehicles/summary", "/api/v1/admin/vehicles/summary", {
       method: "GET",
       params,
     }, requester),
 
   getAlerts: (params = {}, requester) => {
     const boundedParams = buildBoundedPaginationParams(params, 50, 200);
-    return requestWithDualRoute("/api/v1/vehicle-admin/alerts", "/api/vehicle-admin/alerts", {
+    return requestWithDualRoute("/api/v1/admin/vehicles/alerts", "/api/v1/admin/vehicles/alerts", {
       method: "GET",
       params: boundedParams,
     }, requester);
@@ -53,7 +53,7 @@ export const vehicleAdminApi = {
 
   getHistory: (params = {}, requester) => {
     const boundedParams = buildBoundedPaginationParams(params, 50, 200);
-    return requestWithDualRoute("/api/v1/vehicle-admin/history", "/api/vehicle-admin/history", {
+    return requestWithDualRoute("/api/v1/admin/vehicles/history", "/api/v1/admin/vehicles/history", {
       method: "GET",
       params: boundedParams,
     }, requester);
@@ -65,8 +65,8 @@ export const vehicleAdminApi = {
       ...params,
     };
     return requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}`,
-      `/api/vehicle-admin/vehicles/${id}`,
+      `/api/v1/admin/vehicles/${id}`,
+      `/api/v1/admin/vehicles/${id}`,
       {
         method: "GET",
         params: boundedParams,
@@ -76,47 +76,47 @@ export const vehicleAdminApi = {
   },
 
   createVehicle: (data, requester) =>
-    requestWithDualRoute("/api/v1/vehicle-admin/vehicles", "/api/vehicle-admin/vehicles", {
+    requestWithDualRoute("/api/v1/admin/vehicles", "/api/v1/admin/vehicles", {
       method: "POST",
       data,
     }, requester),
 
   updateVehicle: (id, data, requester) =>
-    requestWithDualRoute(`/api/v1/vehicle-admin/vehicles/${id}`, `/api/vehicle-admin/vehicles/${id}`, {
+    requestWithDualRoute(`/api/v1/admin/vehicles/${id}`, `/api/v1/admin/vehicles/${id}`, {
       method: "PUT",
       data,
     }, requester),
 
   lockEdit: (id, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/lock-edit`,
-      `/api/vehicle-admin/vehicles/${id}/lock-edit`,
-      { method: "POST" },
+      `/api/v1/admin/vehicles/${id}/edit-locks`,
+      `/api/v1/admin/vehicles/${id}/edit-locks`,
+      { method: "PUT" },
       requester
     ),
 
   unlockEdit: (id, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/unlock-edit`,
-      `/api/vehicle-admin/vehicles/${id}/unlock-edit`,
-      { method: "POST" },
+      `/api/v1/admin/vehicles/${id}/edit-locks`,
+      `/api/v1/admin/vehicles/${id}/edit-locks`,
+      { method: "DELETE" },
       requester
     ),
 
   hideVehicle: (id, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/hide`,
-      `/api/vehicle-admin/vehicles/${id}/hide`,
-      { method: "POST" },
+      `/api/v1/admin/vehicles/${id}`,
+      `/api/v1/admin/vehicles/${id}`,
+      { method: "DELETE" },
       requester
     ),
 
   updateStatus: (id, status, note, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/status`,
-      `/api/vehicle-admin/vehicles/${id}/status`,
+      `/api/v1/admin/vehicles/${id}/status`,
+      `/api/v1/admin/vehicles/${id}/status`,
       {
-        method: "POST",
+        method: "PATCH",
         data: { status, note },
       },
       requester
@@ -124,10 +124,10 @@ export const vehicleAdminApi = {
 
   changeOwner: (id, customerId, note, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/owner`,
-      `/api/vehicle-admin/vehicles/${id}/owner`,
+      `/api/v1/admin/vehicles/${id}/owner`,
+      `/api/v1/admin/vehicles/${id}/owner`,
       {
-        method: "POST",
+        method: "PATCH",
         data: { customerId, note },
       },
       requester
@@ -135,8 +135,8 @@ export const vehicleAdminApi = {
 
   assignStaff: (id, data, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/assign-staff`,
-      `/api/vehicle-admin/vehicles/${id}/assign-staff`,
+      `/api/v1/admin/vehicles/${id}/staff-assignments`,
+      `/api/v1/admin/vehicles/${id}/staff-assignments`,
       {
         method: "POST",
         data,
@@ -146,8 +146,8 @@ export const vehicleAdminApi = {
 
   assignBay: (id, data, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/assign-bay`,
-      `/api/vehicle-admin/vehicles/${id}/assign-bay`,
+      `/api/v1/admin/vehicles/${id}/bay-assignments`,
+      `/api/v1/admin/vehicles/${id}/bay-assignments`,
       {
         method: "POST",
         data,
@@ -157,8 +157,8 @@ export const vehicleAdminApi = {
 
   moveBay: (id, data, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/move-bay`,
-      `/api/vehicle-admin/vehicles/${id}/move-bay`,
+      `/api/v1/admin/vehicles/${id}/bay-transfers`,
+      `/api/v1/admin/vehicles/${id}/bay-transfers`,
       {
         method: "POST",
         data,
@@ -168,8 +168,8 @@ export const vehicleAdminApi = {
 
   removeBay: (id, data = {}, requester) =>
     requestWithDualRoute(
-      `/api/v1/vehicle-admin/vehicles/${id}/remove-bay`,
-      `/api/vehicle-admin/vehicles/${id}/remove-bay`,
+      `/api/v1/admin/vehicles/${id}/bay-removals`,
+      `/api/v1/admin/vehicles/${id}/bay-removals`,
       {
         method: "POST",
         data,

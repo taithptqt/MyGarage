@@ -24,4 +24,5 @@ public interface IQuotationWorkflowStore :
     IQuotationPortalStore,
     IQuotationLineageQueryStore
 {
+    Task LockServiceOrderForDecisionAsync(long quotationId);
 }

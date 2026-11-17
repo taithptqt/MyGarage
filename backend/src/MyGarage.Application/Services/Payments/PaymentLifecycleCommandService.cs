@@ -187,11 +187,7 @@ public sealed class PaymentLifecycleCommandService : IPaymentLifecycleCommandSer
 
         try
         {
-            existingItem.Status = normalizedTarget;
             existingItem.UpdatedBy = actorUserId;
-            existingItem.UpdatedAt = VietnamTime.Now;
-            await _paymentService.UpdateAsync(id, existingItem);
-
             await _paymentConfirmationService.ApplyOutcomeAsync(existingItem, effectiveAmount, normalizedTarget);
             var updated = await _paymentService.GetByIdAsync(id) ?? existingItem;
             var dto = _paymentService.MapToDto(updated);

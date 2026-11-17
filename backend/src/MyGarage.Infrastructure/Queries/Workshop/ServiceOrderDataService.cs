@@ -8,7 +8,7 @@ namespace MyGarage.Infrastructure.Queries;
 
 public sealed class EfServiceOrderDataService(
     IGarageContext context,
-    IAuditLogService auditLogService) : IServiceOrderDataService
+    IAuditLogWriter auditLogService) : IServiceOrderDataService
 {
     public async Task<(IReadOnlyList<ServiceOrder> Items, int Total)> GetPagedAsync(
         long? scopedBranchId,

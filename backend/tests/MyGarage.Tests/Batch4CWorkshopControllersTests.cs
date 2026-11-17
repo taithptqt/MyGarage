@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -681,7 +682,14 @@ public sealed class Batch4CWorkshopControllersTests
             issuedBy = 200,
             status = "SCANNED"
         });
-        Assert.Equal(HttpStatusCode.OK, gpScanRes.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, gpScanRes.StatusCode);
+        using (var scanScope = factory.Services.CreateScope())
+        {
+            var scanDb = scanScope.ServiceProvider.GetRequiredService<MyGarage.Data.GarageContext>();
+            var gatePass = await scanDb.GatePasses.FindAsync(gpId);
+            gatePass!.Status = "SCANNED";
+            await scanDb.SaveChangesAsync();
+        }
 
         using var gpLockedUpdateRes = await client.PutAsJsonAsync($"/api/v1/gate-passes/{gpId}", new
         {

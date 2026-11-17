@@ -16,7 +16,7 @@ export default function QcTemplateAdminPage() {
     setLoading(true);
     try {
       // Mocked endpoint - assuming GET /api/qc-templates
-      const res = await request({ url: "/api/qc-templates", method: "GET" }).catch(e => []);
+      const res = await request({ url: "/api/v1/qc-templates", method: "GET" }).catch(e => []);
       // If API doesn't exist yet, seed with sample data
       const mockData = (res && res.length) > 0 ? res : [
         { id: "T1", name: "Bảo dưỡng 5,000km", description: "Mẫu kiểm tra tiêu chuẩn cho mốc 5,000km", groups: [

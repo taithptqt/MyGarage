@@ -1,5 +1,5 @@
-using System.Text.Json;
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -8,6 +8,9 @@ namespace MyGarage.Services;
 
 internal static class VehicleAdminSupport
 {
+    private const string VehicleSettingsFileName = "vehicle-admin-settings.json";
+    private const string BaySettingsFileName = "bay-admin-settings.json";
+
     internal const string StatusWaitingReceive = "WAITING_RECEIVE";
     internal const string StatusReceived = "RECEIVED";
     internal const string StatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
@@ -40,72 +43,41 @@ internal static class VehicleAdminSupport
         StatusCanceled
     ];
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    internal static async Task<VehicleAdminSettings> ReadSettingsAsync(
+        IAppConfigFileStore configStore,
+        CancellationToken ct = default)
     {
-        WriteIndented = true
-    };
-
-    internal static async Task<VehicleAdminSettings> ReadSettingsAsync(string contentRootPath)
-    {
-        var path = GetSettingsPath(contentRootPath, "vehicle-admin-settings.json");
-        if (!File.Exists(path)) return VehicleAdminSettings.CreateDefault();
-
-        try
-        {
-            await using var stream = File.OpenRead(path);
-            var settings = await JsonSerializer.DeserializeAsync<VehicleAdminSettings>(stream, JsonOptions)
-                ?? VehicleAdminSettings.CreateDefault();
-            settings.Normalize();
-            return settings;
-        }
-        catch
-        {
-            return VehicleAdminSettings.CreateDefault();
-        }
+        var settings = await configStore.ReadOrDefaultAsync(VehicleSettingsFileName, VehicleAdminSettings.CreateDefault, ct);
+        settings.Normalize();
+        return settings;
     }
 
-    internal static async Task WriteSettingsAsync(string contentRootPath, VehicleAdminSettings settings)
+    internal static Task WriteSettingsAsync(
+        IAppConfigFileStore configStore,
+        VehicleAdminSettings settings,
+        CancellationToken ct = default)
     {
         settings.Normalize();
         settings.UpdatedAt = VietnamTime.Now;
-
-        var path = GetSettingsPath(contentRootPath, "vehicle-admin-settings.json");
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
+        return configStore.WriteAsync(VehicleSettingsFileName, settings, ct);
     }
 
-    internal static async Task<BaySettingsSnapshot> ReadBaySettingsAsync(string contentRootPath)
+    internal static async Task<BaySettingsSnapshot> ReadBaySettingsAsync(
+        IAppConfigFileStore configStore,
+        CancellationToken ct = default)
     {
-        var path = GetSettingsPath(contentRootPath, "bay-admin-settings.json");
-        if (!File.Exists(path)) return BaySettingsSnapshot.CreateDefault();
-
-        try
-        {
-            await using var stream = File.OpenRead(path);
-            var settings = await JsonSerializer.DeserializeAsync<BaySettingsSnapshot>(stream, JsonOptions)
-                ?? BaySettingsSnapshot.CreateDefault();
-            settings.Normalize();
-            return settings;
-        }
-        catch
-        {
-            return BaySettingsSnapshot.CreateDefault();
-        }
+        var settings = await configStore.ReadOrDefaultAsync(BaySettingsFileName, BaySettingsSnapshot.CreateDefault, ct);
+        settings.Normalize();
+        return settings;
     }
 
-    internal static async Task WriteBaySettingsAsync(string contentRootPath, BaySettingsSnapshot settings)
+    internal static Task WriteBaySettingsAsync(
+        IAppConfigFileStore configStore,
+        BaySettingsSnapshot settings,
+        CancellationToken ct = default)
     {
         settings.Normalize();
-        var path = GetSettingsPath(contentRootPath, "bay-admin-settings.json");
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
-    }
-
-    private static string GetSettingsPath(string contentRootPath, string fileName)
-    {
-        var folder = Path.Combine(contentRootPath, "Configurations");
-        Directory.CreateDirectory(folder);
-        return Path.Combine(folder, fileName);
+        return configStore.WriteAsync(BaySettingsFileName, settings, ct);
     }
 
     internal static VehicleMetadata ResolveVehicleMetadata(VehicleAdminSettings settings, long vehicleId)

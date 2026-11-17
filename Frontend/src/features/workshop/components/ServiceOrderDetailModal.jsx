@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "@features/admin/components/AdminModals";
 import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdEdit, MdHistory, MdPerson } from "react-icons/md";
 import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
@@ -332,6 +332,7 @@ export default function ServiceOrderDetailModal({
   staff = [],
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const customer = customers.find(
     (item) => Number(item?.id ?? item?.Id) === Number(order?.customerId ?? order?.CustomerId)
@@ -869,7 +870,10 @@ export default function ServiceOrderDetailModal({
 
   const handleOpenPage = (path) => {
     onClose?.();
-    navigate(path);
+    const resolvedPath = location.pathname.startsWith("/admin")
+      ? path.replace("/workshop/reception/orders", "/admin/service-orders")
+      : path;
+    navigate(resolvedPath);
   };
 
   const refreshAfterDiagnosisChange = async () => {

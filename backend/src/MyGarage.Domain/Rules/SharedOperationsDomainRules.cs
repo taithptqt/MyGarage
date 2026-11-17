@@ -10,6 +10,7 @@ public static class SharedOperationsDomainRules
     // =========================================================================
 
     public const string StatusPending = "PENDING";
+    public const string StatusIssued = "ISSUED";
     public const string StatusApproved = "APPROVED";
     public const string StatusScanned = "SCANNED";
     public const string StatusCanceled = "CANCELED";
@@ -17,6 +18,7 @@ public static class SharedOperationsDomainRules
     private static readonly HashSet<string> ValidGatePassStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         StatusPending,
+        StatusIssued,
         StatusApproved,
         StatusScanned,
         StatusCanceled
@@ -92,7 +94,7 @@ public static class SharedOperationsDomainRules
 
         return normCurrent switch
         {
-            StatusPending => normTarget is StatusApproved or StatusScanned or StatusCanceled,
+            StatusPending or StatusIssued => normTarget is StatusApproved or StatusScanned or StatusCanceled,
             StatusApproved => normTarget is StatusScanned or StatusCanceled,
             StatusScanned or StatusCanceled => false,
             _ => false

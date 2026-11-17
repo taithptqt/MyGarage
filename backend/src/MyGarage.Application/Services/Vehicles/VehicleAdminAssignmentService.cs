@@ -1,4 +1,5 @@
 using MyGarage.Application.Interfaces.Queries;
+using MyGarage.Application.Interfaces.Stores.Common;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -7,10 +8,12 @@ namespace MyGarage.Services;
 public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentService
 {
     private readonly IVehicleAdminDataService _dataService;
+    private readonly IAppConfigFileStore _configStore;
 
-    public VehicleAdminAssignmentService(IVehicleAdminDataService dataService)
+    public VehicleAdminAssignmentService(IVehicleAdminDataService dataService, IAppConfigFileStore configStore)
     {
         _dataService = dataService;
+        _configStore = configStore;
     }
 
     public async Task<VehicleAdminCommandResult> AssignStaffAsync(long id, AssignStaffRequest request, VehicleAdminActorContext actor, CancellationToken ct = default)
@@ -25,7 +28,7 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
             if (staff == null) return VehicleAdminCommandResult.BadRequest("Staff does not exist.");
         }
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         var metadata = VehicleAdminSupport.ResolveVehicleMetadata(settings, id);
 
         string? oldStaffName = null;
@@ -57,7 +60,7 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         metadata.UpdatedAt = now;
 
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "ASSIGN_STAFF", staff == null ? "Clear staff assignment" : $"Assign staff #{staff.Id}", userId, actorName, now);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle assignment updated." });
     }
@@ -72,14 +75,14 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         var bay = await _dataService.GetActiveBayByIdAsync(request.BayId, ct);
         if (bay == null) return VehicleAdminCommandResult.BadRequest("Bay does not exist.");
 
-        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(actor.ContentRootPath);
+        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(_configStore, ct);
         var assignResult = await AssignVehicleToBayAsync(vehicle, bay, baySettings, request.ServiceStatus, request.Note, actor.UserId, ct);
         if (!assignResult.Success) return VehicleAdminCommandResult.BadRequest(assignResult.Message);
 
         var now = VietnamTime.Now;
         var userId = actor.UserId;
         var actorName = actor.UserDisplayName;
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
 
         if (!string.IsNullOrWhiteSpace(request.NewVehicleStatus))
         {
@@ -95,8 +98,8 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "ASSIGN_BAY", $"Assign to bay #{request.BayId}", userId, actorName, now);
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteBaySettingsAsync(actor.ContentRootPath, baySettings);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteBaySettingsAsync(_configStore, baySettings, ct);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle assigned to bay." });
     }
@@ -108,7 +111,7 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         var vehicle = await _dataService.GetActiveVehicleWithModelAsync(id, ct);
         if (vehicle == null) return VehicleAdminCommandResult.NotFound("Vehicle not found.");
 
-        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(actor.ContentRootPath);
+        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(_configStore, ct);
         var targetBay = await _dataService.GetActiveBayByIdAsync(request.ToBayId, ct);
         if (targetBay == null) return VehicleAdminCommandResult.BadRequest("Target bay does not exist.");
 
@@ -126,7 +129,7 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         if (!assignResult.Success) return VehicleAdminCommandResult.BadRequest(assignResult.Message);
 
         var actorName = actor.UserDisplayName;
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
 
         if (!string.IsNullOrWhiteSpace(request.NewVehicleStatus))
         {
@@ -142,8 +145,8 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "MOVE_BAY", $"Move vehicle to bay #{request.ToBayId}", userId, actorName, now);
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteBaySettingsAsync(actor.ContentRootPath, baySettings);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteBaySettingsAsync(_configStore, baySettings, ct);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle moved to new bay." });
     }
@@ -153,7 +156,7 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
         var exists = await _dataService.VehicleExistsAsync(id, activeOnly: true, ct: ct);
         if (!exists) return VehicleAdminCommandResult.NotFound("Vehicle not found.");
 
-        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(actor.ContentRootPath);
+        var baySettings = await VehicleAdminSupport.ReadBaySettingsAsync(_configStore, ct);
         var now = VietnamTime.Now;
         var userId = actor.UserId;
         await ReleaseActiveBaySessionsAsync(id, baySettings, request.Note, mergeEmptyNote: false, now, userId, ct);
@@ -164,12 +167,12 @@ public sealed class VehicleAdminAssignmentService : IVehicleAdminAssignmentServi
             ReleaseBayOccupancy(fallbackBay, now, userId);
         }
 
-        var settings = await VehicleAdminSupport.ReadSettingsAsync(actor.ContentRootPath);
+        var settings = await VehicleAdminSupport.ReadSettingsAsync(_configStore, ct);
         VehicleAdminSupport.AppendVehicleAudit(settings, id, "REMOVE_BAY", "Remove vehicle from bay", userId, actor.UserDisplayName, now);
 
         await _dataService.SaveChangesInTransactionAsync(ct);
-        await VehicleAdminSupport.WriteBaySettingsAsync(actor.ContentRootPath, baySettings);
-        await VehicleAdminSupport.WriteSettingsAsync(actor.ContentRootPath, settings);
+        await VehicleAdminSupport.WriteBaySettingsAsync(_configStore, baySettings, ct);
+        await VehicleAdminSupport.WriteSettingsAsync(_configStore, settings, ct);
 
         return VehicleAdminCommandResult.Ok(new { message = "Vehicle removed from bay." });
     }

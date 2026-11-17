@@ -50,6 +50,9 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
             throw new InvalidOperationException("Thiếu người xác nhận quyết định của khách.");
         }
 
+        var outcome = await _store.ExecuteTransactionalAsync(async () =>
+        {
+        await _store.LockServiceOrderForDecisionAsync(quotationId);
         var quotation = await _store.GetQuotationWithDetailsAndDiscountsAsync(quotationId);
         if (quotation == null)
         {
@@ -82,12 +85,12 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
         {
             if (request.Approved && string.Equals(quotation.Status, QuotationWorkflowConstants.StatusCustomerApproved, StringComparison.OrdinalIgnoreCase))
             {
-                return QuotationMappingHelper.MapQuotationResponse(quotation);
+                return (Quotation: quotation, ServiceOrder: serviceOrder, Changed: false);
             }
 
             if (!request.Approved && string.Equals(quotation.Status, QuotationWorkflowConstants.StatusCustomerRejected, StringComparison.OrdinalIgnoreCase))
             {
-                return QuotationMappingHelper.MapQuotationResponse(quotation);
+                return (Quotation: quotation, ServiceOrder: serviceOrder, Changed: false);
             }
 
             throw new InvalidOperationException("Báo giá chưa ở trạng thái chờ khách hàng xác nhận.");
@@ -111,6 +114,12 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
                 throw new InvalidOperationException("Không có hạng mục hợp lệ để xác nhận.");
             }
 
+            if (approvableDetails.Any(x => string.Equals(x.ItemType?.Trim(), "PART", StringComparison.OrdinalIgnoreCase) &&
+                (!x.ItemId.HasValue || x.ItemId.Value <= 0 || x.Quantity <= 0)))
+            {
+                throw new InvalidOperationException("Phụ tùng trong báo giá thiếu mã sản phẩm hoặc số lượng không hợp lệ.");
+            }
+
             foreach (var detail in approvableDetails)
             {
                 detail.ApprovalStatus = QuotationWorkflowConstants.ApprovalApproved;
@@ -132,30 +141,11 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
             serviceOrder.InsuranceQuoteState = QuotationWorkflowConstants.StatusCustomerApproved;
             await ApplyQuotationToServiceOrderAsync(quotation, serviceOrder, actorId, now);
 
-            // Tự động tạo phiếu yêu cầu vật tư cho các phụ tùng trong báo giá
-            try
-            {
-                await _materialRequestService.CreateFromQuotationAsync(quotationId, actorId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Tự động tạo phiếu yêu cầu vật tư thất bại cho báo giá bảo hiểm {QuotationId}", quotationId);
-                _store.AddAuditLog(new AuditLog
-                {
-                    UserId = actorId,
-                    UserType = "SYSTEM",
-                    BranchId = serviceOrder.ExecuteBranchId,
-                    Action = "MATERIAL_REQUEST_CREATE_FAILED",
-                    TableName = "QUOTATIONS",
-                    RecordId = quotation.Id,
-                    NewValue = ex.Message,
-                    Timestamp = now
-                });
-                await _store.SaveChangesInTransactionAsync();
-            }
+            // The warehouse request is part of the same decision transaction: a
+            // failed request must not leave an approved quotation with no stock work.
+            await _materialRequestService.CreateFromQuotationAsync(quotationId, request.ActorStaffId ?? 0);
 
-            await _customerPortalService.TryNotifyInsuranceApprovalChainAsync(quotation, serviceOrder, true);
-            return QuotationMappingHelper.MapQuotationResponse(quotation);
+            return (Quotation: quotation, ServiceOrder: serviceOrder, Changed: true);
         }
 
         if (quotation.IsAppliedToServiceOrder)
@@ -178,8 +168,17 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
         serviceOrder.UpdatedBy = actorId;
 
         await _store.SaveChangesInTransactionAsync();
-        await _customerPortalService.TryNotifyInsuranceApprovalChainAsync(quotation, serviceOrder, false);
-        return QuotationMappingHelper.MapQuotationResponse(quotation);
+        return (Quotation: quotation, ServiceOrder: serviceOrder, Changed: true);
+        });
+
+        if (!outcome.Changed)
+        {
+            return QuotationMappingHelper.MapQuotationResponse(outcome.Quotation);
+        }
+
+        // Notifications run only after the decision and warehouse request commit.
+        await _customerPortalService.TryNotifyInsuranceApprovalChainAsync(outcome.Quotation, outcome.ServiceOrder, request.Approved);
+        return QuotationMappingHelper.MapQuotationResponse(outcome.Quotation);
     }
 
     private async Task ApplyQuotationToServiceOrderAsync(Quotation quotation, ServiceOrder serviceOrder, long actorId, DateTime now)
@@ -197,6 +196,14 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
         if (approvedDetails.Count == 0)
         {
             throw new InvalidOperationException("Không có hạng mục được duyệt để áp vào lệnh sửa chữa.");
+        }
+
+        // Existing order discounts have no quotation lineage. Replacing them could
+        // silently discard discounts from another approved quotation or a manual adjustment.
+        var existingServiceOrderDiscounts = await _store.GetServiceOrderDiscountsForUpdateAsync(serviceOrder.Id);
+        if (existingServiceOrderDiscounts.Count > 0)
+        {
+            throw new InvalidOperationException("Không thể áp báo giá vì giảm giá hiện có trên lệnh chưa xác định được nguồn. Cần đối soát trước khi tiếp tục.");
         }
 
         var existingServiceOrderDetails = await _store.GetServiceOrderDetailsForUpdateAsync(serviceOrder.Id);
@@ -267,27 +274,9 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
             _store.AddServiceOrderDetails(rowsToCreate);
         }
 
-        var existingServiceOrderDiscounts = await _store.GetServiceOrderDiscountsForUpdateAsync(serviceOrder.Id);
-        if (existingServiceOrderDiscounts.Count > 0)
+        var serviceOrderDiscounts = BuildServiceOrderDiscounts(quotation, serviceOrder.Id, detailByQuotationDetailId);
+        if (serviceOrderDiscounts.Count > 0)
         {
-            _store.RemoveServiceOrderDiscounts(existingServiceOrderDiscounts);
-        }
-
-        var quotationDiscounts = (quotation.QuotationDiscounts ?? new List<QuotationDiscount>()).ToList();
-        if (quotationDiscounts.Count > 0)
-        {
-            var serviceOrderDiscounts = quotationDiscounts.Select(discount => new ServiceOrderDiscount
-            {
-                ServiceOrderId = serviceOrder.Id,
-                DiscountType = discount.DiscountType,
-                CustomerTierId = discount.CustomerTierId,
-                VoucherId = discount.VoucherId,
-                DiscountValue = discount.DiscountValue,
-                ValueType = discount.ValueType,
-                AppliedAmount = discount.AppliedAmount,
-                Reason = discount.Reason,
-                AppliedBy = discount.AppliedBy
-            }).ToList();
             _store.AddServiceOrderDiscounts(serviceOrderDiscounts);
         }
 
@@ -316,6 +305,55 @@ public sealed class QuotationCustomerDecisionService : IQuotationCustomerDecisio
         await QuotationPricingHelper.RecalculateServiceOrderTotalsAsync(_store, serviceOrder.Id, actorId, now);
         await _serviceOrderDetailService.SyncServiceOrderWaitingPartsStatusAsync(serviceOrder.Id, actorId);
         await _store.SaveChangesInTransactionAsync();
+    }
+
+    internal static List<ServiceOrderDiscount> BuildServiceOrderDiscounts(
+        Quotation quotation,
+        long serviceOrderId,
+        IReadOnlyDictionary<long, ServiceOrderDetail> detailByQuotationDetailId)
+    {
+        var canceledIds = quotation.QuotationDetails
+            .Where(detail => string.Equals(detail.Status, QuotationWorkflowConstants.DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
+            .Select(detail => detail.Id)
+            .ToHashSet();
+        var quotationDetailIds = quotation.QuotationDetails.Select(detail => detail.Id).ToHashSet();
+        var result = new List<ServiceOrderDiscount>();
+        foreach (var discount in quotation.QuotationDiscounts ?? new List<QuotationDiscount>())
+        {
+            ServiceOrderDetail? targetDetail = null;
+            if (discount.QuotationDetailId is long detailId)
+            {
+                if (!quotationDetailIds.Contains(detailId))
+                {
+                    throw new InvalidOperationException("Giảm giá không thuộc hạng mục của báo giá hiện tại.");
+                }
+                if (canceledIds.Contains(detailId))
+                {
+                    continue;
+                }
+                if (!detailByQuotationDetailId.TryGetValue(detailId, out targetDetail))
+                {
+                    throw new InvalidOperationException("Không tìm thấy hạng mục lệnh sửa chữa tương ứng với giảm giá báo giá.");
+                }
+            }
+
+            result.Add(new ServiceOrderDiscount
+            {
+                ServiceOrderId = serviceOrderId,
+                ServiceOrderDetail = targetDetail,
+                ServiceOrderDetailId = targetDetail is { Id: > 0 } ? targetDetail.Id : null,
+                DiscountType = discount.DiscountType,
+                CustomerTierId = discount.CustomerTierId,
+                VoucherId = discount.VoucherId,
+                DiscountValue = discount.DiscountValue,
+                ValueType = discount.ValueType,
+                AppliedAmount = discount.AppliedAmount,
+                Reason = discount.Reason,
+                AppliedBy = discount.AppliedBy,
+                DiscountCategory = discount.DiscountCategory
+            });
+        }
+        return result;
     }
 
     private static void ApplyApprovedQuotationToExistingServiceOrderDetail(

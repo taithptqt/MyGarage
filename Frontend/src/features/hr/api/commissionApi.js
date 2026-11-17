@@ -23,7 +23,7 @@ export async function requestWithDualRoute(v1Url, legacyUrl, options = {}, reque
 export async function getCommissions(params = {}, requester) {
   return requestWithDualRoute(
     "/api/v1/commissions",
-    "/api/commissions",
+    "/api/v1/commissions",
     { method: "GET", params },
     requester
   );
